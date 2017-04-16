@@ -68,8 +68,8 @@ Note that new brightness value is checked to be between 0 and max_brightness.
 * *getactualbrightness* -> takes a backlight kernel interface. Returns actual brightness for that interface (int).
 
 ### If built with gamma support:
-* *getgamma* -> returns current display temperature (int).
-* *setgamma* -> takes a temperature value (int, between 1000 and 10000) and set display temperature. Returns newly setted display temperature (int).
+* *getgamma* -> takes env display variable, returns current display temperature (int).
+* *setgamma* -> takes env display variable and a temperature value (int, between 1000 and 10000) and set display temperature. Returns newly setted display temperature (int).
 
 ### If built with frame captures support:
 * *captureframes* -> takes a video sysname (eg: video0) and a number of frames to be captured (int, between 1 and 20). Returns average frames brightness, between 0.0 and 1.0 (double).

@@ -102,8 +102,8 @@ static int get_temp(const unsigned short R, const unsigned short B) {
     return temperature;
 }
 
-void set_gamma(int temp, int *err) {
-    Display *dpy = XOpenDisplay(NULL);
+void set_gamma(const char *display, int temp, int *err) {
+    Display *dpy = XOpenDisplay(display);
     if (dpy == NULL) {
         perror("XopenDisplay");
         *err = ENXIO;
@@ -139,9 +139,9 @@ void set_gamma(int temp, int *err) {
     XCloseDisplay(dpy);
 }
 
-int get_gamma(int *err) {
+int get_gamma(const char *display, int *err) {
     int temp = -1;
-    Display *dpy = XOpenDisplay(NULL);
+    Display *dpy = XOpenDisplay(display);
     if (dpy == NULL) {
         perror("XopenDisplay");
         *err = ENXIO;
