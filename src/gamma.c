@@ -104,8 +104,8 @@ static int get_temp(const unsigned short R, const unsigned short B) {
 
 void set_gamma(int temp, int *err) {
     Display *dpy = XOpenDisplay(NULL);
-
     if (dpy == NULL) {
+        perror("XopenDisplay");
         *err = ENXIO;
         return;
     }
@@ -143,6 +143,7 @@ int get_gamma(int *err) {
     int temp = -1;
     Display *dpy = XOpenDisplay(NULL);
     if (dpy == NULL) {
+        perror("XopenDisplay");
         *err = ENXIO;
         goto end;
     }
