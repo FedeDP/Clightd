@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/FedeDP/Clightd.svg?branch=master)](https://travis-ci.org/FedeDP/Clightd)
 
-Clightd is a bus interface that let you easily set screen brightness, gamma temperature and get ambient brightness through webcam frames capture.
+Clightd is a bus interface that lets you easily set screen brightness, gamma temperature and get ambient brightness through webcam frames capture.
 
 ## It currently needs:
 * libsystemd >= 221 (systemd/sd-bus.h)
