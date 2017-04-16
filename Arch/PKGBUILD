@@ -1,9 +1,9 @@
 # Maintainer: Federico Di Pierro <nierro92@gmail.com>
 
-pkgname=clight-git
-_gitname=Clight
+pkgname=clightd-git
+_gitname=Clightd
 _pkgname=clightd
-pkgver=r6.9e69ebf
+pkgver=r4.77cf646
 pkgrel=1
 pkgdesc="Bus interface to change screen brightness and capture frames from webcam."
 arch=('i686' 'x86_64')
@@ -21,11 +21,11 @@ pkgver() {
 }
 
 build() {
-    cd $srcdir/$_gitname/$_pkgname
+    cd $srcdir/$_gitname
     make
 }
 
 package() {
-    cd $srcdir/$_gitname/$_pkgname
+    cd $srcdir/$_gitname
     make DESTDIR="$pkgdir" install
 }
