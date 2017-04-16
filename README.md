@@ -76,8 +76,7 @@ Note that new brightness value is checked to be between 0 and max_brightness.
 
 
 ## Arch AUR packages
-In [Arch](https://github.com/FedeDP/Clightd/tree/master/Arch) folder you can find a PKGBUILD.  
-I will upload clightd to aur as soon as i feel it is ready to be used.  
+Clightd is available on AUR: https://aur.archlinux.org/packages/clightd-git/ .
 
 ## Deb packages
 Deb package for amd64 architecture is provided. You can find it inside [Debian](https://github.com/FedeDP/Clightd/tree/master/Debian) folder.  
