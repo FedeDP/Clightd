@@ -1,4 +1,6 @@
-This is clight's own bus interface.
+[![Build Status](https://travis-ci.org/FedeDP/Clightd.svg?branch=master)](https://travis-ci.org/FedeDP/Clight)
+
+Clightd is a bus interface that let you easily set screen brightness, gamma temperature and get ambient brightness through webcam frames capture.
 
 ## It currently needs:
 * libsystemd >= 221 (systemd/sd-bus.h)
@@ -69,3 +71,22 @@ Note that new brightness value is checked to be between 0 and max_brightness.
 
 ### If built with frame captures support:
 * *captureframes* -> takes a video sysname (eg: video0) and a number of frames to be captured (int, between 1 and 20). Returns average frames brightness, between 0.0 and 1.0 (double).
+
+
+## Arch AUR packages
+In [Arch](https://github.com/FedeDP/Clightd/tree/master/Arch) folder you can find a PKGBUILD.  
+I will upload clightd to aur as soon as i feel it is ready to be used.  
+
+## Deb packages
+Deb package for amd64 architecture is provided. You can find it inside [Debian](https://github.com/FedeDP/Clightd/tree/master/Debian) folder.  
+Moreover, you can very easily build your own packages, if aforementioned package happens to be outdated.  
+You only need to issue:
+
+    $ make deb
+
+A deb file will be created in [Debian](https://github.com/FedeDP/Clightd/tree/master/Debian) folder.  
+Please note that while i am using Debian testing at my job, i am developing clightd from archlinux.  
+Thus, you can encounter some packaging issues. Please, report back.  
+
+## License
+This software is distributed with GPL license, see [COPYING](https://github.com/FedeDP/Clightd/blob/master/COPYING) file for more informations.
