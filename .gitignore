@@ -1,4 +1,4 @@
 *.kdev4
 .kdev4/
 *.o
-/clightd
+clightd
