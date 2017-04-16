@@ -1,0 +1,8 @@
+[Unit]
+Description=Bus service to change screen brightness
+
+[Service]
+Type=dbus
+BusName=org.clightd.backlight
+User=root
+ExecStart=/usr/lib/clightd/clightd 

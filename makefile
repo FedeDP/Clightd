@@ -4,6 +4,8 @@ BUSCONFDIR = /etc/dbus-1/system.d/
 BUSCONFNAME = org.clightd.backlight.conf
 BUSSERVICEDIR = /usr/share/dbus-1/system-services/
 BUSSERVICENAME = org.clightd.backlight.service
+SYSTEMDSERVICE = clightd.service
+SYSTEMDDIR = /usr/lib/systemd/system
 EXTRADIR = Scripts
 DEBIANDIR = ./Clightd
 DEBOUTPUTDIR = ./Debian
@@ -92,6 +94,10 @@ install:
 	$(info installing dbus service file.)
 	@$(INSTALL_DIR) "$(DESTDIR)$(BUSSERVICEDIR)"
 	@$(INSTALL_DATA) $(EXTRADIR)/$(BUSSERVICENAME) "$(DESTDIR)$(BUSSERVICEDIR)"
+	
+	$(info installing systemd service file.)
+	@$(INSTALL_DIR) "$(DESTDIR)$(SYSTEMDDIR)"
+	@$(INSTALL_DATA) $(EXTRADIR)/$(SYSTEMDSERVICE) "$(DESTDIR)$(SYSTEMDDIR)"
 
 uninstall:
 	$(info uninstalling bin.)
@@ -102,3 +108,6 @@ uninstall:
 
 	$(info uninstalling dbus service file.)
 	@$(RM) "$(DESTDIR)$(BUSSERVICEDIR)/$(BUSSERVICENAME)"
+	
+	$(info uninstalling systemd service file.)
+	@$(RM) "$(DESTDIR)$(SYSTEMDDIR)/$(SYSTEMDSERVICE)"
