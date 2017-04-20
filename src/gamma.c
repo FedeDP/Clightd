@@ -102,7 +102,10 @@ static int get_temp(const unsigned short R, const unsigned short B) {
     return temperature;
 }
 
-void set_gamma(const char *display, int temp, int *err) {
+void set_gamma(const char *display, const char *xauthority, int temp, int *err) {
+    /* set xauthority cookie */
+    setenv("XAUTHORITY", xauthority, 1);
+    
     Display *dpy = XOpenDisplay(display);
     if (dpy == NULL) {
         perror("XopenDisplay");
@@ -139,8 +142,12 @@ void set_gamma(const char *display, int temp, int *err) {
     XCloseDisplay(dpy);
 }
 
-int get_gamma(const char *display, int *err) {
+int get_gamma(const char *display, const char *xauthority, int *err) {
     int temp = -1;
+    
+    /* set xauthority cookie */
+    setenv("XAUTHORITY", xauthority, 1);
+    
     Display *dpy = XOpenDisplay(display);
     if (dpy == NULL) {
         perror("XopenDisplay");

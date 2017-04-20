@@ -57,7 +57,7 @@ A clight replacement, using clightd, can be something like (pseudo-code):
     $ new_br = ambient_br * max_br
     $ busctl call org.clightd.backlight /org/clightd/backlight org.clightd.backlight setbrightness si "" new_br
 
-Note that passing an empty string as first parameter will make clightd use first subsystem matching device it finds (through libudev). It should be good to go in most cases.
+Note that passing an empty/NULL string as first parameter will make clightd use first subsystem matching device it finds (through libudev). It should be good to go in most cases.
 
 ## Bus interface methods
 * *getbrightness* -> takes a backlight kernel interface (eg: intel_backlight) or nothing to just use first backlight kernel interface that libudev finds.
@@ -68,8 +68,8 @@ Note that new brightness value is checked to be between 0 and max_brightness.
 * *getactualbrightness* -> takes a backlight kernel interface. Returns actual brightness for that interface (int).
 
 ### If built with gamma support:
-* *getgamma* -> takes env display variable, returns current display temperature (int).
-* *setgamma* -> takes env display variable and a temperature value (int, between 1000 and 10000) and set display temperature. Returns newly setted display temperature (int).
+* *getgamma* -> takes env DISPLAY variable, env XAUTHORITY variable. Returns current display temperature (int).
+* *setgamma* -> takes env DISPLAY variable, env XAUTHORITY variable and a temperature value (int, between 1000 and 10000). Returns newly setted display temperature (int).
 
 ### If built with frame captures support:
 * *captureframes* -> takes a video sysname (eg: video0) and a number of frames to be captured (int, between 1 and 20). Returns average frames brightness, between 0.0 and 1.0 (double).

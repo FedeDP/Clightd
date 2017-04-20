@@ -7,7 +7,7 @@
 
 #include "commons.h"
 
-void set_gamma(const char *display, int temp, int *err);
-int get_gamma(const char *display, int *err);
+void set_gamma(const char *display, const char *xauthority, int temp, int *err);
+int get_gamma(const char *display, const char *xauthority, int *err);
 
 #endif

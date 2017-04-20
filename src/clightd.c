@@ -62,9 +62,9 @@ static const sd_bus_vtable calculator_vtable[] = {
     SD_BUS_METHOD("getactualbrightness", "s", "i", method_getactualbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
 #ifndef DISABLE_GAMMA
     // takes: current display env variable and new screen gamma temperature val. Returns new temperature val
-    SD_BUS_METHOD("setgamma", "si", "i", method_setgamma, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("setgamma", "ssi", "i", method_setgamma, SD_BUS_VTABLE_UNPRIVILEGED),
     // takes: current display env variable. Returns current temperature val
-    SD_BUS_METHOD("getgamma", "s", "i", method_getgamma, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("getgamma", "ss", "i", method_getgamma, SD_BUS_VTABLE_UNPRIVILEGED),
 #endif
 #ifndef DISABLE_FRAME_CAPTURES
     // takes: video interface, eg: "/dev/video0". Returns frame average brightness.
@@ -214,10 +214,10 @@ static int method_getactualbrightness(sd_bus_message *m, void *userdata, sd_bus_
 #ifndef DISABLE_GAMMA
 static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     int temp, error = 0;
-    const char *display = NULL;
+    const char *display = NULL, *xauthority = NULL;
 
     /* Read the parameters */
-    int r = sd_bus_message_read(m, "si", &display, &temp);
+    int r = sd_bus_message_read(m, "ssi", &display, &xauthority, &temp);
     if (r < 0) {
         fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
         return r;
@@ -226,7 +226,7 @@ static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
     if (temp < 1000 || temp > 10000) {
         error = EINVAL;
     } else {
-        set_gamma(display, temp, &error);
+        set_gamma(display, xauthority, temp, &error);
     }
     if (error) {
         if (error == EINVAL) {
@@ -245,16 +245,16 @@ static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
 
 static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     int error = 0;
-    const char *display = NULL;
+    const char *display = NULL, *xauthority = NULL;
     
     /* Read the parameters */
-    int r = sd_bus_message_read(m, "s", &display);
+    int r = sd_bus_message_read(m, "ss", &display, &xauthority);
     if (r < 0) {
         fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
         return r;
     }
     
-    int temp = get_gamma(display, &error);
+    int temp = get_gamma(display, xauthority, &error);
     if (error) {
         if (error == ENXIO) {
             sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Could not open X screen.");
