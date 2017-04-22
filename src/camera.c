@@ -123,7 +123,6 @@ static void init(void) {
     
     state->width = fmt.fmt.pix.width;
     state->height = fmt.fmt.pix.height;
-//     ilInit();
 }
 
 static void init_mmap(void) {
@@ -159,7 +158,7 @@ static int xioctl(int request, void *arg) {
     int r;
     
     do {
-        r = ioctl (state->device_fd, request, arg);
+        r = ioctl(state->device_fd, request, arg);
     } while (-1 == r && EINTR == errno);
     
     if (r == -1) {
@@ -242,7 +241,6 @@ static double compute_avg_brightness(int num_captures) {
 }
 
 static void free_all(void) {
-//     ilShutDown();
     if (state->device_fd != -1) {
         close(state->device_fd);
     }

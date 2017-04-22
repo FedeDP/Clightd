@@ -400,6 +400,7 @@ int main(void) {
     }
 
 finish:
+    sd_bus_release_name(bus, bus_interface);
     if (slot) {
         sd_bus_slot_unref(slot);
     }

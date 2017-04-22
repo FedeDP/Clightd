@@ -110,7 +110,7 @@ void set_gamma(const char *display, const char *xauthority, int temp, int *err) 
     if (dpy == NULL) {
         perror("XopenDisplay");
         *err = ENXIO;
-        return;
+        goto end;
     }
 
     int screen = DefaultScreen(dpy);
@@ -124,11 +124,8 @@ void set_gamma(const char *display, const char *xauthority, int temp, int *err) 
         
     for (int i = 0; i < res->ncrtc; i++) {
         int crtcxid = res->crtcs[i];
-
         int size = XRRGetCrtcGammaSize(dpy, crtcxid);
-
         XRRCrtcGamma *crtc_gamma = XRRAllocGamma(size);
-
         for (int j = 0; j < size; j++) {
             double g = 65535.0 * j / size;
             crtc_gamma->red[j] = g * red;
@@ -138,8 +135,11 @@ void set_gamma(const char *display, const char *xauthority, int temp, int *err) 
         XRRSetCrtcGamma(dpy, crtcxid, crtc_gamma);
         XFree(crtc_gamma);
     }
-
     XCloseDisplay(dpy);
+
+end:
+    /* Drop xauthority cookie */
+    unsetenv("XAUTHORITY");
 }
 
 int get_gamma(const char *display, const char *xauthority, int *err) {
@@ -172,6 +172,8 @@ int get_gamma(const char *display, const char *xauthority, int *err) {
     XCloseDisplay(dpy);
 
 end:
+    /* Drop xauthority cookie */
+    unsetenv("XAUTHORITY");
     return temp;
 }
 
