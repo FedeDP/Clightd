@@ -78,7 +78,7 @@ static const sd_bus_vtable calculator_vtable[] = {
  */
 static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     int value, r, max;
-    struct udev_device *dev;
+    struct udev_device *dev = NULL;
     const char *backlight_interface;
 
     /* Read the parameters */
@@ -129,7 +129,7 @@ static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error 
  */
 static int method_getbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     int x, r;
-    struct udev_device *dev;
+    struct udev_device *dev = NULL;
     const char *backlight_interface;
 
     /* Read the parameters */
@@ -158,7 +158,7 @@ static int method_getbrightness(sd_bus_message *m, void *userdata, sd_bus_error 
  */
 static int method_getmaxbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     int x, r;
-    struct udev_device *dev;
+    struct udev_device *dev = NULL;
     const char *backlight_interface;
 
     /* Read the parameters */
@@ -187,7 +187,7 @@ static int method_getmaxbrightness(sd_bus_message *m, void *userdata, sd_bus_err
  */
 static int method_getactualbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     int x, r;
-    struct udev_device *dev;
+    struct udev_device *dev = NULL;
     const char *backlight_interface;
 
     /* Read the parameters */
@@ -276,7 +276,7 @@ static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
  */
 static int method_captureframes(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     int r, error = 0, num_captures;
-    struct udev_device *dev;
+    struct udev_device *dev = NULL;
     const char *video_interface;
 
     /* Read the parameters */
