@@ -42,6 +42,8 @@ $(info Gamma support disabled.)
 endif
 endif
 
+CLIGHTD_VERSION = $(shell git describe --abbrev=0 --always --tags)
+
 all: clightd clean
 
 debug: clightd-debug clean
@@ -68,7 +70,7 @@ install-deb: install
 
 build-deb:
 	$(info setting deb package version.)
-	@sed -i 's/Version:.*/Version: $(CLIGHT_VERSION)/' ./DEBIAN/control
+	@sed -i 's/Version:.*/Version: $(CLIGHTD_VERSION)/' ./DEBIAN/control
 	$(info copying debian build script.)
 	@cp -r DEBIAN/ $(DEBIANDIR)
 	@$(INSTALL_DIR) $(DEBOUTPUTDIR)
