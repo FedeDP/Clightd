@@ -15,6 +15,10 @@ Clightd is a bus interface that lets you easily set screen brightness, gamma tem
 ### Needed only if built with frame captures support:
 * linux-api-headers (linux/videodev2.h)
 
+## Runtime deps:
+* shared objects from build libraries
+* polkit
+
 ## Build time switches:
 * DISABLE_FRAME_CAPTURES=1 (to disable frame captures support)
 * DISABLE_GAMMA=1 (to disable gamma support)
