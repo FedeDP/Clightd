@@ -18,6 +18,7 @@ arch:
         - linux-api-headers
         - libx11
         - libxrandr
+        - polkit
     script:
         - "echo $CC"
         - make debug
