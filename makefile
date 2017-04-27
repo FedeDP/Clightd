@@ -6,6 +6,8 @@ BUSSERVICEDIR = /usr/share/dbus-1/system-services/
 BUSSERVICENAME = org.clightd.backlight.service
 SYSTEMDSERVICE = clightd.service
 SYSTEMDDIR = /usr/lib/systemd/system
+POLKITPOLICYNAME = org.clightd.backlight.policy
+POLKITPOLICYDIR = /usr/share/polkit-1/actions
 EXTRADIR = Scripts
 DEBIANDIR = ./Clightd
 DEBOUTPUTDIR = ./Debian
@@ -97,6 +99,10 @@ install:
 	$(info installing systemd service file.)
 	@$(INSTALL_DIR) "$(DESTDIR)$(SYSTEMDDIR)"
 	@$(INSTALL_DATA) $(EXTRADIR)/$(SYSTEMDSERVICE) "$(DESTDIR)$(SYSTEMDDIR)"
+	
+	$(info installing polkit policy file.)
+	@$(INSTALL_DIR) "$(DESTDIR)$(POLKITPOLICYDIR)"
+	@$(INSTALL_DATA) $(EXTRADIR)/$(POLKITPOLICYNAME) "$(DESTDIR)$(POLKITPOLICYDIR)"
 
 uninstall:
 	$(info uninstalling bin.)
@@ -110,3 +116,6 @@ uninstall:
 	
 	$(info uninstalling systemd service file.)
 	@$(RM) "$(DESTDIR)$(SYSTEMDDIR)/$(SYSTEMDSERVICE)"
+	
+	$(info uninstalling polkit policy file.)
+	@$(RM) "$(DESTDIR)$(POLKITPOLICYDIR)/$(POLKITPOLICYNAME)"
