@@ -69,8 +69,7 @@ Note that passing an empty/NULL string as first parameter will make clightd use 
 * *getbrightness* -> takes a backlight kernel interface (eg: intel_backlight) or nothing to just use first backlight kernel interface that libudev finds.
 Returns current brightness value (int).
 * *getmaxbrightness* -> takes a backlight kernel interface (as above). Returns max supported brightness value for that interface (int).
-* *setbrightness* -> takes a backlight kernel interface and a new value. Set the brightness value on that interface and returns new brightness value (int). Only active sessions can call this method.
-Note that new brightness value is checked to be between 0 and max_brightness.
+* *setbrightness* -> takes a backlight kernel interface and a new value. Set the brightness value on that interface and returns new brightness value (int). Note that new brightness value is checked to be between 0 and max_brightness. Only active sessions can call this method.
 * *getactualbrightness* -> takes a backlight kernel interface. Returns actual brightness for that interface (int).
 
 ### If built with gamma support:
