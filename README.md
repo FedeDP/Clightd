@@ -15,6 +15,10 @@ Clightd is a bus interface that lets you easily set screen brightness, gamma tem
 ### Needed only if built with frame captures support:
 * linux-api-headers (linux/videodev2.h)
 
+## Runtime deps:
+* shared objects from build libraries
+* polkit
+
 ## Build time switches:
 * DISABLE_FRAME_CAPTURES=1 (to disable frame captures support)
 * DISABLE_GAMMA=1 (to disable gamma support)
@@ -44,7 +48,9 @@ Brightness related bus interface methods make all use of libudev to write and re
 If no syspath is passed as parameter to method calls, it uses first subsystem matching device that it finds through libudev.  
 Strict error checking tries to enforce no issue of any kind.  
 
-Getgamma function supports 50-steps temperature values. It tries to fit temperature inside a 50 step (eg: it finds 5238, tries if 5200 or 5250 are fine too, and in case returns them. Otherwise, it returns 5238.)
+Getgamma function supports 50-steps temperature values. It tries to fit temperature inside a 50 step (eg: it finds 5238, tries if 5200 or 5250 are fine too, and in case returns them. Otherwise, it returns 5238.)  
+
+Clightd makes use of polkit for setgamma, setbrightness and captureframes function. Only active sessions can call these methods.  
 
 You may ask why did i developed this solution. The answer is quite simple: on linux there is no simple and unified way of changing screen brightness.  
 So, i thought it could be a good idea to develop a bus service that can be used by every other program.  
@@ -63,16 +69,15 @@ Note that passing an empty/NULL string as first parameter will make clightd use 
 * *getbrightness* -> takes a backlight kernel interface (eg: intel_backlight) or nothing to just use first backlight kernel interface that libudev finds.
 Returns current brightness value (int).
 * *getmaxbrightness* -> takes a backlight kernel interface (as above). Returns max supported brightness value for that interface (int).
-* *setbrightness* -> takes a backlight kernel interface and a new value. Set the brightness value on that interface and returns new brightness value (int).
-Note that new brightness value is checked to be between 0 and max_brightness.
+* *setbrightness* -> takes a backlight kernel interface and a new value. Set the brightness value on that interface and returns new brightness value (int). Note that new brightness value is checked to be between 0 and max_brightness. Only active sessions can call this method.
 * *getactualbrightness* -> takes a backlight kernel interface. Returns actual brightness for that interface (int).
 
 ### If built with gamma support:
-* *getgamma* -> takes env DISPLAY variable, env XAUTHORITY variable. Returns current display temperature (int).
-* *setgamma* -> takes env DISPLAY variable, env XAUTHORITY variable and a temperature value (int, between 1000 and 10000). Returns newly setted display temperature (int).
+* *getgamma* -> takes env DISPLAY variable and env XAUTHORITY variable. Returns current display temperature (int).
+* *setgamma* -> takes env DISPLAY variable, env XAUTHORITY variable and a temperature value (int, between 1000 and 10000). Returns newly setted display temperature (int). Only active sessions can call this method.
 
 ### If built with frame captures support:
-* *captureframes* -> takes a video sysname (eg: video0) and a number of frames to be captured (int, between 1 and 20). Returns average frames brightness, between 0.0 and 1.0 (double).
+* *captureframes* -> takes a video sysname (eg: video0) and a number of frames to be captured (int, between 1 and 20). Returns average frames brightness, between 0.0 and 1.0 (double). Only active sessions can call this method.
 
 
 ## Arch AUR packages

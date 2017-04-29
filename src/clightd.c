@@ -42,15 +42,17 @@ static int method_captureframes(sd_bus_message *m, void *userdata, sd_bus_error 
 static void get_first_matching_device(struct udev_device **dev, const char *subsystem);
 static void get_udev_device(const char *backlight_interface, const char *subsystem,
                             sd_bus_error **ret_error, struct udev_device **dev);
-
+static int check_authorization(sd_bus_message *m);
 
 static const char object_path[] = "/org/clightd/backlight";
 static const char bus_interface[] = "org.clightd.backlight";
 static struct udev *udev;
+static sd_bus *bus = NULL;
+
 /**
  * Bus spec: https://dbus.freedesktop.org/doc/dbus-specification.html
  */
-static const sd_bus_vtable calculator_vtable[] = {
+static const sd_bus_vtable clightd_vtable[] = {
     SD_BUS_VTABLE_START(0),
     // takes: backlight kernel interface, eg: "intel_backlight" and val to be written. Returns new val.
     SD_BUS_METHOD("setbrightness", "si", "i", method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
@@ -80,6 +82,11 @@ static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error 
     int value, r, max;
     struct udev_device *dev = NULL;
     const char *backlight_interface;
+    
+    if (!check_authorization(m)) {
+        sd_bus_error_set_errno(ret_error, EACCES);
+        return -EACCES;
+    }
 
     /* Read the parameters */
     r = sd_bus_message_read(m, "si", &backlight_interface, &value);
@@ -216,6 +223,11 @@ static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
     int temp, error = 0;
     const char *display = NULL, *xauthority = NULL;
 
+    if (!check_authorization(m)) {
+        sd_bus_error_set_errno(ret_error, EACCES);
+        return -EACCES;
+    }
+    
     /* Read the parameters */
     int r = sd_bus_message_read(m, "ssi", &display, &xauthority, &temp);
     if (r < 0) {
@@ -279,6 +291,11 @@ static int method_captureframes(sd_bus_message *m, void *userdata, sd_bus_error 
     struct udev_device *dev = NULL;
     const char *video_interface;
 
+    if (!check_authorization(m)) {
+        sd_bus_error_set_errno(ret_error, EACCES);
+        return -EACCES;
+    }
+    
     /* Read the parameters */
     r = sd_bus_message_read(m, "si", &video_interface, &num_captures);
     if (r < 0) {
@@ -345,9 +362,47 @@ static void get_udev_device(const char *backlight_interface, const char *subsyst
     }
 }
 
+static int check_authorization(sd_bus_message *m) {
+    int authorized = 0;
+    sd_bus_error error = SD_BUS_ERROR_NULL;
+    sd_bus_message *reply = NULL;
+    sd_bus_creds *c = sd_bus_message_get_creds(m);
+
+   const char *busname;
+   int r = sd_bus_creds_get_unique_name(c, &busname);
+    if (r < 0) {
+        fprintf(stderr, "%s\n", strerror(-r));
+        goto end;
+    }
+    
+    char action_id[100] = {0};
+    snprintf(action_id, sizeof(action_id), "%s.%s", sd_bus_message_get_destination(m), sd_bus_message_get_member(m));
+
+    r = sd_bus_call_method(bus, "org.freedesktop.PolicyKit1", "/org/freedesktop/PolicyKit1/Authority",
+                           "org.freedesktop.PolicyKit1.Authority", "CheckAuthorization", &error, &reply,
+                           "(sa{sv})sa{ss}us", "system-bus-name", 1, "name", "s", busname, action_id, NULL, 0, "");
+    if (r < 0) {
+        fprintf(stderr, "%s\n", error.message);
+    } else {
+        /* only read first boolean -> complete signature is "bba{ss}" but we only need first (authorized boolean) */
+        r = sd_bus_message_read(reply, "(bba{ss})", &authorized, NULL, NULL);
+        if (r < 0) {
+            fprintf(stderr, "%s\n", strerror(-r));
+        }
+    }
+    
+end:
+    if (reply) {
+        sd_bus_message_unref(reply);
+    }
+    if (error.message) {
+        sd_bus_error_free(&error);
+    }
+    return authorized;
+}
+
 int main(void) {
     sd_bus_slot *slot = NULL;
-    sd_bus *bus = NULL;
     int r;
 
     udev = udev_new();
@@ -364,7 +419,7 @@ int main(void) {
                                  &slot,
                                  object_path,
                                  bus_interface,
-                                 calculator_vtable,
+                                 clightd_vtable,
                                  NULL);
     if (r < 0) {
         fprintf(stderr, "Failed to issue method call: %s\n", strerror(-r));
