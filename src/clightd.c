@@ -84,8 +84,8 @@ static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error 
     const char *backlight_interface;
     
     if (!check_authorization(m)) {
-        sd_bus_error_set_errno(ret_error, EACCES);
-        return -EACCES;
+        sd_bus_error_set_errno(ret_error, EPERM);
+        return -EPERM;
     }
 
     /* Read the parameters */
@@ -224,8 +224,8 @@ static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
     const char *display = NULL, *xauthority = NULL;
 
     if (!check_authorization(m)) {
-        sd_bus_error_set_errno(ret_error, EACCES);
-        return -EACCES;
+        sd_bus_error_set_errno(ret_error, EPERM);
+        return -EPERM;
     }
     
     /* Read the parameters */
@@ -292,8 +292,8 @@ static int method_captureframes(sd_bus_message *m, void *userdata, sd_bus_error 
     const char *video_interface;
 
     if (!check_authorization(m)) {
-        sd_bus_error_set_errno(ret_error, EACCES);
-        return -EACCES;
+        sd_bus_error_set_errno(ret_error, EPERM);
+        return -EPERM;
     }
     
     /* Read the parameters */
