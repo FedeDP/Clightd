@@ -1,5 +1,8 @@
-Before v1.0:
+## Before v1.0:
 
 - [x] add polkit checkAuthorization support -> this way only active session can affect screen brightness/gamma
+
+## Future development
+
 - [ ] drop xlib and use libxcb (see redshift) for gamma (https://github.com/jonls/redshift/blob/master/src/gamma-randr.c)
-- [ ] once moved gamma to xcb, move dpms support in clightd (as xcb will already be a dep)
+- [ ] once moved gamma to xcb, move dpms support in clightd (as xcb will already be a dep) so to drop xcb dep on clight
