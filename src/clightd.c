@@ -27,17 +27,21 @@
 #include "../inc/camera.h"
 #include "../inc/gamma.h"
 #include "../inc/commons.h"
+#include "../inc/dpms.h"
 
 static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_getbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_getmaxbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_getactualbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
-#ifndef DISABLE_GAMMA
+#ifdef GAMMA_PRESENT
 static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 #endif
 #ifndef DISABLE_FRAME_CAPTURES
 static int method_captureframes(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
+#endif
+#ifdef DPMS_PRESENT
+static int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 #endif
 static void get_first_matching_device(struct udev_device **dev, const char *subsystem);
 static void get_udev_device(const char *backlight_interface, const char *subsystem,
@@ -54,23 +58,19 @@ static sd_bus *bus = NULL;
  */
 static const sd_bus_vtable clightd_vtable[] = {
     SD_BUS_VTABLE_START(0),
-    // takes: backlight kernel interface, eg: "intel_backlight" and val to be written. Returns new val.
     SD_BUS_METHOD("setbrightness", "si", "i", method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    // takes: backlight kernel interface, eg: "intel_backlight". Returns brightness val
     SD_BUS_METHOD("getbrightness", "s", "i", method_getbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    // takes: backlight kernel interface, eg: "intel_backlight". Returns max brightness val
     SD_BUS_METHOD("getmaxbrightness", "s", "i", method_getmaxbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    // takes: backlight kernel interface, eg: "intel_backlight". Returns actual brightness val
     SD_BUS_METHOD("getactualbrightness", "s", "i", method_getactualbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-#ifndef DISABLE_GAMMA
-    // takes: current display env variable and new screen gamma temperature val. Returns new temperature val
+#ifdef GAMMA_PRESENT
     SD_BUS_METHOD("setgamma", "ssi", "i", method_setgamma, SD_BUS_VTABLE_UNPRIVILEGED),
-    // takes: current display env variable. Returns current temperature val
     SD_BUS_METHOD("getgamma", "ss", "i", method_getgamma, SD_BUS_VTABLE_UNPRIVILEGED),
 #endif
 #ifndef DISABLE_FRAME_CAPTURES
-    // takes: video interface, eg: "/dev/video0". Returns frame average brightness.
     SD_BUS_METHOD("captureframes", "si", "d", method_captureframes, SD_BUS_VTABLE_UNPRIVILEGED),
+#endif
+#ifdef DPMS_PRESENT
+    SD_BUS_METHOD("getdpms", "ss", "i", method_getdpms, SD_BUS_VTABLE_UNPRIVILEGED),
 #endif
     SD_BUS_VTABLE_END
 };
@@ -218,7 +218,7 @@ static int method_getactualbrightness(sd_bus_message *m, void *userdata, sd_bus_
     return sd_bus_reply_method_return(m, "i", x);
 }
 
-#ifndef DISABLE_GAMMA
+#ifdef GAMMA_PRESENT
 static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     int temp, error = 0;
     const char *display = NULL, *xauthority = NULL;
@@ -326,6 +326,35 @@ static int method_captureframes(sd_bus_message *m, void *userdata, sd_bus_error 
 
     /* Reply with the response */
     return sd_bus_reply_method_return(m, "d", val);
+}
+#endif
+
+#ifdef DPMS_PRESENT
+/*
+ * Get dpms state
+ */
+static int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+    const char *display = NULL, *xauthority = NULL;
+    
+    /* Read the parameters */
+    int r = sd_bus_message_read(m, "ss", &display, &xauthority);
+    if (r < 0) {
+        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
+        return r;
+    }
+    
+    int dpms_state = get_dpms_state(display, xauthority);
+    if (dpms_state == -2) {
+        sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Could not open X screen.");
+        return -1;
+    }
+    
+    if (dpms_state == DPMS_DISABLED) {
+        printf("Dpms is currently disabled.\n");
+    } else {
+        printf("Current dpms state: %d\n", dpms_state);
+    }
+    return sd_bus_reply_method_return(m, "i", dpms_state);
 }
 #endif
 

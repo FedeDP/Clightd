@@ -3,7 +3,7 @@
  * and to improvements made here: http://www.zombieprototypes.com/?p=210.
  **/
 
-#ifndef DISABLE_GAMMA
+#ifdef GAMMA_PRESENT
 
 #include "../inc/gamma.h"
 #include <X11/extensions/Xrandr.h>

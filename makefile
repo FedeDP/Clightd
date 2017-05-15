@@ -35,13 +35,31 @@ $(info Frames capturing support disabled.)
 endif
 
 ifneq ("$(DISABLE_GAMMA)","1")
-CFLAGS+=$(shell pkg-config --cflags x11 xrandr)
-LIBS+=$(shell pkg-config --libs x11 xrandr)
+GAMMA=$(shell pkg-config --silence-errors --libs x11 xrandr)
+ifneq ("$(GAMMA)","")
+CFLAGS+=-DGAMMA_PRESENT $(shell pkg-config --cflags x11 xrandr)
+LIBS+=$(GAMMA)
 $(info Gamma support enabled.)
 else
-CFLAGS+=-DDISABLE_GAMMA
 $(info Gamma support disabled.)
 endif
+else
+$(info Gamma support disabled.)
+endif
+
+ifneq ("$(DISABLE_DPMS)","1")
+DPMS=$(shell pkg-config --silence-errors --libs x11 xext)
+ifneq ("$(DPMS)","")
+CFLAGS+=-DDPMS_PRESENT $(shell pkg-config --cflags x11 xext)
+LIBS+=$(DPMS)
+$(info DPMS support enabled.)
+else
+$(info DPMS support disabled.)
+endif
+else
+$(info DPMS support disabled.)
+endif
+
 endif
 
 CLIGHTD_VERSION = $(shell git describe --abbrev=0 --always --tags)

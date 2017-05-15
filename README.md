@@ -12,6 +12,10 @@ Clightd is a bus interface that lets you easily set screen brightness, gamma tem
 * libxrandr (X11/extensions/Xrandr.h)
 * libx11 (X11/Xlib.h)
 
+### Needed only if built with dpms support:
+* libxext (X11/extensions/Xext.h)
+* libx11 (X11/Xlib.h)
+
 ### Needed only if built with frame captures support:
 * linux-api-headers (linux/videodev2.h)
 
@@ -22,6 +26,7 @@ Clightd is a bus interface that lets you easily set screen brightness, gamma tem
 ## Build time switches:
 * DISABLE_FRAME_CAPTURES=1 (to disable frame captures support)
 * DISABLE_GAMMA=1 (to disable gamma support)
+* DISABLE_DPMS=1 (to disable dpms support)
 
 ## Build instructions:
 Build and install:
@@ -78,6 +83,9 @@ Returns current brightness value (int).
 
 ### If built with frame captures support:
 * *captureframes* -> takes a video sysname (eg: video0) and a number of frames to be captured (int, between 1 and 20). Returns average frames brightness, between 0.0 and 1.0 (double). Only active sessions can call this method.
+
+### If build with dpms support:
+* *getdpms* -> takes env DISPLAY variable and env XAUTHORITY variable. Returns display dpms state (int).
 
 
 ## Arch AUR packages

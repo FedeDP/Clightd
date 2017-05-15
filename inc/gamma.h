@@ -3,7 +3,7 @@
  * http://www.tedunangst.com/flak/post/sct-set-color-temperature
  */
 
-#ifndef DISABLE_GAMMA
+#ifdef GAMMA_PRESENT
 
 #include "commons.h"
 
