@@ -18,12 +18,13 @@ arch:
         - linux-api-headers
         - libx11
         - libxrandr
-        - polkit
+        - libxext
     script:
         - "echo $CC"
         - make debug
         - make DISABLE_FRAME_CAPTURES=1 debug
         - make DISABLE_GAMMA=1 debug
+        - make DISABLE_DPMS=1 debug
         - make DISABLE_FRAME_CAPTURES=1 DISABLE_GAMMA=1 debug
 
 script:
