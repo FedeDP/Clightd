@@ -42,6 +42,9 @@ static int method_captureframes(sd_bus_message *m, void *userdata, sd_bus_error 
 #endif
 #ifdef DPMS_PRESENT
 static int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
+static int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
+static int method_getdpms_timeouts(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
+static int method_setdpms_timeouts(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 #endif
 static void get_first_matching_device(struct udev_device **dev, const char *subsystem);
 static void get_udev_device(const char *backlight_interface, const char *subsystem,
@@ -71,6 +74,9 @@ static const sd_bus_vtable clightd_vtable[] = {
 #endif
 #ifdef DPMS_PRESENT
     SD_BUS_METHOD("getdpms", "ss", "i", method_getdpms, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("setdpms", "ssi", "i", method_setdpms, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("getdpms_timeouts", "ss", "iii", method_getdpms_timeouts, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("setdpms_timeouts", "ssiii", "i", method_setdpms_timeouts, SD_BUS_VTABLE_UNPRIVILEGED),
 #endif
     SD_BUS_VTABLE_END
 };
@@ -330,9 +336,6 @@ static int method_captureframes(sd_bus_message *m, void *userdata, sd_bus_error 
 #endif
 
 #ifdef DPMS_PRESENT
-/*
- * Get dpms state
- */
 static int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     const char *display = NULL, *xauthority = NULL;
     
@@ -356,6 +359,98 @@ static int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
     }
     return sd_bus_reply_method_return(m, "i", dpms_state);
 }
+
+static int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+    const char *display = NULL, *xauthority = NULL;
+    int level;
+    
+    /* Require polkit auth */
+//     if (!check_authorization(m)) {
+//         sd_bus_error_set_errno(ret_error, EPERM);
+//         return -EPERM;
+//     }
+    
+    /* Read the parameters */
+    int r = sd_bus_message_read(m, "ssi", &display, &xauthority, &level);
+    if (r < 0) {
+        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
+        return r;
+    }
+    
+    /* 0 -> DPMSModeOn, 3 -> DPMSModeOff */
+    if (level < 0 || level > 3) {
+        sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Wrong DPMS level value.");
+        return -EINVAL;
+    }
+    
+    int new_state = set_dpms_state(display, xauthority, level);
+    if (new_state) {
+        sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Could not open X screen.");
+        return -1;
+    }
+    
+    printf("New dpms state: %d\n", new_state);
+    return sd_bus_reply_method_return(m, "i", new_state);
+}
+
+static int method_getdpms_timeouts(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+    const char *display = NULL, *xauthority = NULL;
+    
+    /* Read the parameters */
+    int r = sd_bus_message_read(m, "ss", &display, &xauthority);
+    if (r < 0) {
+        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
+        return r;
+    }
+    
+    struct dpms_timeout t = {0};
+    int error = get_dpms_timeouts(display, xauthority, &t);
+    if (error == -2) {
+        sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Could not open X screen.");
+        return -1;
+    }
+    if (error == -1) {
+        sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Dpms is disabled.");
+        return -1;
+    }
+    
+    printf("Current dpms timeouts:\tStandby: %ds\tSuspend: %ds\tOff:%ds.\n", t.standby, t.suspend, t.off);
+    return sd_bus_reply_method_return(m, "iii", t.standby, t.suspend, t.off);
+}
+
+static int method_setdpms_timeouts(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+    const char *display = NULL, *xauthority = NULL;
+    
+    /* Require polkit auth */
+    if (!check_authorization(m)) {
+        sd_bus_error_set_errno(ret_error, EPERM);
+        return -EPERM;
+    }
+    
+    /* Read the parameters */
+    int standby, suspend, off;
+    int r = sd_bus_message_read(m, "ssiii", &display, &xauthority, &standby, &suspend, &off);
+    if (r < 0) {
+        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
+        return r;
+    }
+    
+    if (standby < 0 || suspend < 0 || off < 0) {
+        sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Wrong DPMS timeouts values.");
+        return -EINVAL;
+    }
+    
+    struct dpms_timeout t = { .standby = standby, .suspend = suspend, .off = off };
+    int err = set_dpms_timeouts(display, xauthority, &t);
+    if (err) {
+        sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Could not open X screen.");
+        return -1;
+    }
+    
+    printf("New dpms timeouts:\tStandby: %ds\tSuspend: %ds\tOff:%ds.\n", t.standby, t.suspend, t.off);
+    return sd_bus_reply_method_return(m, "i", err);
+}
+
 #endif
 
 /**

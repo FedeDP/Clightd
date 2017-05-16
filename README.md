@@ -71,21 +71,17 @@ A clight replacement, using clightd, can be something like (pseudo-code):
 Note that passing an empty/NULL string as first parameter will make clightd use first subsystem matching device it finds (through libudev). It should be good to go in most cases.
 
 ## Bus interface methods
-* *getbrightness* -> takes a backlight kernel interface (eg: intel_backlight) or nothing to just use first backlight kernel interface that libudev finds.
-Returns current brightness value (int).
-* *getmaxbrightness* -> takes a backlight kernel interface (as above). Returns max supported brightness value for that interface (int).
-* *setbrightness* -> takes a backlight kernel interface and a new value. Set the brightness value on that interface and returns new brightness value (int). Note that new brightness value is checked to be between 0 and max_brightness. Only active sessions can call this method.
-* *getactualbrightness* -> takes a backlight kernel interface. Returns actual brightness for that interface (int).
-
-### If built with gamma support:
-* *getgamma* -> takes env DISPLAY variable and env XAUTHORITY variable. Returns current display temperature (int).
-* *setgamma* -> takes env DISPLAY variable, env XAUTHORITY variable and a temperature value (int, between 1000 and 10000). Returns newly setted display temperature (int). Only active sessions can call this method.
-
-### If built with frame captures support:
-* *captureframes* -> takes a video sysname (eg: video0) and a number of frames to be captured (int, between 1 and 20). Returns average frames brightness, between 0.0 and 1.0 (double). Only active sessions can call this method.
-
-### If build with dpms support:
-* *getdpms* -> takes env DISPLAY variable and env XAUTHORITY variable. Returns display dpms state (int).
+| Method              | Signature | Input values                                                        | Return type | Return value                                   | Active sessions only |
+|---------------------|-----------|---------------------------------------------------------------------|-------------|------------------------------------------------|----------------------|
+| getbrightness       |    s      | * Backlight kernel interface (eg: intel_backlight) or empty string  |      i      | Interface's brightness                         |                      |
+| getmaxbrightness    |    s      | * Backlight kernel interface or empty string                        |      i      | Interface's max brightness                     |                      |
+| setbrightness       |    si     | * Backlight kernel interface or empty string * New brightness value |      i      | Brightness value setted                        |           ✔          |
+| getactualbrightness |    s      | * Backlight kernel interface or empty string                        |      i      | Interface's actual brightness                  |                      |
+| getgamma            |    ss     | * Env DISPLAY variable  * Env XAUTHORITY variable                   |      i      | Current display gamma temp                     |                      |
+| setgamma            |    ssi    | * Env DISPLAY variable  * Env XAUTHORITY variable * New gamma value |      i      | Gamma value setted                             |           ✔          |
+| captureframes       |    si     | * Video sysname (eg: video0) * Number of frames                     |      d      | Average frames brightness, between 0.0 and 1.0 |           ✔          |
+| getdpms             |    ss     | * Env DISPLAY variable  * Env XAUTHORITY variable                   |      i      | Current dpms state                             |                      |
+| setdpms             |    ssi    | * Env DISPLAY variable  * Env XAUTHORITY variable * New dpms state  |      i      | Dpms state setted                              |           ✔          |
 
 
 ## Arch AUR packages
