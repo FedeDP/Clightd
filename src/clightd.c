@@ -61,12 +61,12 @@ static sd_bus *bus = NULL;
  */
 static const sd_bus_vtable clightd_vtable[] = {
     SD_BUS_VTABLE_START(0),
-    SD_BUS_METHOD("setbrightness", "si", "i", method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("setbrightness", "si", NULL, method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getbrightness", "s", "i", method_getbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getmaxbrightness", "s", "i", method_getmaxbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getactualbrightness", "s", "i", method_getactualbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
 #ifdef GAMMA_PRESENT
-    SD_BUS_METHOD("setgamma", "ssi", "i", method_setgamma, SD_BUS_VTABLE_UNPRIVILEGED),
+SD_BUS_METHOD("setgamma", "ssi", NULL, method_setgamma, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getgamma", "ss", "i", method_getgamma, SD_BUS_VTABLE_UNPRIVILEGED),
 #endif
 #ifndef DISABLE_FRAME_CAPTURES
@@ -74,9 +74,9 @@ static const sd_bus_vtable clightd_vtable[] = {
 #endif
 #ifdef DPMS_PRESENT
     SD_BUS_METHOD("getdpms", "ss", "i", method_getdpms, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("setdpms", "ssi", "i", method_setdpms, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("setdpms", "ssi", NULL, method_setdpms, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getdpms_timeouts", "ss", "iii", method_getdpms_timeouts, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("setdpms_timeouts", "ssiii", "i", method_setdpms_timeouts, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("setdpms_timeouts", "ssiii", NULL, method_setdpms_timeouts, SD_BUS_VTABLE_UNPRIVILEGED),
 #endif
     SD_BUS_VTABLE_END
 };
@@ -133,8 +133,7 @@ static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error 
     printf("New brightness value for %s: %d\n", udev_device_get_sysname(dev), value);
 
     udev_device_unref(dev);
-    /* Reply with the response */
-    return sd_bus_reply_method_return(m, "i", value);
+    return sd_bus_reply_method_return(m, NULL);
 }
 
 /**
@@ -256,9 +255,7 @@ static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
     }
 
     printf("Gamma value set: %d\n", temp);
-
-    /* Reply with the response */
-    return sd_bus_reply_method_return(m, "i", temp);
+    return sd_bus_reply_method_return(m, NULL);
 }
 
 static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
@@ -347,9 +344,9 @@ static int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
     }
     
     int dpms_state = get_dpms_state(display, xauthority);
-    if (dpms_state == -2) {
+    if (dpms_state == NO_X) {
         sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Could not open X screen.");
-        return -1;
+        return NO_X;
     }
     
     if (dpms_state == DPMS_DISABLED) {
@@ -365,10 +362,10 @@ static int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
     int level;
     
     /* Require polkit auth */
-//     if (!check_authorization(m)) {
-//         sd_bus_error_set_errno(ret_error, EPERM);
-//         return -EPERM;
-//     }
+    if (!check_authorization(m)) {
+        sd_bus_error_set_errno(ret_error, EPERM);
+        return -EPERM;
+    }
     
     /* Read the parameters */
     int r = sd_bus_message_read(m, "ssi", &display, &xauthority, &level);
@@ -383,14 +380,14 @@ static int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
         return -EINVAL;
     }
     
-    int new_state = set_dpms_state(display, xauthority, level);
-    if (new_state) {
+    int err = set_dpms_state(display, xauthority, level);
+    if (err) {
         sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Could not open X screen.");
-        return -1;
+        return err;
     }
     
-    printf("New dpms state: %d\n", new_state);
-    return sd_bus_reply_method_return(m, "i", new_state);
+    printf("New dpms state: %d\n", level);
+    return sd_bus_reply_method_return(m, NULL);
 }
 
 static int method_getdpms_timeouts(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
@@ -405,13 +402,13 @@ static int method_getdpms_timeouts(sd_bus_message *m, void *userdata, sd_bus_err
     
     struct dpms_timeout t = {0};
     int error = get_dpms_timeouts(display, xauthority, &t);
-    if (error == -2) {
+    if (error == NO_X) {
         sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Could not open X screen.");
-        return -1;
+        return NO_X;
     }
-    if (error == -1) {
+    if (error == DPMS_DISABLED) {
         sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Dpms is disabled.");
-        return -1;
+        return DPMS_DISABLED;
     }
     
     printf("Current dpms timeouts:\tStandby: %ds\tSuspend: %ds\tOff:%ds.\n", t.standby, t.suspend, t.off);
@@ -444,11 +441,11 @@ static int method_setdpms_timeouts(sd_bus_message *m, void *userdata, sd_bus_err
     int err = set_dpms_timeouts(display, xauthority, &t);
     if (err) {
         sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Could not open X screen.");
-        return -1;
+        return err;
     }
     
     printf("New dpms timeouts:\tStandby: %ds\tSuspend: %ds\tOff:%ds.\n", t.standby, t.suspend, t.off);
-    return sd_bus_reply_method_return(m, "i", err);
+    return sd_bus_reply_method_return(m, NULL);
 }
 
 #endif
@@ -556,7 +553,7 @@ int main(void) {
         fprintf(stderr, "Failed to acquire service name: %s\n", strerror(-r));
         goto finish;
     }
-
+    
     for (;;) {
         /* Process requests */
         r = sd_bus_process(bus, NULL);

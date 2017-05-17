@@ -16,7 +16,7 @@
 int get_dpms_state(const char *display, const char *xauthority) {
     BOOL onoff;
     CARD16 s;
-    int ret = -2;
+    int ret = NO_X;
     
     /* set xauthority cookie */
     setenv("XAUTHORITY", xauthority, 1);
@@ -42,7 +42,7 @@ int get_dpms_state(const char *display, const char *xauthority) {
 }
 
 int set_dpms_state(const char *display, const char *xauthority, int dpms_level) {
-    int ret = dpms_level;
+    int ret = 0;
     
     /* set xauthority cookie */
     setenv("XAUTHORITY", xauthority, 1);
@@ -53,7 +53,7 @@ int set_dpms_state(const char *display, const char *xauthority, int dpms_level) 
         DPMSForceLevel(dpy, dpms_level);
         XFlush(dpy);
     } else {
-        ret = -3;
+        ret = NO_X;
     }
     
     /* Drop xauthority cookie */
@@ -69,7 +69,7 @@ int set_dpms_state(const char *display, const char *xauthority, int dpms_level) 
 int get_dpms_timeouts(const char *display, const char *xauthority, struct dpms_timeout *t) {
     BOOL onoff;
     CARD16 s;
-    int ret = -2;
+    int ret = NO_X;
     
     /* set xauthority cookie */
     setenv("XAUTHORITY", xauthority, 1);
@@ -107,7 +107,7 @@ int set_dpms_timeouts(const char *display, const char *xauthority, struct dpms_t
         DPMSSetTimeouts(dpy, t->standby, t->suspend, t->off);
         XFlush(dpy);
     } else {
-        ret = -3;
+        ret = NO_X;
     }
     
     /* Drop xauthority cookie */

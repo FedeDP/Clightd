@@ -70,19 +70,20 @@ A clight replacement, using clightd, can be something like (pseudo-code):
 
 Note that passing an empty/NULL string as first parameter will make clightd use first subsystem matching device it finds (through libudev). It should be good to go in most cases.
 
-## Bus interface methods
-| Method              | Signature | Input values                                                        | Return type | Return value                                   | Active sessions only |
-|---------------------|-----------|---------------------------------------------------------------------|-------------|------------------------------------------------|----------------------|
-| getbrightness       |    s      | * Backlight kernel interface (eg: intel_backlight) or empty string  |      i      | Interface's brightness                         |                      |
-| getmaxbrightness    |    s      | * Backlight kernel interface or empty string                        |      i      | Interface's max brightness                     |                      |
-| setbrightness       |    si     | * Backlight kernel interface or empty string * New brightness value |      i      | Brightness value setted                        |           ✔          |
-| getactualbrightness |    s      | * Backlight kernel interface or empty string                        |      i      | Interface's actual brightness                  |                      |
-| getgamma            |    ss     | * Env DISPLAY variable  * Env XAUTHORITY variable                   |      i      | Current display gamma temp                     |                      |
-| setgamma            |    ssi    | * Env DISPLAY variable  * Env XAUTHORITY variable * New gamma value |      i      | Gamma value setted                             |           ✔          |
-| captureframes       |    si     | * Video sysname (eg: video0) * Number of frames                     |      d      | Average frames brightness, between 0.0 and 1.0 |           ✔          |
-| getdpms             |    ss     | * Env DISPLAY variable  * Env XAUTHORITY variable                   |      i      | Current dpms state                             |                      |
-| setdpms             |    ssi    | * Env DISPLAY variable  * Env XAUTHORITY variable * New dpms state  |      i      | Dpms state setted                              |           ✔          |
-
+## Bus interface
+| Method | IN | IN values | OUT | OUT values | Polkit restricted |
+|-|-|-|-|-|-|
+| getbrightness | s | Backlight kernel interface (eg: intel_backlight) or empty string | i | Interface's brightness | |
+| getmaxbrightness | s | Backlight kernel interface | i | Interface's max brightness | |
+| getactualbrightness | s | Backlight kernel interface | i | Interface's actual brightness | |
+| setbrightness | si | <ul><li>Backlight kernel interface</li><li>New brightness value</li></ul>|||✔|
+| getgamma | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current display gamma temp | |
+| setgamma | ssi | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New gamma value</li></ul> | | |✔|
+| captureframes | si | <ul><li>video sysname(eg: Video0)</li><li>Number of frames</li></ul> | d | Average frames brightness, between 0.0 and 1.0 | ✔ |
+| getdpms | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current dpms state | |
+| setdpms | ssi | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New dpms state</li></ul> | | | ✔ |
+| getdpms_timeouts | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | iii | Dpms timeouts values |  |
+| setdpms_timeouts | ssiii | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New dpms timeouts</li></ul> |  |  |  ✔ |
 
 ## Arch AUR packages
 Clightd is available on AUR: https://aur.archlinux.org/packages/clightd-git/ .

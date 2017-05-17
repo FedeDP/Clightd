@@ -5,6 +5,7 @@
 #include <X11/extensions/dpms.h>
 
 #define DPMS_DISABLED -1
+#define NO_X -2
 
 struct dpms_timeout {
     CARD16 standby;

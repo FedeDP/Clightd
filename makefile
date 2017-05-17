@@ -19,7 +19,7 @@ INSTALL_DATA = $(INSTALL) -m644
 INSTALL_DIR = $(INSTALL) -d
 SRCDIR = src/
 LIBS = -lm $(shell pkg-config --libs libsystemd libudev)
-CFLAGS = $(shell pkg-config --cflags libsystemd libudev)
+CFLAGS = $(shell pkg-config --cflags libsystemd libudev) -D_GNU_SOURCE -std=c99
 
 ifeq (,$(findstring $(MAKECMDGOALS),"clean install uninstall"))
 
