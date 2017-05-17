@@ -76,14 +76,14 @@ Note that passing an empty/NULL string as first parameter will make clightd use 
 | getbrightness | s | Backlight kernel interface (eg: intel_backlight) or empty string | i | Interface's brightness | |
 | getmaxbrightness | s | Backlight kernel interface | i | Interface's max brightness | |
 | getactualbrightness | s | Backlight kernel interface | i | Interface's actual brightness | |
-| setbrightness | si | <ul><li>Backlight kernel interface</li><li>New brightness value</li></ul>|||✔|
+| setbrightness | si | <ul><li>Backlight kernel interface</li><li>New brightness value</li></ul>| i | New setted brightness |✔|
 | getgamma | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current display gamma temp | |
-| setgamma | ssi | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New gamma value</li></ul> | | |✔|
+| setgamma | ssi | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New gamma value</li></ul> | i | New setted gamma temp |✔|
 | captureframes | si | <ul><li>video sysname(eg: Video0)</li><li>Number of frames</li></ul> | d | Average frames brightness, between 0.0 and 1.0 | ✔ |
 | getdpms | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current dpms state | |
-| setdpms | ssi | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New dpms state</li></ul> | | | ✔ |
+| setdpms | ssi | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New dpms state</li></ul> | i | New setted dpms state | ✔ |
 | getdpms_timeouts | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | iii | Dpms timeouts values |  |
-| setdpms_timeouts | ssiii | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New dpms timeouts</li></ul> |  |  |  ✔ |
+| setdpms_timeouts | ssiii | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New dpms timeouts</li></ul> | iii | New dpms timeouts |  ✔ |
 
 ## Arch AUR packages
 Clightd is available on AUR: https://aur.archlinux.org/packages/clightd-git/ .

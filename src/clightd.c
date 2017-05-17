@@ -61,12 +61,12 @@ static sd_bus *bus = NULL;
  */
 static const sd_bus_vtable clightd_vtable[] = {
     SD_BUS_VTABLE_START(0),
-    SD_BUS_METHOD("setbrightness", "si", NULL, method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("setbrightness", "si", "i", method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getbrightness", "s", "i", method_getbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getmaxbrightness", "s", "i", method_getmaxbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getactualbrightness", "s", "i", method_getactualbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
 #ifdef GAMMA_PRESENT
-SD_BUS_METHOD("setgamma", "ssi", NULL, method_setgamma, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("setgamma", "ssi", "i", method_setgamma, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getgamma", "ss", "i", method_getgamma, SD_BUS_VTABLE_UNPRIVILEGED),
 #endif
 #ifndef DISABLE_FRAME_CAPTURES
@@ -74,9 +74,9 @@ SD_BUS_METHOD("setgamma", "ssi", NULL, method_setgamma, SD_BUS_VTABLE_UNPRIVILEG
 #endif
 #ifdef DPMS_PRESENT
     SD_BUS_METHOD("getdpms", "ss", "i", method_getdpms, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("setdpms", "ssi", NULL, method_setdpms, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("setdpms", "ssi", "i", method_setdpms, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getdpms_timeouts", "ss", "iii", method_getdpms_timeouts, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("setdpms_timeouts", "ssiii", NULL, method_setdpms_timeouts, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("setdpms_timeouts", "ssiii", "iii", method_setdpms_timeouts, SD_BUS_VTABLE_UNPRIVILEGED),
 #endif
     SD_BUS_VTABLE_END
 };
@@ -133,7 +133,7 @@ static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error 
     printf("New brightness value for %s: %d\n", udev_device_get_sysname(dev), value);
 
     udev_device_unref(dev);
-    return sd_bus_reply_method_return(m, NULL);
+    return sd_bus_reply_method_return(m, "i", value);
 }
 
 /**
@@ -255,7 +255,7 @@ static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
     }
 
     printf("Gamma value set: %d\n", temp);
-    return sd_bus_reply_method_return(m, NULL);
+    return sd_bus_reply_method_return(m, "i", temp);
 }
 
 static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
@@ -387,7 +387,7 @@ static int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
     }
     
     printf("New dpms state: %d\n", level);
-    return sd_bus_reply_method_return(m, NULL);
+    return sd_bus_reply_method_return(m, "i", level);
 }
 
 static int method_getdpms_timeouts(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
@@ -445,7 +445,7 @@ static int method_setdpms_timeouts(sd_bus_message *m, void *userdata, sd_bus_err
     }
     
     printf("New dpms timeouts:\tStandby: %ds\tSuspend: %ds\tOff:%ds.\n", t.standby, t.suspend, t.off);
-    return sd_bus_reply_method_return(m, NULL);
+    return sd_bus_reply_method_return(m, "iii", standby, suspend, off);
 }
 
 #endif
