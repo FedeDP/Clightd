@@ -72,7 +72,7 @@ Note that passing an empty/NULL string as first parameter will make clightd use 
 
 ## Bus interface
 | Method | IN | IN values | OUT | OUT values | Polkit restricted |
-|-|-|-|-|-|-|
+|-|:-:|-|:-:|-|:-:|
 | getbrightness | s | Backlight kernel interface (eg: intel_backlight) or empty string | i | Interface's brightness | |
 | getmaxbrightness | s | Backlight kernel interface | i | Interface's max brightness | |
 | getactualbrightness | s | Backlight kernel interface | i | Interface's actual brightness | |
