@@ -1,6 +1,5 @@
 #pragma once
 
-#include <libudev.h>
 #include "../inc/commons.h"
 
 void get_first_matching_device(struct udev_device **dev, const char *subsystem);

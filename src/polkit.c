@@ -29,7 +29,7 @@ int check_authorization(sd_bus_message *m) {
         }
     }
     
-    end:
+end:
     if (reply) {
         sd_bus_message_unref(reply);
     }

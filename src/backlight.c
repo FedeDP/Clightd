@@ -1,5 +1,6 @@
 #include "../inc/backlight.h"
 #include "../inc/polkit.h"
+#include "../inc/udev.h"
 
 /**
  * Brightness setter method

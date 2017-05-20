@@ -23,7 +23,6 @@
 
 #include "../inc/camera.h"
 #include "../inc/gamma.h"
-#include "../inc/commons.h"
 #include "../inc/dpms.h"
 #include "../inc/udev.h"
 #include "../inc/backlight.h"

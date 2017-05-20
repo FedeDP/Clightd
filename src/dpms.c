@@ -2,6 +2,17 @@
 
 #include "../inc/dpms.h"
 #include "../inc/polkit.h"
+#include <X11/Xlib.h>
+#include <X11/extensions/dpms.h>
+
+#define DPMS_DISABLED -1
+#define NO_X -2
+
+struct dpms_timeout {
+    CARD16 standby;
+    CARD16 suspend;
+    CARD16 off;
+};
 
 static int get_dpms_state(const char *display, const char *xauthority);
 static int set_dpms_state(const char *display, const char *xauthority, int dpms_level);
