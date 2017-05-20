@@ -6,6 +6,7 @@
 #ifdef GAMMA_PRESENT
 
 #include "../inc/gamma.h"
+#include "../inc/polkit.h"
 #include <X11/extensions/Xrandr.h>
 #include <math.h>
 
@@ -14,6 +15,69 @@ static unsigned short get_red(int temp);
 static unsigned short get_green(int temp);
 static unsigned short get_blue(int temp);
 static int get_temp(const unsigned short R, const unsigned short B);
+static void set_gamma(const char *display, const char *xauthority, int temp, int *err);
+static int get_gamma(const char *display, const char *xauthority, int *err);
+
+
+int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+    int temp, error = 0;
+    const char *display = NULL, *xauthority = NULL;
+    
+    if (!check_authorization(m)) {
+        sd_bus_error_set_errno(ret_error, EPERM);
+        return -EPERM;
+    }
+    
+    /* Read the parameters */
+    int r = sd_bus_message_read(m, "ssi", &display, &xauthority, &temp);
+    if (r < 0) {
+        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
+        return r;
+    }
+    
+    if (temp < 1000 || temp > 10000) {
+        error = EINVAL;
+    } else {
+        set_gamma(display, xauthority, temp, &error);
+    }
+    if (error) {
+        if (error == EINVAL) {
+            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Temperature value should be between 1000 and 10000.");
+        } else if (error == ENXIO) {
+            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Could not open X screen.");
+        }
+        return -error;
+    }
+    
+    printf("Gamma value set: %d\n", temp);
+    return sd_bus_reply_method_return(m, "i", temp);
+}
+
+int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+    int error = 0;
+    const char *display = NULL, *xauthority = NULL;
+    
+    /* Read the parameters */
+    int r = sd_bus_message_read(m, "ss", &display, &xauthority);
+    if (r < 0) {
+        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
+        return r;
+    }
+    
+    int temp = get_gamma(display, xauthority, &error);
+    if (error) {
+        if (error == ENXIO) {
+            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Could not open X screen.");
+        } else {
+            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Failed to get screen temperature.");
+        }
+        return -error;
+    }
+    
+    printf("Current gamma value: %d\n", temp);
+    
+    return sd_bus_reply_method_return(m, "i", temp);
+}
 
 static unsigned short clamp(double x, double max) {
     if (x > max) { 
@@ -102,7 +166,7 @@ static int get_temp(const unsigned short R, const unsigned short B) {
     return temperature;
 }
 
-void set_gamma(const char *display, const char *xauthority, int temp, int *err) {
+static void set_gamma(const char *display, const char *xauthority, int temp, int *err) {
     /* set xauthority cookie */
     setenv("XAUTHORITY", xauthority, 1);
     
@@ -142,7 +206,7 @@ end:
     unsetenv("XAUTHORITY");
 }
 
-int get_gamma(const char *display, const char *xauthority, int *err) {
+static int get_gamma(const char *display, const char *xauthority, int *err) {
     int temp = -1;
     
     /* set xauthority cookie */

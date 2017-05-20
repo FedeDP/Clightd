@@ -1,6 +1,8 @@
 #ifndef DISABLE_FRAME_CAPTURES
 
 #include "../inc/camera.h"
+#include "../inc/polkit.h"
+#include "../inc/udev.h"
 #include <unistd.h>
 #include <string.h>
 #include <sys/mman.h>
@@ -9,6 +11,7 @@
 #include <sys/ioctl.h>
 #include <stdint.h>
 
+static double capture_frames(const char *interface, int num_captures, int *err);
 static void open_device(const char *interface);
 static void init(void);
 static void init_mmap(void);
@@ -28,7 +31,52 @@ struct state {
 
 static struct state *state;
 
-double capture_frames(const char *interface, int num_captures, int *err) {
+/*
+ * Frame capturing method
+ */
+int method_captureframes(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+    int r, error = 0, num_captures;
+    struct udev_device *dev = NULL;
+    const char *video_interface;
+    
+    if (!check_authorization(m)) {
+        sd_bus_error_set_errno(ret_error, EPERM);
+        return -EPERM;
+    }
+    
+    /* Read the parameters */
+    r = sd_bus_message_read(m, "si", &video_interface, &num_captures);
+    if (r < 0) {
+        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
+        return r;
+    }
+    
+    if (num_captures <= 0 || num_captures > 20) {
+        sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Number of captures should be between 1 and 20.");
+        return -EINVAL;
+    }
+    
+    // if no video device is specified, try to get first matching device
+    get_udev_device(video_interface, "video4linux", &ret_error, &dev);
+    if (sd_bus_error_is_set(ret_error)) {
+        return -sd_bus_error_get_errno(ret_error);
+    }
+    
+    double val = capture_frames(udev_device_get_devnode(dev), num_captures, &error);
+    if (error) {
+        sd_bus_error_set_errno(ret_error, error);
+        udev_device_unref(dev);
+        return -error;
+    }
+    
+    printf("%d frames captured by %s. Average brightness value: %lf\n", num_captures, udev_device_get_sysname(dev), val);
+    udev_device_unref(dev);
+    
+    /* Reply with the response */
+    return sd_bus_reply_method_return(m, "d", val);
+}
+
+static double capture_frames(const char *interface, int num_captures, int *err) {
     double avg_brightness = -1;
     
     /* properly initialize struct with all fields to zero-or-null */

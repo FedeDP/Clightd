@@ -7,7 +7,7 @@
 
 #include "commons.h"
 
-void set_gamma(const char *display, const char *xauthority, int temp, int *err);
-int get_gamma(const char *display, const char *xauthority, int *err);
+int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
+int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 
 #endif

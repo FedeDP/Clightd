@@ -13,9 +13,9 @@ struct dpms_timeout {
     CARD16 off;
 };
 
-int get_dpms_state(const char *display, const char *xauthority);
-int set_dpms_state(const char *display, const char *xauthority, int dpms_level);
-int get_dpms_timeouts(const char *display, const char *xauthority, struct dpms_timeout *t);
-int set_dpms_timeouts(const char *display, const char *xauthority, struct dpms_timeout *t);
+int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
+int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
+int method_getdpms_timeouts(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
+int method_setdpms_timeouts(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 
 #endif
