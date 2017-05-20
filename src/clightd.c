@@ -24,7 +24,6 @@
 #include "../inc/camera.h"
 #include "../inc/gamma.h"
 #include "../inc/dpms.h"
-#include "../inc/udev.h"
 #include "../inc/backlight.h"
 
 static const char object_path[] = "/org/clightd/backlight";
