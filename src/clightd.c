@@ -57,7 +57,6 @@ static const sd_bus_vtable clightd_vtable[] = {
 };
 
 int main(void) {
-    sd_bus_slot *slot = NULL;
     int r;
 
     udev = udev_new();
@@ -71,7 +70,7 @@ int main(void) {
 
     /* Install the object */
     r = sd_bus_add_object_vtable(bus,
-                                 &slot,
+                                 NULL,
                                  object_path,
                                  bus_interface,
                                  clightd_vtable,
@@ -111,9 +110,6 @@ int main(void) {
 
 finish:
     sd_bus_release_name(bus, bus_interface);
-    if (slot) {
-        sd_bus_slot_unref(slot);
-    }
     if (bus) {
         sd_bus_flush_close_unref(bus);
     }
