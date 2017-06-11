@@ -16,6 +16,10 @@ Clightd is a bus interface that lets you easily set screen brightness, gamma tem
 * libxext (X11/extensions/Xext.h)
 * libx11 (X11/Xlib.h)
 
+### Needed only if built with idle time support:
+* libxss (X11/extensions/scrnsaver.h)
+* libx11 (X11/Xlib.h)
+
 ### Needed only if built with frame captures support:
 * linux-api-headers (linux/videodev2.h)
 
@@ -27,6 +31,7 @@ Clightd is a bus interface that lets you easily set screen brightness, gamma tem
 * DISABLE_FRAME_CAPTURES=1 (to disable frame captures support)
 * DISABLE_GAMMA=1 (to disable gamma support)
 * DISABLE_DPMS=1 (to disable dpms support)
+* DISABLE_IDLE=1 (to disable user idle time support)
 
 ## Build instructions:
 Build and install:
@@ -50,12 +55,12 @@ Uninstall:
 
 ## Devel info
 Brightness related bus interface methods make all use of libudev to write and read current values (no fopen or other things like that).  
-If no syspath is passed as parameter to method calls, it uses first subsystem matching device that it finds through libudev.  
+All method calls use libudev to take correct device path, and fallback to first subsystem matching device if empty string is passed.  
 Strict error checking tries to enforce no issue of any kind.  
 
 Getgamma function supports 50-steps temperature values. It tries to fit temperature inside a 50 step (eg: it finds 5238, tries if 5200 or 5250 are fine too, and in case returns them. Otherwise, it returns 5238.)  
 
-Clightd makes use of polkit for setgamma, setbrightness and captureframes function. Only active sessions can call these methods.  
+Clightd makes use of polkit for setgamma, setbrightness, setdpms and captureframes function. Only active sessions can call these methods.  
 
 You may ask why did i developed this solution. The answer is quite simple: on linux there is no simple and unified way of changing screen brightness.  
 So, i thought it could be a good idea to develop a bus service that can be used by every other program.  
@@ -68,14 +73,14 @@ A clight replacement, using clightd, can be something like (pseudo-code):
     $ new_br = ambient_br * max_br
     $ busctl call org.clightd.backlight /org/clightd/backlight org.clightd.backlight setbrightness si "" new_br
 
-Note that passing an empty/NULL string as first parameter will make clightd use first subsystem matching device it finds (through libudev). It should be good to go in most cases.
+Note that passing an empty/NULL string as first parameter will make clightd use first subsystem matching device it finds (through libudev).* It should be good to go in most cases.
 
 ## Bus interface
 | Method | IN | IN values | OUT | OUT values | Polkit restricted |
 |-|:-:|-|:-:|-|:-:|
-| getbrightness | s | Backlight kernel interface (eg: intel_backlight) or empty string | i | Interface's brightness | |
-| getmaxbrightness | s | Backlight kernel interface | i | Interface's max brightness | |
-| getactualbrightness | s | Backlight kernel interface | i | Interface's actual brightness | |
+| getbrightness | s | <ul><li>Backlight kernel interface (eg: intel_backlight) or empty string</li></ul> | i | Interface's brightness | |
+| getmaxbrightness | s | <ul><li>Backlight kernel interface</li></ul> | i | Interface's max brightness | |
+| getactualbrightness | s | <ul><li>Backlight kernel interface</li></ul> | i | Interface's actual brightness | |
 | setbrightness | si | <ul><li>Backlight kernel interface</li><li>New brightness value</li></ul>| i | New setted brightness |✔|
 | getgamma | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current display gamma temp | |
 | setgamma | ssi | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New gamma value</li></ul> | i | New setted gamma temp |✔|
@@ -84,6 +89,7 @@ Note that passing an empty/NULL string as first parameter will make clightd use 
 | setdpms | ssi | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New dpms state</li></ul> | i | New setted dpms state | ✔ |
 | getdpms_timeouts | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | iii | Dpms timeouts values |  |
 | setdpms_timeouts | ssiii | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New dpms timeouts</li></ul> | iii | New dpms timeouts |  ✔ |
+| getidletime | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current idle time in ms | |
 
 ## Arch AUR packages
 Clightd is available on AUR: https://aur.archlinux.org/packages/clightd-git/ .

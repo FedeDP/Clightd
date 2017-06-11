@@ -60,6 +60,19 @@ else
 $(info DPMS support disabled.)
 endif
 
+ifneq ("$(DISABLE_IDLE)","1")
+IDLE=$(shell pkg-config --silence-errors --libs x11 xscrnsaver)
+ifneq ("$(IDLE)","")
+CFLAGS+=-DIDLE_PRESENT $(shell pkg-config --cflags x11 xscrnsaver)
+LIBS+=$(IDLE)
+$(info idle support enabled.)
+else
+$(info idle support disabled.)
+endif
+else
+$(info idle support disabled.)
+endif
+
 endif
 
 CLIGHTD_VERSION = $(shell git describe --abbrev=0 --always --tags)

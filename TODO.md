@@ -1,3 +1,4 @@
 ## 1.2
 - [x] modularize source code better
-- [ ] detect user inactivity as per clight TODO
+- [x] add a get_user_idle_time method exposed
+- [x] update pkgbuild and deb package script

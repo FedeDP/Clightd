@@ -175,6 +175,7 @@ static void set_gamma(const char *display, const char *xauthority, int temp, int
         perror("XopenDisplay");
         *err = ENXIO;
         goto end;
+        return;
     }
 
     int screen = DefaultScreen(dpy);

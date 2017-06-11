@@ -25,6 +25,7 @@
 #include "../inc/gamma.h"
 #include "../inc/dpms.h"
 #include "../inc/backlight.h"
+#include "../inc/idle.h"
 
 static const char object_path[] = "/org/clightd/backlight";
 static const char bus_interface[] = "org.clightd.backlight";
@@ -50,6 +51,9 @@ static const sd_bus_vtable clightd_vtable[] = {
     SD_BUS_METHOD("setdpms", "ssi", "i", method_setdpms, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getdpms_timeouts", "ss", "iii", method_getdpms_timeouts, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("setdpms_timeouts", "ssiii", "iii", method_setdpms_timeouts, SD_BUS_VTABLE_UNPRIVILEGED),
+#endif
+#ifdef IDLE_PRESENT
+    SD_BUS_METHOD("getidletime", "ss", "i", method_get_idle_time, SD_BUS_VTABLE_UNPRIVILEGED),
 #endif
     SD_BUS_VTABLE_END
 };
