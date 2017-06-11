@@ -19,13 +19,15 @@ arch:
         - libx11
         - libxrandr
         - libxext
+        - libxss
     script:
         - "echo $CC"
         - make debug
         - make DISABLE_FRAME_CAPTURES=1 debug
         - make DISABLE_GAMMA=1 debug
         - make DISABLE_DPMS=1 debug
-        - make DISABLE_FRAME_CAPTURES=1 DISABLE_GAMMA=1 DISABLE_DPMS=1 debug
+        - make DISABLE_IDLE=1 debug
+        - make DISABLE_FRAME_CAPTURES=1 DISABLE_GAMMA=1 DISABLE_DPMS=1 DISABLE_IDLE=1 debug
 
 script:
     - "curl -s https://raw.githubusercontent.com/mikkeloscar/arch-travis/master/arch-travis.sh | bash"
