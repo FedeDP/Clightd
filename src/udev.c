@@ -1,9 +1,11 @@
 #include "../inc/udev.h"
 
+static void get_first_matching_device(struct udev_device **dev, const char *subsystem);
+
 /**
  * Set dev to first device in subsystem
  */
-void get_first_matching_device(struct udev_device **dev, const char *subsystem) {
+static void get_first_matching_device(struct udev_device **dev, const char *subsystem) {
     struct udev_enumerate *enumerate;
     struct udev_list_entry *devices;
     
