@@ -143,3 +143,40 @@ int method_getactualbrightness(sd_bus_message *m, void *userdata, sd_bus_error *
     /* Reply with the response */
     return sd_bus_reply_method_return(m, "i", x);
 }
+
+int method_isinterface_enabled(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+    int r, e = 1; // default to enabled if sysattr is missing
+    struct udev_device *dev = NULL;
+    const char *backlight_interface;
+    
+    /* Read the parameters */
+    r = sd_bus_message_read(m, "s", &backlight_interface);
+    if (r < 0) {
+        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
+        return r;
+    }
+    
+    get_udev_device(backlight_interface, "backlight", &ret_error, &dev);
+    if (sd_bus_error_is_set(ret_error)) {
+        return -sd_bus_error_get_errno(ret_error);
+    }
+    
+    const char *sysname = udev_device_get_sysname(dev);
+    dev = udev_device_get_parent_with_subsystem_devtype(dev, "drm", NULL);
+    if (!dev) {
+        sd_bus_error_set_errno(ret_error, ENODEV);
+        return -sd_bus_error_get_errno(ret_error);
+    }
+    
+    const char *enabled = udev_device_get_sysattr_value(dev, "enabled");
+    if (enabled) {
+        printf("Interface %s state: %s\n", sysname, enabled);
+        e = !strcmp(enabled, "enabled"); // 1 if enabled
+    }
+    
+    udev_device_unref(dev);
+    
+    /* Reply with the response */
+    return sd_bus_reply_method_return(m, "i", e);
+    
+}

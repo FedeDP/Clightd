@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <systemd/sd-bus.h>
 #include <libudev.h>
+#include <unistd.h>
 
 struct udev *udev;
 sd_bus *bus;

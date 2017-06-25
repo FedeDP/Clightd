@@ -26,9 +26,21 @@
 #include "../inc/dpms.h"
 #include "../inc/backlight.h"
 #include "../inc/idle.h"
+#include <sys/signalfd.h>
+#include <poll.h>
+#include <signal.h>
+
+static void bus_cb(void);
+static void signal_cb(void);
+static void set_pollfd(void);
+static void main_poll(void);
+
+enum poll_idx { BUS, SIGNAL, POLL_SIZE };
 
 static const char object_path[] = "/org/clightd/backlight";
 static const char bus_interface[] = "org.clightd.backlight";
+static struct pollfd main_p[POLL_SIZE];
+static int quit;
 
 /**
  * Bus spec: https://dbus.freedesktop.org/doc/dbus-specification.html
@@ -39,6 +51,7 @@ static const sd_bus_vtable clightd_vtable[] = {
     SD_BUS_METHOD("getbrightness", "s", "i", method_getbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getmaxbrightness", "s", "i", method_getmaxbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getactualbrightness", "s", "i", method_getactualbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("isbacklightinterfaceenabled", "s", "i", method_isinterface_enabled, SD_BUS_VTABLE_UNPRIVILEGED),
 #ifdef GAMMA_PRESENT
     SD_BUS_METHOD("setgamma", "ssi", "i", method_setgamma, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getgamma", "ss", "i", method_getgamma, SD_BUS_VTABLE_UNPRIVILEGED),
@@ -58,9 +71,82 @@ static const sd_bus_vtable clightd_vtable[] = {
     SD_BUS_VTABLE_END
 };
 
+static void bus_cb(void) {
+    int ret = sd_bus_process(bus, NULL);
+    if (ret < 0) {
+        fprintf(stderr, "Failed to process bus: %s\n", strerror(-ret));
+        quit = -1;
+    }
+}
+
+/*
+ * if received an external SIGINT or SIGTERM,
+ * just switch the quit flag to 1 and print to stdout.
+ */
+static void signal_cb(void) {
+    struct signalfd_siginfo fdsi;
+    ssize_t s;
+    
+    s = read(main_p[SIGNAL].fd, &fdsi, sizeof(struct signalfd_siginfo));
+    if (s != sizeof(struct signalfd_siginfo)) {
+        fprintf(stderr, "an error occurred while getting signalfd data.\n");
+    }
+    printf("received signal %d. Leaving.\n", fdsi.ssi_signo);
+    quit = 1;
+}
+
+static void set_pollfd(void) {
+    int busfd = sd_bus_get_fd(bus);
+    main_p[BUS] = (struct pollfd) {
+        .fd = busfd,
+        .events = POLLIN,
+    };
+    
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGINT);
+    sigaddset(&mask, SIGTERM);
+    sigprocmask(SIG_BLOCK, &mask, NULL);
+    int sigfd = signalfd(-1, &mask, 0);
+    main_p[SIGNAL] = (struct pollfd) {
+        .fd = sigfd,
+        .events = POLLIN,
+    };
+}
+
+/*
+ * Listens on fds
+ */
+static void main_poll(void) {
+    while (!quit) {
+        int r = poll(main_p, POLL_SIZE, -1);
+        if (r == -1) {
+            if (errno == EINTR) {
+                continue;
+            }
+            fprintf(stderr, "%s\n", strerror(errno));
+            quit = -1;
+            break;
+        }
+        
+        for (int i = 0; i < POLL_SIZE && r > 0 && !quit; i++) {
+            if (main_p[i].revents & POLLIN) {
+                switch (i) {
+                    case BUS:
+                        bus_cb();
+                        break;
+                    case SIGNAL:
+                        signal_cb();
+                        break;
+                }
+                r--;
+            }
+        }
+    }
+}
+
 int main(void) {
     int r;
-
     udev = udev_new();
 
     /* Connect to the system bus */
@@ -89,33 +175,14 @@ int main(void) {
         goto finish;
     }
     
-    for (;;) {
-        /* Process requests */
-        r = sd_bus_process(bus, NULL);
-        if (r < 0) {
-            fprintf(stderr, "Failed to process bus: %s\n", strerror(-r));
-            goto finish;
-        }
-
-        /* we processed a request, try to process another one, right-away */
-        if (r > 0) {
-            continue;
-        }
-
-        /* Wait for the next request to process */
-        r = sd_bus_wait(bus, (uint64_t) -1);
-        if (r < 0) {
-            fprintf(stderr, "Failed to wait on bus: %s\n", strerror(-r));
-            goto finish;
-        }
-    }
-
+    set_pollfd();
+    main_poll();
+    
 finish:
     sd_bus_release_name(bus, bus_interface);
     if (bus) {
         sd_bus_flush_close_unref(bus);
     }
     udev_unref(udev);
-
-    return r < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
+    return quit < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }

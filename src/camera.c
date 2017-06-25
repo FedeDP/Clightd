@@ -3,7 +3,6 @@
 #include "../inc/camera.h"
 #include "../inc/polkit.h"
 #include "../inc/udev.h"
-#include <unistd.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <linux/videodev2.h>
