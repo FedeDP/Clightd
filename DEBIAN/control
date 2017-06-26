@@ -3,7 +3,7 @@ Version: 1.2
 Section: base
 Priority: optional
 Architecture: amd64
-Depends: libsystemd0, libudev1, libxrandr2, libxext6, libx11-6, libpolkit-backend-1-0, libxss1
+Depends: libsystemd0 (>= 221), libudev1, libxrandr2, libxext6, libx11-6, libpolkit-backend-1-0, libxss1
 Suggests: clight
 Maintainer: Federico Di Pierro <nierro92@gmail.com>
 Description: Clightd bus interface to set screen brightness and gamma and to capture frames from webcam devices.
