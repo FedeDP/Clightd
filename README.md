@@ -70,7 +70,8 @@ A clight replacement, using clightd, can be something like (pseudo-code):
 
     $ max_br = busctl call org.clightd.backlight /org/clightd/backlight org.clightd.backlight getmaxbrightness s ""
     $ ambient_br = busctl call org.clightd.backlight /org/clightd/backlight org.clightd.backlight captureframes si "" 5
-    $ new_br = ambient_br * max_br
+    $ avg_br_percent = compute_avg(ambient_br, 5)
+    $ new_br = avg_br_percent * max_br
     $ busctl call org.clightd.backlight /org/clightd/backlight org.clightd.backlight setbrightness si "" new_br
 
 Note that passing an empty/NULL string as first parameter will make clightd use first subsystem matching device it finds (through libudev).* It should be good to go in most cases.
@@ -85,7 +86,7 @@ Note that passing an empty/NULL string as first parameter will make clightd use 
 | setbrightness | si | <ul><li>Backlight kernel interface</li><li>New brightness value</li></ul>| i | New setted brightness |✔|
 | getgamma | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current display gamma temp | |
 | setgamma | ssi | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New gamma value</li></ul> | i | New setted gamma temp |✔|
-| captureframes | si | <ul><li>video sysname(eg: Video0)</li><li>Number of frames</li></ul> | d | Average frames brightness, between 0.0 and 1.0 | ✔ |
+| captureframes | si | <ul><li>video sysname(eg: Video0)</li><li>Number of frames</li></ul> | ad | Each frame's brightness (0-255) | ✔ |
 | getdpms | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current dpms state | |
 | setdpms | ssi | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New dpms state</li></ul> | i | New setted dpms state | ✔ |
 | getdpms_timeouts | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | iii | Dpms timeouts values |  |

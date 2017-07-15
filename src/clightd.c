@@ -46,7 +46,7 @@ static const sd_bus_vtable clightd_vtable[] = {
     SD_BUS_METHOD("getgamma", "ss", "i", method_getgamma, SD_BUS_VTABLE_UNPRIVILEGED),
 #endif
 #ifndef DISABLE_FRAME_CAPTURES
-    SD_BUS_METHOD("captureframes", "si", "d", method_captureframes, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("captureframes", "si", "ad", method_captureframes, SD_BUS_VTABLE_UNPRIVILEGED),
 #endif
 #ifdef DPMS_PRESENT
     SD_BUS_METHOD("getdpms", "ss", "i", method_getdpms, SD_BUS_VTABLE_UNPRIVILEGED),
