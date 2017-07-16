@@ -19,7 +19,6 @@ static void start_stream(void);
 static void stop_stream(void);
 static void capture_frame(int i);
 static double compute_brightness(const int idx, const unsigned int size);
-// static double compute_avg_brightness(int num_captures) ;
 static void free_all();
 
 struct buffer {
@@ -283,33 +282,6 @@ static double compute_brightness(const int idx, const unsigned int size) {
     brightness /= state.width * state.height;
     return brightness;
 }
-
-// /*
-//  * Compute average captured frames brightness.
-//  * It will normalize data removing highest and lowest values.
-//  */
-// static double compute_avg_brightness(int num_captures) {
-//     int lowest = 0, highest = 0;
-//     double total = 0.0;
-//     
-//     for (int i = 0; i < num_captures; i++) {
-//         if (state.brightness_values[i] < state.brightness_values[lowest]) {
-//             lowest = i;
-//         } else if (state.brightness_values[i] > state.brightness_values[highest]) {
-//             highest = i;
-//         }
-//         total += state.brightness_values[i];
-//     }
-//         
-//     // total == 0.0 means every captured frame decompression failed
-//     if (total != 0.0 && num_captures > 2) {
-//         // remove highest and lowest values to normalize
-//         total -= (state.brightness_values[highest] + state.brightness_values[lowest]);
-//         num_captures -= 2;
-//     }
-//     total /= 255;
-//     return total / num_captures;
-// }
 
 static void free_all(void) {
     if (state.buffers) {
