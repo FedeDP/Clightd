@@ -40,7 +40,7 @@ static const sd_bus_vtable clightd_vtable[] = {
     SD_BUS_METHOD("getbrightness", "s", "i", method_getbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getmaxbrightness", "s", "i", method_getmaxbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getactualbrightness", "s", "i", method_getactualbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("isbacklightinterfaceenabled", "s", "i", method_isinterface_enabled, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("isbacklightinterfaceenabled", "s", "b", method_isinterface_enabled, SD_BUS_VTABLE_UNPRIVILEGED),
 #ifdef GAMMA_PRESENT
     SD_BUS_METHOD("setgamma", "ssi", "i", method_setgamma, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getgamma", "ss", "i", method_getgamma, SD_BUS_VTABLE_UNPRIVILEGED),

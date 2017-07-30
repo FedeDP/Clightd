@@ -177,6 +177,6 @@ int method_isinterface_enabled(sd_bus_message *m, void *userdata, sd_bus_error *
     udev_device_unref(dev);
     
     /* Reply with the response */
-    return sd_bus_reply_method_return(m, "i", e);
+    return sd_bus_reply_method_return(m, "b", e);
     
 }

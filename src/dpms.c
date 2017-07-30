@@ -60,8 +60,7 @@ int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
         return r;
     }
     
-    /* 0 -> DPMSModeOn, 3 -> DPMSModeOff */
-    if (level < 0 || level > 3) {
+    if (level < DPMS_DISABLED || level > DPMSModeOff) {
         sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Wrong DPMS level value.");
         return -EINVAL;
     }
@@ -72,7 +71,11 @@ int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
         return err;
     }
     
-    printf("New dpms state: %d\n", level);
+    if (level != DPMS_DISABLED) {
+        printf("New dpms state: %d\n", level);
+    } else {
+        printf("Dpms disabled.\n");
+    }
     return sd_bus_reply_method_return(m, "i", level);
 }
 
@@ -154,22 +157,20 @@ int get_dpms_state(const char *display, const char *xauthority) {
     setenv("XAUTHORITY", xauthority, 1);
 
     Display *dpy = XOpenDisplay(display);
-    if (dpy &&  DPMSCapable(dpy)) {
-        DPMSInfo(dpy, &s, &onoff);
-        if (onoff) {
-            ret = s;
-        } else {
-            ret = DPMS_DISABLED;
+    if (dpy) {
+        if (DPMSCapable(dpy)) {
+            DPMSInfo(dpy, &s, &onoff);
+            if (onoff) {
+                ret = s;
+            } else {
+                ret = DPMS_DISABLED;
+            }
         }
+        XCloseDisplay(dpy);
     }
     
     /* Drop xauthority cookie */
     unsetenv("XAUTHORITY");
-    
-    if (dpy) {
-        XCloseDisplay(dpy);
-    }
-    
     return ret;
 }
 
@@ -180,21 +181,23 @@ int set_dpms_state(const char *display, const char *xauthority, int dpms_level) 
     setenv("XAUTHORITY", xauthority, 1);
     
     Display *dpy = XOpenDisplay(display);
-    if (dpy && DPMSCapable(dpy)) {
-        DPMSEnable(dpy);
-        DPMSForceLevel(dpy, dpms_level);
-        XFlush(dpy);
+    if (dpy) {
+        if (DPMSCapable(dpy)) {
+            if (dpms_level != DPMS_DISABLED) {
+                DPMSEnable(dpy);
+                DPMSForceLevel(dpy, dpms_level);
+            } else {
+                DPMSDisable(dpy);
+            }
+            XFlush(dpy);
+        }
+        XCloseDisplay(dpy);
     } else {
         ret = NO_X;
     }
     
     /* Drop xauthority cookie */
     unsetenv("XAUTHORITY");
-    
-    if (dpy) {
-        XCloseDisplay(dpy);
-    }
-    
     return ret;
 }
 
@@ -207,23 +210,21 @@ int get_dpms_timeouts(const char *display, const char *xauthority, struct dpms_t
     setenv("XAUTHORITY", xauthority, 1);
     
     Display *dpy = XOpenDisplay(display);
-    if (dpy &&  DPMSCapable(dpy)) {
-        DPMSInfo(dpy, &s, &onoff);
-        if (onoff) {
-            DPMSGetTimeouts(dpy, &(t->standby), &(t->suspend), &(t->off));
-            ret = 0;
-        } else {
-            ret = DPMS_DISABLED;
+    if (dpy) {
+        if (DPMSCapable(dpy)) {
+            DPMSInfo(dpy, &s, &onoff);
+            if (onoff) {
+                DPMSGetTimeouts(dpy, &(t->standby), &(t->suspend), &(t->off));
+                ret = 0;
+            } else {
+                ret = DPMS_DISABLED;
+            }
         }
+        XCloseDisplay(dpy);
     }
     
     /* Drop xauthority cookie */
     unsetenv("XAUTHORITY");
-    
-    if (dpy) {
-        XCloseDisplay(dpy);
-    }
-    
     return ret;
 }
 
@@ -234,21 +235,19 @@ int set_dpms_timeouts(const char *display, const char *xauthority, struct dpms_t
     setenv("XAUTHORITY", xauthority, 1);
     
     Display *dpy = XOpenDisplay(display);
-    if (dpy && DPMSCapable(dpy)) {
-        DPMSEnable(dpy);
-        DPMSSetTimeouts(dpy, t->standby, t->suspend, t->off);
-        XFlush(dpy);
-    } else {
-        ret = NO_X;
-    }
-    
-    /* Drop xauthority cookie */
-    unsetenv("XAUTHORITY");
-    
     if (dpy) {
+        if (DPMSCapable(dpy)) {
+            DPMSEnable(dpy);
+            DPMSSetTimeouts(dpy, t->standby, t->suspend, t->off);
+            XFlush(dpy);
+        } else {
+            ret = NO_X;
+        }
         XCloseDisplay(dpy);
     }
-    
+
+    /* Drop xauthority cookie */
+    unsetenv("XAUTHORITY");
     return ret;
 }
 
