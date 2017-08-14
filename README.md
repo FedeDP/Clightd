@@ -82,7 +82,7 @@ Note that passing an empty/NULL string as first parameter will make clightd use 
 | getbrightness | s | <ul><li>Backlight kernel interface (eg: intel_backlight) or empty string</li></ul> | i | Interface's brightness | |
 | getmaxbrightness | s | <ul><li>Backlight kernel interface</li></ul> | i | Interface's max brightness | |
 | getactualbrightness | s | <ul><li>Backlight kernel interface</li></ul> | i | Interface's actual brightness | |
-| isbacklightinterfaceenabled | s | <ul><li>Backlight kernel interface</li></ul> | i | Boolean enabled for interface | |
+| isbacklightinterfaceenabled | s | <ul><li>Backlight kernel interface</li></ul> | b | Boolean enabled for interface | |
 | setbrightness | si | <ul><li>Backlight kernel interface</li><li>New brightness value</li></ul>| i | New setted brightness |✔|
 | getgamma | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current display gamma temp | |
 | setgamma | ssi | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New gamma value</li></ul> | i | New setted gamma temp |✔|
