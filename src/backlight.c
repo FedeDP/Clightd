@@ -146,7 +146,7 @@ int method_getactualbrightness(sd_bus_message *m, void *userdata, sd_bus_error *
 
 int method_isinterface_enabled(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     int r, e = 1; // default to enabled if sysattr is missing
-    struct udev_device *dev = NULL;
+    struct udev_device *dev = NULL, *d = NULL;
     const char *backlight_interface;
     
     /* Read the parameters */
@@ -162,13 +162,19 @@ int method_isinterface_enabled(sd_bus_message *m, void *userdata, sd_bus_error *
     }
     
     const char *sysname = udev_device_get_sysname(dev);
-    dev = udev_device_get_parent_with_subsystem_devtype(dev, "drm", NULL);
-    if (!dev) {
+    /* 
+     * The returned device is not referenced. 
+     * It is attached to the parent device, 
+     * and will be cleaned up when the parent device is cleaned up.
+     */
+    d = udev_device_get_parent_with_subsystem_devtype(dev, "drm", NULL);
+    if (!d) {
+        udev_device_unref(dev);
         sd_bus_error_set_errno(ret_error, ENODEV);
         return -sd_bus_error_get_errno(ret_error);
     }
     
-    const char *enabled = udev_device_get_sysattr_value(dev, "enabled");
+    const char *enabled = udev_device_get_sysattr_value(d, "enabled");
     if (enabled) {
         printf("Interface %s state: %s\n", sysname, enabled);
         e = !strcmp(enabled, "enabled"); // 1 if enabled

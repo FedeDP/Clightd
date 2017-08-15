@@ -27,9 +27,23 @@
 #include "../inc/backlight.h"
 #include "../inc/idle.h"
 #include "../inc/udev.h"
+#include <sys/signalfd.h>
+#include <poll.h>
+#include <signal.h>
+
+static void bus_cb(void);
+static void signal_cb(void);
+static void set_pollfd(void);
+static void main_poll(void);
+static void close_mainp(void);
+
+enum poll_idx { BUS, SIGNAL, POLL_SIZE };
+enum quit_codes { LEAVE_W_ERR = -1, SIGNAL_RCV = 1 };
 
 static const char object_path[] = "/org/clightd/backlight";
 static const char bus_interface[] = "org.clightd.backlight";
+static struct pollfd main_p[POLL_SIZE];
+static int quit;
 
 /**
  * Bus spec: https://dbus.freedesktop.org/doc/dbus-specification.html
@@ -60,9 +74,93 @@ static const sd_bus_vtable clightd_vtable[] = {
     SD_BUS_VTABLE_END
 };
 
+static void bus_cb(void) {
+    int r;
+    do {
+        r = sd_bus_process(bus, NULL);
+        if (r < 0) {
+            fprintf(stderr, "Failed to process bus: %s\n", strerror(-r));
+            quit = LEAVE_W_ERR;
+        }
+    } while (r > 0);
+}
+
+/*
+ * if received an external SIGINT or SIGTERM,
+ * just switch the quit flag to 1 and print to stdout.
+ */
+static void signal_cb(void) {
+    struct signalfd_siginfo fdsi;
+    ssize_t s;
+    
+    s = read(main_p[SIGNAL].fd, &fdsi, sizeof(struct signalfd_siginfo));
+    if (s != sizeof(struct signalfd_siginfo)) {
+        fprintf(stderr, "an error occurred while getting signalfd data.\n");
+    }
+    printf("Received signal %d. Leaving.\n", fdsi.ssi_signo);
+    quit = SIGNAL_RCV;
+}
+
+static void set_pollfd(void) {
+    int busfd = sd_bus_get_fd(bus);
+    main_p[BUS] = (struct pollfd) {
+        .fd = busfd,
+        .events = POLLIN,
+    };
+    
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGINT);
+    sigaddset(&mask, SIGTERM);
+    sigprocmask(SIG_BLOCK, &mask, NULL);
+    int sigfd = signalfd(-1, &mask, 0);
+    main_p[SIGNAL] = (struct pollfd) {
+        .fd = sigfd,
+        .events = POLLIN,
+    };
+}
+
+/*
+ * Listens on fds
+ */
+static void main_poll(void) {
+    while (!quit) {
+        int r = poll(main_p, POLL_SIZE, -1);
+        
+        if (r == -1 && errno != EINTR) {
+            fprintf(stderr, "%s\n", strerror(errno));
+            quit = LEAVE_W_ERR;
+        }
+        
+        while (r > 0 && !quit) {
+            for (int i = 0; i < POLL_SIZE; i++) {
+                if (main_p[i].revents & POLLIN) {
+                    switch (i) {
+                    case BUS:
+                        bus_cb();
+                        break;
+                    case SIGNAL:
+                        signal_cb();
+                        break;
+                    }
+                    r--;
+                    break;
+                }
+            }
+        }
+    }
+}
+
+static void close_mainp(void) {
+    for (int i = BUS; i < POLL_SIZE; i++) {
+        if (main_p[i].fd > 0) {
+            close(main_p[i].fd);
+        }
+    }
+}
+
 int main(void) {
     int r;
-    
     udev = udev_new();
     
     /* Connect to the system bus */
@@ -91,26 +189,13 @@ int main(void) {
         goto finish;
     }
     
-    for (;;) {
-        /* Process requests */
-        r = sd_bus_process(bus, NULL);
-        if (r < 0) {
-            fprintf(stderr, "Failed to process bus: %s\n", strerror(-r));
-            goto finish;
-        }
-        
-        /* we processed a request, try to process another one, right-away */
-        if (r > 0) {
-            continue;
-        }
-        
-        /* Wait for the next request to process */
-        r = sd_bus_wait(bus, (uint64_t) -1);
-        if (r < 0) {
-            fprintf(stderr, "Failed to wait on bus: %s\n", strerror(-r));
-            goto finish;
-        }
-    }
+    set_pollfd();
+   /*
+    * Need to parse initial bus messages 
+    * or it'll give "Connection timed out" error
+    */
+    bus_cb();
+    main_poll();
     
 finish:
     sd_bus_release_name(bus, bus_interface);
@@ -118,6 +203,6 @@ finish:
         sd_bus_flush_close_unref(bus);
     }
     udev_unref(udev);
-    
-    return r < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
+    close_mainp();
+    return quit == LEAVE_W_ERR ? EXIT_FAILURE : EXIT_SUCCESS;
 }

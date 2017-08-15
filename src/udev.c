@@ -24,7 +24,7 @@ static void get_first_matching_device(struct udev_device **dev, const char *subs
 
 void get_udev_device(const char *backlight_interface, const char *subsystem,
                             sd_bus_error **ret_error, struct udev_device **dev) {
-    // if no backlight_interface is specified, try to get first matching device
+    /* if no backlight_interface is specified, try to get first matching device */
     if (!backlight_interface || !strlen(backlight_interface)) {
         get_first_matching_device(dev, subsystem);
     } else {
