@@ -38,6 +38,7 @@ int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_er
      */
     max = atoi(udev_device_get_sysattr_value(dev, "max_brightness"));
     if (value > max) {
+        udev_device_unref(dev);
         sd_bus_error_setf(ret_error, SD_BUS_ERROR_INVALID_ARGS, "Value must be smaller than %d.", max);
         return -EINVAL;
     }

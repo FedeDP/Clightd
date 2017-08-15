@@ -199,6 +199,7 @@ static void set_gamma(const char *display, const char *xauthority, int temp, int
         XRRSetCrtcGamma(dpy, crtcxid, crtc_gamma);
         XFree(crtc_gamma);
     }
+    XRRFreeScreenResources(res);
     XCloseDisplay(dpy);
 
 end:
@@ -233,6 +234,7 @@ static int get_gamma(const char *display, const char *xauthority, int *err) {
         *err = 1;
     }
 
+    XRRFreeScreenResources(res);
     XCloseDisplay(dpy);
 
 end:

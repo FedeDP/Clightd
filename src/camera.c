@@ -79,6 +79,7 @@ int method_captureframes(sd_bus_message *m, void *userdata, sd_bus_error *ret_er
     sd_bus_message_new_method_return(m, &reply);
     sd_bus_message_append_array(reply, 'd', state.brightness_values, num_captures * sizeof(double));
     r = sd_bus_send(NULL, reply, NULL);
+    sd_bus_message_unref(reply);
     
 end:
     udev_device_unref(dev);
@@ -288,6 +289,7 @@ static void free_all(void) {
         for (int i = 0; i < state.num_captures; i++) {
             munmap(state.buffers[i].start, state.buffers[i].length);
         }
+        free(state.buffers);
     }
     if (state.device_fd != -1) {
         close(state.device_fd);
