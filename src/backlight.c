@@ -162,7 +162,6 @@ int method_isinterface_enabled(sd_bus_message *m, void *userdata, sd_bus_error *
         return -sd_bus_error_get_errno(ret_error);
     }
     
-    const char *sysname = udev_device_get_sysname(dev);
     /* 
      * The returned device is not referenced. 
      * It is attached to the parent device, 
@@ -177,7 +176,7 @@ int method_isinterface_enabled(sd_bus_message *m, void *userdata, sd_bus_error *
     
     const char *enabled = udev_device_get_sysattr_value(d, "enabled");
     if (enabled) {
-        printf("Interface %s state: %s\n", sysname, enabled);
+        printf("Interface %s state: %s\n", udev_device_get_sysname(dev), enabled);
         e = !strcmp(enabled, "enabled"); // 1 if enabled
     }
     

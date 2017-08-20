@@ -37,6 +37,7 @@ static void set_pollfd(void);
 static void main_poll(void);
 static void close_mainp(void);
 
+// enum poll_idx { BUS, SIGNAL, UDEV, POLL_SIZE };
 enum poll_idx { BUS, SIGNAL, POLL_SIZE };
 enum quit_codes { LEAVE_W_ERR = -1, SIGNAL_RCV = 1 };
 
@@ -44,6 +45,7 @@ static const char object_path[] = "/org/clightd/backlight";
 static const char bus_interface[] = "org.clightd.backlight";
 static struct pollfd main_p[POLL_SIZE];
 static int quit;
+// static struct udev_monitor *mon;
 
 /**
  * Bus spec: https://dbus.freedesktop.org/doc/dbus-specification.html
@@ -118,12 +120,18 @@ static void set_pollfd(void) {
         .fd = sigfd,
         .events = POLLIN,
     };
+    
+//     main_p[UDEV] = (struct pollfd) {
+//         .fd = udev_monitor_get_fd(mon),
+//         .events = POLLIN,
+//     };
 }
 
 /*
  * Listens on fds
  */
 static void main_poll(void) {
+//     struct udev_device *dev;
     while (!quit) {
         int r = poll(main_p, POLL_SIZE, -1);
         
@@ -142,6 +150,16 @@ static void main_poll(void) {
                     case SIGNAL:
                         signal_cb();
                         break;
+//                     case UDEV:
+//                         dev = udev_monitor_receive_device(mon);
+//                         if (dev) {
+//                             printf("I: ACTION=%s\n", udev_device_get_action(dev));
+//                             printf("I: DEVNAME=%s\n", udev_device_get_sysname(dev));
+//                             printf("I: DEVPATH=%s\n", udev_device_get_devpath(dev));
+//                             printf("---\n");
+//                             udev_device_unref(dev);
+//                         }
+//                         break;
                     }
                     r--;
                     break;
@@ -189,6 +207,11 @@ int main(void) {
         goto finish;
     }
     
+    /* not working...it seems my driver does not send proper udev events */
+//     mon = udev_monitor_new_from_netlink(udev, "udev");
+//     udev_monitor_filter_add_match_subsystem_devtype(mon, "drm", "drm_minor");
+//     udev_monitor_enable_receiving(mon);
+    
     set_pollfd();
    /*
     * Need to parse initial bus messages 
@@ -202,6 +225,7 @@ finish:
     if (bus) {
         sd_bus_flush_close_unref(bus);
     }
+//     udev_monitor_unref(mon);
     udev_unref(udev);
     close_mainp();
     return quit == LEAVE_W_ERR ? EXIT_FAILURE : EXIT_SUCCESS;

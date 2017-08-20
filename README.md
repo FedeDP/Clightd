@@ -74,7 +74,7 @@ A clight replacement, using clightd, can be something like (pseudo-code):
     $ new_br = avg_br_percent * max_br
     $ busctl call org.clightd.backlight /org/clightd/backlight org.clightd.backlight setbrightness si "" new_br
 
-Note that passing an empty/NULL string as first parameter will make clightd use first subsystem matching device it finds (through libudev).* It should be good to go in most cases.
+**Note that passing an empty/NULL string as first parameter will make clightd use first subsystem matching device it finds (through libudev).** It should be good to go in most cases.
 
 ## Bus interface
 | Method | IN | IN values | OUT | OUT values | Polkit restricted | X only |
