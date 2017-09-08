@@ -140,16 +140,15 @@ static void main_poll(void) {
             quit = LEAVE_W_ERR;
         }
         
-        while (r > 0 && !quit) {
-            for (int i = 0; i < POLL_SIZE; i++) {
-                if (main_p[i].revents & POLLIN) {
-                    switch (i) {
-                    case BUS:
-                        bus_cb();
-                        break;
-                    case SIGNAL:
-                        signal_cb();
-                        break;
+        for (int i = 0; i < POLL_SIZE && !quit && r > 0; i++) {
+            if (main_p[i].revents & POLLIN) {
+                switch (i) {
+                case BUS:
+                    bus_cb();
+                    break;
+                case SIGNAL:
+                    signal_cb();
+                    break;
 //                     case UDEV:
 //                         dev = udev_monitor_receive_device(mon);
 //                         if (dev) {
@@ -160,10 +159,8 @@ static void main_poll(void) {
 //                             udev_device_unref(dev);
 //                         }
 //                         break;
-                    }
-                    r--;
-                    break;
                 }
+                r--;
             }
         }
     }

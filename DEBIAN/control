@@ -1,5 +1,5 @@
 Package: clightd
-Version: 1.4
+Version: 1.5
 Section: base
 Priority: optional
 Architecture: amd64
