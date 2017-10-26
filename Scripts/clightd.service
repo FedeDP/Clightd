@@ -1,5 +1,6 @@
 [Unit]
 Description=Bus service to manage various screen related properties (gamma, dpms, backlight)
+Requires=polkit.service
 
 [Service]
 Type=dbus
@@ -8,7 +9,6 @@ User=root
 ExecStart=/usr/lib/clightd/clightd
 Restart=on-failure
 RestartSec=5
-Requires=polkit.service
 
 [Install]
 WantedBy=multi-user.target
