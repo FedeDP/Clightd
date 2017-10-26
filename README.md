@@ -1,6 +1,7 @@
 # Clightd
 
 [![Build Status](https://travis-ci.org/FedeDP/Clightd.svg?branch=master)](https://travis-ci.org/FedeDP/Clightd)
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/7563e6f8e83f4b1aa884c6032709e341)](https://www.codacy.com/app/FedeDP/Clightd?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=FedeDP/Clightd&amp;utm_campaign=Badge_Grade)
 
 Clightd is a bus interface that lets you easily set screen brightness, gamma temperature and get ambient brightness through webcam frames capture.
 
