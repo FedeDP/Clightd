@@ -166,6 +166,30 @@ static void init(void) {
         return;
     }
     
+    struct v4l2_control ctrl ={0};
+    // disable auto white balance -- DONT LEAVE IF UNSUPPORTED
+    ctrl.id = V4L2_CID_AUTO_WHITE_BALANCE;
+    if (-1 == xioctl(VIDIOC_S_CTRL, &ctrl)) {
+        perror("Setting V4L2_CID_AUTO_WHITE_BALANCE");
+        state.quit = 0;
+    }
+    
+    memset(&ctrl, 0, sizeof(struct v4l2_control));
+    // disable autogain -- DONT LEAVE IF UNSUPPORTED
+    ctrl.id = V4L2_CID_AUTOGAIN;
+    if (-1 == xioctl(VIDIOC_S_CTRL, &ctrl)) {
+        perror("setting V4L2_CID_AUTOGAIN");
+        state.quit = 0;
+    }
+    
+    memset(&ctrl, 0, sizeof(struct v4l2_control));
+    // disable backlight compensation -- DONT LEAVE IF UNSUPPORTED
+    ctrl.id = V4L2_CID_BACKLIGHT_COMPENSATION;
+    if (-1 == xioctl(VIDIOC_S_CTRL, &ctrl)) {
+        perror("setting V4L2_CID_BACKLIGHT_COMPENSATION");
+        state.quit = 0;
+    }
+    
     state.width = fmt.fmt.pix.width;
     state.height = fmt.fmt.pix.height;
 }
