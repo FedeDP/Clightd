@@ -73,6 +73,19 @@ else
 $(info idle support disabled.)
 endif
 
+ifneq ("$(DISABLE_DDC)","1")
+DDC=$(shell pkg-config --silence-errors --libs ddcutil)
+ifneq ("$(DDC)","")
+CFLAGS+=-DUSE_DDC $(shell pkg-config --cflags ddcutil)
+LIBS+=$(DDC) -lddcutil
+$(info DDCutil support enabled.)
+else
+$(info DDCutil support disabled.)
+endif
+else
+$(info DDCutil support disabled.)
+endif
+
 endif
 
 CLIGHTD_VERSION = $(shell git describe --abbrev=0 --always --tags)

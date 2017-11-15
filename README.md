@@ -69,11 +69,9 @@ So, i thought it could be a good idea to develop a bus service that can be used 
 My idea is that anyone can now implement something similar to [clight](https://github.com/FedeDP/Clight) without messing with videodev/libudev and code in general.  
 A clight replacement, using clightd, can be something like (pseudo-code):
 
-    $ max_br = busctl call org.clightd.backlight /org/clightd/backlight org.clightd.backlight getmaxbrightness s ""
-    $ ambient_br = busctl call org.clightd.backlight /org/clightd/backlight org.clightd.backlight captureframes si "" 5
+    $ ambient_br = busctl call org.clightd.backlight /org/clightd/backlight org.clightd.backlight captureframes "si" "" 5
     $ avg_br_percent = compute_avg(ambient_br, 5)
-    $ new_br = avg_br_percent * max_br
-    $ busctl call org.clightd.backlight /org/clightd/backlight org.clightd.backlight setbrightness si "" new_br
+    $ busctl call org.clightd.backlight /org/clightd/backlight org.clightd.backlight setbrightness "sd" "" avg_br_percent
 
 **Note that passing an empty/NULL string as first parameter will make clightd use first subsystem matching device it finds (through libudev).** It should be good to go in most cases.
 
@@ -83,8 +81,7 @@ A clight replacement, using clightd, can be something like (pseudo-code):
 | getbrightness | s | <ul><li>Backlight kernel interface (eg: intel_backlight) or empty string</li></ul> | i | Interface's brightness | | |
 | getmaxbrightness | s | <ul><li>Backlight kernel interface</li></ul> | i | Interface's max brightness | | |
 | getactualbrightness | s | <ul><li>Backlight kernel interface</li></ul> | i | Interface's actual brightness | | |
-| isbacklightinterfaceenabled | s | <ul><li>Backlight kernel interface</li></ul> | b | Boolean enabled for interface | | |
-| setbrightness | si | <ul><li>Backlight kernel interface</li><li>New brightness value</li></ul>| i | New setted brightness | ✔ | |
+| setbrightness | sd | <ul><li>Backlight kernel interface</li><li>New brightness as percentage of max value</li></ul>| i | Number of screens on which brightness has been changed | ✔ | |
 | getgamma | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current display gamma temp | | ✔ |
 | setgamma | ssi | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New gamma value</li></ul> | i | New setted gamma temp | ✔ | ✔ |
 | captureframes | si | <ul><li>video sysname(eg: Video0)</li><li>Number of frames</li></ul> | ad | Each frame's brightness (0-255) | ✔ | |
