@@ -24,7 +24,7 @@ Clightd is a bus interface that lets you easily set screen brightness, gamma tem
 ### Needed only if built with frame captures support:
 * linux-api-headers (linux/videodev2.h)
 
-### Needed only if built with ddcutil:
+### Needed only if built with ddcutil support:
 * ddcutil (ddcutil_c_api.h)
 
 ## Runtime deps:
