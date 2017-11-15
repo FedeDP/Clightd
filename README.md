@@ -91,6 +91,15 @@ A clight replacement, using clightd, can be something like (pseudo-code):
 | setdpms_timeouts | ssiii | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New dpms timeouts</li></ul> | iii | New dpms timeouts | ✔ | ✔ |
 | getidletime | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current idle time in ms | | ✔ |
 
+## Ddcutil support
+Clightd uses [ddcutil](https://github.com/rockowitz/ddcutil) C api to set external monitor brightness.  
+
+> ddcutil is a program for querying and changing monitor settings, such as brightness and color levels.  
+> ddcutil uses DDC/CI to communicate with monitors implementing MCCS (Monitor Control Command Set) over I2C.  
+
+Its support is obviously optional, as it is unfortunately not widely available.  
+Users must manually create a file in /etc/modules-load.d/ to load i2c-dev module at boot, like this [one](https://github.com/FedeDP/Clightd/blob/ddcutil/Scripts/i2c_clightd.conf).
+
 ## Arch AUR packages
 Clightd is available on AUR: https://aur.archlinux.org/packages/clightd-git/ .
 
