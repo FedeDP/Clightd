@@ -38,7 +38,6 @@ ifneq ("$(DISABLE_GAMMA)","1")
 GAMMA=$(shell pkg-config --silence-errors --libs x11 xrandr)
 ifneq ("$(GAMMA)","")
 CFLAGS+=-DGAMMA_PRESENT $(shell pkg-config --cflags x11 xrandr)
-LIBS+=$(GAMMA)
 $(info Gamma support enabled.)
 else
 $(info Gamma support disabled.)
@@ -51,7 +50,6 @@ ifneq ("$(DISABLE_DPMS)","1")
 DPMS=$(shell pkg-config --silence-errors --libs x11 xext)
 ifneq ("$(DPMS)","")
 CFLAGS+=-DDPMS_PRESENT $(shell pkg-config --cflags x11 xext)
-LIBS+=$(DPMS)
 $(info DPMS support enabled.)
 else
 $(info DPMS support disabled.)
@@ -64,7 +62,6 @@ ifneq ("$(DISABLE_IDLE)","1")
 IDLE=$(shell pkg-config --silence-errors --libs x11 xscrnsaver)
 ifneq ("$(IDLE)","")
 CFLAGS+=-DIDLE_PRESENT $(shell pkg-config --cflags x11 xscrnsaver)
-LIBS+=$(IDLE)
 $(info idle support enabled.)
 else
 $(info idle support disabled.)
@@ -77,7 +74,6 @@ ifneq ("$(DISABLE_DDC)","1")
 DDC=$(shell pkg-config --silence-errors --libs ddcutil)
 ifneq ("$(DDC)","")
 CFLAGS+=-DUSE_DDC $(shell pkg-config --cflags ddcutil)
-LIBS+=$(DDC) -lddcutil
 $(info DDCutil support enabled.)
 else
 $(info DDCutil support disabled.)
@@ -85,6 +81,8 @@ endif
 else
 $(info DDCutil support disabled.)
 endif
+
+LIBS+=$(GAMMA) $(DPMS) $(IDLE) $(DDC)
 
 endif
 
