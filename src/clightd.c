@@ -34,6 +34,8 @@
 static void bus_cb(void);
 static void signal_cb(void);
 static void set_pollfd(void);
+static int get_version(sd_bus *b, const char *path, const char *interface, const char *property, 
+                       sd_bus_message *reply, void *userdata, sd_bus_error *error);
 static void main_poll(void);
 static void close_mainp(void);
 
@@ -50,10 +52,18 @@ static int quit;
  */
 static const sd_bus_vtable clightd_vtable[] = {
     SD_BUS_VTABLE_START(0),
-    SD_BUS_METHOD("setbrightness", "sd", "i", method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_PROPERTY("version", "s", get_version, 0, SD_BUS_VTABLE_PROPERTY_CONST),
+    SD_BUS_METHOD("setbrightness", "si", "i", method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("setbrightnesspct", "sd", "d", method_setbrightnesspct, SD_BUS_VTABLE_UNPRIVILEGED),
+#ifdef USE_DDC
+    SD_BUS_METHOD("setbrightness_external", "i", "i", method_setbrightness_external, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("setbrightnesspct_external", "d", "d", method_setbrightnesspct_external, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("getbrightness_external", NULL, "ai", method_getbrightness_external, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("getbrightnesspct_external", NULL, "ad", method_getbrightnesspct_external, SD_BUS_VTABLE_UNPRIVILEGED),
+#endif
     SD_BUS_METHOD("getbrightness", "s", "i", method_getbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("getbrightnesspct", "s", "d", method_getbrightnesspct, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getmaxbrightness", "s", "i", method_getmaxbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("getactualbrightness", "s", "i", method_getactualbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
 #ifdef GAMMA_PRESENT
     SD_BUS_METHOD("setgamma", "ssi", "i", method_setgamma, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getgamma", "ss", "i", method_getgamma, SD_BUS_VTABLE_UNPRIVILEGED),
@@ -119,11 +129,16 @@ static void set_pollfd(void) {
     };
 }
 
+static int get_version(sd_bus *b, const char *path, const char *interface, const char *property, 
+                       sd_bus_message *reply, void *userdata, sd_bus_error *error) {
+
+    return sd_bus_message_append(reply, "s", VERSION);
+}
+
 /*
  * Listens on fds
  */
 static void main_poll(void) {
-//     struct udev_device *dev;
     while (!quit) {
         int r = poll(main_p, POLL_SIZE, -1);
         
@@ -179,7 +194,6 @@ int main(void) {
         goto finish;
     }
     
-    /* Take a well-known service name so that clients can find us */
     r = sd_bus_request_name(bus, bus_interface, 0);
     if (r < 0) {
         fprintf(stderr, "Failed to acquire service name: %s\n", strerror(-r));

@@ -87,6 +87,7 @@ LIBS+=$(GAMMA) $(DPMS) $(IDLE) $(DDC)
 endif
 
 CLIGHTD_VERSION = $(shell git describe --abbrev=0 --always --tags)
+CFLAGS+=-DVERSION=\"$(CLIGHTD_VERSION)\"
 
 all: clightd clean
 
