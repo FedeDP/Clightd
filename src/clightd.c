@@ -34,8 +34,6 @@
 static void bus_cb(void);
 static void signal_cb(void);
 static void set_pollfd(void);
-static int get_version(sd_bus *b, const char *path, const char *interface, const char *property, 
-                       sd_bus_message *reply, void *userdata, sd_bus_error *error);
 static void main_poll(void);
 static void close_mainp(void);
 
@@ -52,10 +50,10 @@ static int quit;
  */
 static const sd_bus_vtable clightd_vtable[] = {
     SD_BUS_VTABLE_START(0),
-    SD_BUS_PROPERTY("version", "s", get_version, 0, SD_BUS_VTABLE_PROPERTY_CONST),
     SD_BUS_METHOD("setbrightness", "si", "i", method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("setbrightnesspct", "sd", "d", method_setbrightnesspct, SD_BUS_VTABLE_UNPRIVILEGED),
-#ifdef USE_DDC
+    SD_BUS_METHOD("setbrightnesspct_all", "sd", "d", method_setbrightnesspct_all, SD_BUS_VTABLE_UNPRIVILEGED),
+#ifdef USE_DDC    
     SD_BUS_METHOD("setbrightness_external", "i", "i", method_setbrightness_external, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("setbrightnesspct_external", "d", "d", method_setbrightnesspct_external, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getbrightness_external", NULL, "ai", method_getbrightness_external, SD_BUS_VTABLE_UNPRIVILEGED),
@@ -129,12 +127,6 @@ static void set_pollfd(void) {
     };
 }
 
-static int get_version(sd_bus *b, const char *path, const char *interface, const char *property, 
-                       sd_bus_message *reply, void *userdata, sd_bus_error *error) {
-
-    return sd_bus_message_append(reply, "s", VERSION);
-}
-
 /*
  * Listens on fds
  */
@@ -174,7 +166,6 @@ static void close_mainp(void) {
 int main(void) {
     int r;
     udev = udev_new();
-    
     /* Connect to the system bus */
     r = sd_bus_default_system(&bus);
     if (r < 0) {

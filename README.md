@@ -101,8 +101,10 @@ Clightd uses [ddcutil](https://github.com/rockowitz/ddcutil) C api to set extern
 > ddcutil is a program for querying and changing monitor settings, such as brightness and color levels.  
 > ddcutil uses DDC/CI to communicate with monitors implementing MCCS (Monitor Control Command Set) over I2C.  
 
-Its support is obviously optional, as it is unfortunately not widely available.  
-Users must manually create a file in /etc/modules-load.d/ to load i2c-dev module at boot, like this [one](https://github.com/FedeDP/Clightd/blob/ddcutil/Scripts/i2c_clightd.conf).
+Its support is obviously optional, as it is unfortunately not widely available (eg: ubuntu/debian do not even package ddcutil C api).  
+It is being pushed though (kde plasma is going to use it: https://phabricator.kde.org/D5381).  
+Users must manually create a file in /etc/modules-load.d/ to load i2c-dev module at boot, like this [one](https://github.com/FedeDP/Clightd/blob/ddcutil/Scripts/i2c_clightd.conf).  
+On archlinux this is automatically accomplished by PKGBUILD.
 
 ## Arch AUR packages
 Clightd is available on AUR: https://aur.archlinux.org/packages/clightd-git/ .

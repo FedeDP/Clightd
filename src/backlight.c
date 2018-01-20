@@ -124,6 +124,61 @@ int method_setbrightnesspct(sd_bus_message *m, void *userdata, sd_bus_error *ret
     return sd_bus_reply_method_return(m, "d", perc);
 }
 
+int method_setbrightnesspct_all(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+#ifndef USE_DDC
+    /* without ddctutils support, just return method_setbrightnesspct */
+    return method_setbrightnesspct(m, userdata, ret_error);
+#else
+    double perc = 0.0;
+    struct udev_device *dev = NULL;
+    const char *backlight_interface;
+    
+    if (!check_authorization(m)) {
+        sd_bus_error_set_errno(ret_error, EPERM);
+        return -EPERM;
+    }
+    
+    int r = sd_bus_message_read(m, "sd", &backlight_interface, &perc);
+    if (r < 0) {
+        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
+        return r;
+    }
+    
+    perc = perc < 0.0 ? 0.0 : perc;
+    perc = perc > 1.0 ? 1.0 : perc;
+    
+    /* Set on external monitors */
+    DDCUTIL_LOOP({
+        int new_value = valrec->val.c.max_val * perc;
+        rc = ddca_set_continuous_vcp_value(dh, br_code, new_value);
+        if (rc) {
+            FUNCTION_ERRMSG("ddca_set_continuous_vcp_value", rc);
+        }
+    });
+    
+    /* Set on internal laptop monitor */
+    get_udev_device(backlight_interface, "backlight", &ret_error, &dev);
+    if (dev) {
+        int max = atoi(udev_device_get_sysattr_value(dev, "max_brightness"));
+        int value = perc * (double)max;
+        char val[10] = {0};
+        sprintf(val, "%d", value);
+        r = udev_device_set_sysattr_value(dev, "brightness", val);
+        if (r < 0) {
+            udev_device_unref(dev);
+            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_ACCESS_DENIED, "Not authorized.");
+            return r;
+        }
+        udev_device_unref(dev);
+    } else {
+        // dont leave if no backlight controller is present as this can be a desktop pc
+        sd_bus_error_set_errno(ret_error, 0);
+    }
+   
+    return sd_bus_reply_method_return(m, "d", perc);
+#endif
+}
+
 #ifdef USE_DDC
 int method_setbrightness_external(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     int val;
