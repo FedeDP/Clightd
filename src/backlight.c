@@ -25,10 +25,10 @@ for (int ndx = 0; ndx < dlist->ct; ndx++) { \
         FUNCTION_ERRMSG("ddca_open_display", rc); \
         continue; \
     } \
-    DDCA_Single_Vcp_Value *valrec; \
-    rc = ddca_get_vcp_value(dh, br_code, DDCA_NON_TABLE_VCP_VALUE, &valrec); \
+    DDCA_Any_Vcp_Value *valrec; \
+    rc = ddca_get_any_vcp_value(dh, br_code, DDCA_NON_TABLE_VCP_VALUE, &valrec); \
     if (rc) { \
-        FUNCTION_ERRMSG("ddca_get_vcp_value", rc); \
+        FUNCTION_ERRMSG("ddca_get_any_vcp_value", rc); \
         goto end_loop; \
     } \
     func; \
@@ -149,7 +149,7 @@ int method_setbrightnesspct_all(sd_bus_message *m, void *userdata, sd_bus_error 
     
     /* Set on external monitors */
     DDCUTIL_LOOP({
-        int new_value = valrec->val.c.max_val * perc;
+        int new_value = VALREC_MAX_VAL(valrec) * perc;
         rc = ddca_set_continuous_vcp_value(dh, br_code, new_value);
         if (rc) {
             FUNCTION_ERRMSG("ddca_set_continuous_vcp_value", rc);
@@ -224,7 +224,7 @@ int method_setbrightnesspct_external(sd_bus_message *m, void *userdata, sd_bus_e
     perc = perc > 1.0 ? 1.0 : perc;
     
     DDCUTIL_LOOP({
-        int new_value = valrec->val.c.max_val * perc;
+        int new_value = VALREC_MAX_VAL(valrec) * perc;
         rc = ddca_set_continuous_vcp_value(dh, br_code, new_value);
         if (rc) {
             FUNCTION_ERRMSG("ddca_set_continuous_vcp_value", rc);
@@ -239,7 +239,7 @@ int method_getbrightness_external(sd_bus_message *m, void *userdata, sd_bus_erro
     sd_bus_message_new_method_return(m, &reply);
     sd_bus_message_open_container(reply, SD_BUS_TYPE_ARRAY, "i");
     
-    DDCUTIL_LOOP(sd_bus_message_append(reply, "i", valrec->val.c.cur_val));
+    DDCUTIL_LOOP(sd_bus_message_append(reply, "i", VALREC_CUR_VAL(valrec)));
     
     sd_bus_message_close_container(reply);
     int r = sd_bus_send(NULL, reply, NULL);
@@ -256,7 +256,7 @@ int method_getbrightnesspct_external(sd_bus_message *m, void *userdata, sd_bus_e
     sd_bus_message_new_method_return(m, &reply);
     sd_bus_message_open_container(reply, SD_BUS_TYPE_ARRAY, "d");
     
-    DDCUTIL_LOOP(sd_bus_message_append(reply, "d", (double)valrec->val.c.cur_val / valrec->val.c.max_val));
+    DDCUTIL_LOOP(sd_bus_message_append(reply, "d", (double)VALREC_CUR_VAL(valrec) / VALREC_MAX_VAL(valrec)));
     
     sd_bus_message_close_container(reply);
     int r = sd_bus_send(NULL, reply, NULL);
