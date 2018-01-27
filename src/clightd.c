@@ -50,18 +50,9 @@ static int quit;
  */
 static const sd_bus_vtable clightd_vtable[] = {
     SD_BUS_VTABLE_START(0),
-    SD_BUS_METHOD("setbrightness", "si", "i", method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("setbrightnesspct", "sd", "d", method_setbrightnesspct, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("setbrightnesspct_all", "sd", "d", method_setbrightnesspct_all, SD_BUS_VTABLE_UNPRIVILEGED),
-#ifdef USE_DDC    
-    SD_BUS_METHOD("setbrightness_external", "i", "i", method_setbrightness_external, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("setbrightnesspct_external", "d", "d", method_setbrightnesspct_external, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("getbrightness_external", NULL, "ai", method_getbrightness_external, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("getbrightnesspct_external", NULL, "ad", method_getbrightnesspct_external, SD_BUS_VTABLE_UNPRIVILEGED),
-#endif
-    SD_BUS_METHOD("getbrightness", "s", "i", method_getbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("getbrightnesspct", "s", "d", method_getbrightnesspct, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("getmaxbrightness", "s", "i", method_getmaxbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("setbrightness", "a(sd)", "i", method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("getbrightness", "as", "ad", method_getbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("getallbrightness", "", "a(sd)", method_getallbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
 #ifdef GAMMA_PRESENT
     SD_BUS_METHOD("setgamma", "ssi", "i", method_setgamma, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getgamma", "ss", "i", method_getgamma, SD_BUS_VTABLE_UNPRIVILEGED),

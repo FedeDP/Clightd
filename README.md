@@ -75,17 +75,16 @@ A clight replacement, using clightd, can be something like (pseudo-code):
 
     $ ambient_br = busctl call org.clightd.backlight /org/clightd/backlight org.clightd.backlight captureframes "si" "" 5
     $ avg_br_percent = compute_avg(ambient_br, 5)
-    $ busctl call org.clightd.backlight /org/clightd/backlight org.clightd.backlight setbrightness "sd" "" avg_br_percent
+    $ busctl call org.clightd.backlight /org/clightd/backlight org.clightd.backlight setbrightness "a(sd)" 1 "" avg_br_percent
 
 **Note that passing an empty/NULL string as first parameter will make clightd use first subsystem matching device it finds (through libudev).** It should be good to go in most cases.
 
 ## Bus interface
 | Method | IN | IN values | OUT | OUT values | Polkit restricted | X only |
 |-|:-:|-|:-:|-|:-:|-|
-| getbrightness | s | <ul><li>Backlight kernel interface (eg: intel_backlight) or empty string</li></ul> | i | Interface's brightness | | |
-| getmaxbrightness | s | <ul><li>Backlight kernel interface</li></ul> | i | Interface's max brightness | | |
-| getactualbrightness | s | <ul><li>Backlight kernel interface</li></ul> | i | Interface's actual brightness | | |
-| setbrightness | sd | <ul><li>Backlight kernel interface</li><li>New brightness as percentage of max value</li></ul>| i | Number of screens on which brightness has been changed | ✔ | |
+| getbrightness | as | <ul><li>Array of screen serialnumbers</li></ul> | ad | Backlight pct for each screen | | |
+| getallbrightness | | | a(sd) | Array of struct with serialNumber and current backlight pct for each screen | | |
+| setbrightness | a(sd) | <ul><li>Array of struct with serialNumber and desired backlight level in pct for each screen</li></ul> | i | Number of screens on which backlight has been changed | ✔ | |
 | getgamma | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current display gamma temp | | ✔ |
 | setgamma | ssi | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New gamma value</li></ul> | i | New setted gamma temp | ✔ | ✔ |
 | captureframes | si | <ul><li>video sysname(eg: Video0)</li><li>Number of frames</li></ul> | ad | Each frame's brightness (0-255) | ✔ | |
@@ -95,8 +94,10 @@ A clight replacement, using clightd, can be something like (pseudo-code):
 | setdpms_timeouts | ssiii | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New dpms timeouts</li></ul> | iii | New dpms timeouts | ✔ | ✔ |
 | getidletime | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current idle time in ms | | ✔ |
 
+Please note that for internal laptop screen, you can use backlight kernel interface (eg: intel_backlight) or empty string (to forcefully use first udev backlight subsystem matching device).
+
 ## Ddcutil support
-Clightd uses [ddcutil](https://github.com/rockowitz/ddcutil) C api to set external monitor brightness.  
+Clightd uses [ddcutil](https://github.com/rockowitz/ddcutil) C api to set external monitor brightness and thus supporting desktop PCs too.  
 
 > ddcutil is a program for querying and changing monitor settings, such as brightness and color levels.  
 > ddcutil uses DDC/CI to communicate with monitors implementing MCCS (Monitor Control Command Set) over I2C.  

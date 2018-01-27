@@ -6,337 +6,215 @@
 
 #include <ddcutil_c_api.h>
 
-#define FUNCTION_ERRMSG(function_name,status_code) \
-fprintf(stderr, "(%s) %s() returned %d (%s): %s\n",      \
-__func__, function_name, status_code,    \
-ddca_rc_name(status_code),      \
-ddca_rc_desc(status_code))
-
 #define DDCUTIL_LOOP(func) \
-const DDCA_Vcp_Feature_Code br_code = 0x10; \
-DDCA_Display_Info_List *dlist = ddca_get_display_info_list(); \
-for (int ndx = 0; ndx < dlist->ct; ndx++) { \
-    DDCA_Display_Info *dinfo = &dlist->info[ndx]; \
-    DDCA_Display_Ref dref = dinfo->dref; \
+    const DDCA_Vcp_Feature_Code br_code = 0x10; \
+    DDCA_Display_Info_List *dlist = ddca_get_display_info_list(); \
+    for (int ndx = 0; ndx < dlist->ct; ndx++) { \
+        DDCA_Display_Info *dinfo = &dlist->info[ndx]; \
+        DDCA_Display_Ref dref = dinfo->dref; \
+        DDCA_Display_Handle dh = NULL; \
+        if (ddca_open_display(dref, &dh)) { \
+            continue; \
+        } \
+        DDCA_Any_Vcp_Value *valrec; \
+        if (!ddca_get_any_vcp_value(dh, br_code, DDCA_NON_TABLE_VCP_VALUE, &valrec)) { \
+            func; \
+        } \
+        ddca_close_display(dh); \
+    } \
+    if (dlist) { \
+        ddca_free_display_info_list(dlist); \
+    }
+
+#define DDCUTIL_FUNC(func) \
+    const DDCA_Vcp_Feature_Code br_code = 0x10; \
+    DDCA_Display_Identifier pdid = NULL; \
+    DDCA_Display_Ref dref = NULL; \
     DDCA_Display_Handle dh = NULL; \
-    DDCA_Status rc; \
-    rc = ddca_open_display(dref, &dh); \
-    if (rc) { \
-        FUNCTION_ERRMSG("ddca_open_display", rc); \
-        continue; \
+    DDCA_Any_Vcp_Value *valrec = NULL; \
+    if (ddca_create_mfg_model_sn_display_identifier(NULL, NULL, sn, &pdid)) { \
+        goto end; \
     } \
-    DDCA_Any_Vcp_Value *valrec; \
-    rc = ddca_get_any_vcp_value(dh, br_code, DDCA_NON_TABLE_VCP_VALUE, &valrec); \
-    if (rc) { \
-        FUNCTION_ERRMSG("ddca_get_any_vcp_value", rc); \
-        goto end_loop; \
+    if (ddca_create_display_ref(pdid, &dref)) { \
+        goto end; \
     } \
-    func; \
-end_loop: \
-    rc = ddca_close_display(dh); \
-    if (rc) { \
-        FUNCTION_ERRMSG("ddca_close_display", rc); \
+    if (ddca_open_display(dref, &dh)) { \
+        goto end; \
     } \
-} \
-if (dlist) { \
-    ddca_free_display_info_list(dlist); \
-}
+    if (!ddca_get_any_vcp_value(dh, br_code, DDCA_NON_TABLE_VCP_VALUE, &valrec)) { \
+        func; \
+    } \
+end: \
+    if (dh) { \
+        ddca_close_display(dh); \
+    } \
+    if (dref) { \
+        ddca_free_display_ref(dref); \
+    } \
+    if (pdid) { \
+        ddca_free_display_identifier(pdid); \
+    }
+
+#else
+
+#define DDCUTIL_LOOP(func) do {} while(0)
+#define DDCUTIL_FUNC(func) do {} while(0)
 
 #endif
 
-/**
- * Brightness setter method
- */
-int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    int value;
-    struct udev_device *dev = NULL;
-    const char *backlight_interface;
-    
-    if (!check_authorization(m)) {
-        sd_bus_error_set_errno(ret_error, EPERM);
-        return -EPERM;
-    }
-    
-    int r = sd_bus_message_read(m, "si", &backlight_interface, &value);
-    if (r < 0) {
-        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
-        return r;
-    }
-    
-    get_udev_device(backlight_interface, "backlight", &ret_error, &dev);
-    if (sd_bus_error_is_set(ret_error)) {
-        return -sd_bus_error_get_errno(ret_error);
-    }
-    
-    int max = atoi(udev_device_get_sysattr_value(dev, "max_brightness"));
-    value = value > max ? max : value;
-    value = value < 0 ? 0 : value;
-    
-    char val[10] = {0};
-    sprintf(val, "%d", value);
-    r = udev_device_set_sysattr_value(dev, "brightness", val);
-    if (r < 0) {
-        udev_device_unref(dev);
-        sd_bus_error_set_const(ret_error, SD_BUS_ERROR_ACCESS_DENIED, "Not authorized.");
-        return r;
-    }
-    udev_device_unref(dev);
-    return sd_bus_reply_method_return(m, "i", value);
-}
+static int set_internal_backlight(const double pct, const char *path);
+static int set_external_backlight(const double pct, const char *sn);
+static int append_internal_backlight(sd_bus_message *reply, const char *path, int all);
+static int append_external_backlight(sd_bus_message *reply, const char *sn, int all);
 
 /**
  * Brightness pct setter method
  */
-int method_setbrightnesspct(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    double perc = 0.0;
-    struct udev_device *dev = NULL;
-    const char *backlight_interface;
-    
+int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     if (!check_authorization(m)) {
         sd_bus_error_set_errno(ret_error, EPERM);
         return -EPERM;
     }
     
-    int r = sd_bus_message_read(m, "sd", &backlight_interface, &perc);
+    int ok = 0;
+    
+    int r = sd_bus_message_enter_container(m, SD_BUS_TYPE_ARRAY, "(sd)");
     if (r < 0) {
-        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
-        return r;
+        fprintf(stderr, "%s\n", strerror(-r));
+    } else {
+        while (sd_bus_message_enter_container(m, SD_BUS_TYPE_STRUCT, "sd") > 0) {
+            const char *sn = NULL;
+            double pct;
+            if (sd_bus_message_read(m, "sd", &sn, &pct) > 0) {
+                pct = pct < 0.0 ? 0.0 : pct;
+                pct = pct > 1.0 ? 1.0 : pct;
+                if (!set_internal_backlight(pct, sn) || !set_external_backlight(pct, sn)) {
+                    ok++;
+                }
+            }
+            sd_bus_message_exit_container(m);
+        }
+        sd_bus_message_exit_container(m);
     }
     
-    perc = perc < 0.0 ? 0.0 : perc;
-    perc = perc > 1.0 ? 1.0 : perc;
-    
-    get_udev_device(backlight_interface, "backlight", &ret_error, &dev);
-    if (sd_bus_error_is_set(ret_error)) {
-        return -sd_bus_error_get_errno(ret_error);
-    }
-    int max = atoi(udev_device_get_sysattr_value(dev, "max_brightness"));
-    int value = perc * (double)max;
-    char val[10] = {0};
-    sprintf(val, "%d", value);
-    r = udev_device_set_sysattr_value(dev, "brightness", val);
-    if (r < 0) {
-        udev_device_unref(dev);
-        sd_bus_error_set_const(ret_error, SD_BUS_ERROR_ACCESS_DENIED, "Not authorized.");
-        return r;
-    }
-    udev_device_unref(dev);
-    return sd_bus_reply_method_return(m, "d", perc);
+    // Returns number of actually changed backlights
+    return sd_bus_reply_method_return(m, "i", ok);
 }
 
-int method_setbrightnesspct_all(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-#ifndef USE_DDC
-    /* without ddctutils support, just return method_setbrightnesspct */
-    return method_setbrightnesspct(m, userdata, ret_error);
-#else
-    double perc = 0.0;
+static int set_internal_backlight(const double pct, const char *path) {
+    int r = -1;
     struct udev_device *dev = NULL;
-    const char *backlight_interface;
-    
-    if (!check_authorization(m)) {
-        sd_bus_error_set_errno(ret_error, EPERM);
-        return -EPERM;
-    }
-    
-    int r = sd_bus_message_read(m, "sd", &backlight_interface, &perc);
-    if (r < 0) {
-        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
-        return r;
-    }
-    
-    perc = perc < 0.0 ? 0.0 : perc;
-    perc = perc > 1.0 ? 1.0 : perc;
-    
-    /* Set on external monitors */
-    DDCUTIL_LOOP({
-        int new_value = VALREC_MAX_VAL(valrec) * perc;
-        rc = ddca_set_continuous_vcp_value(dh, br_code, new_value);
-        if (rc) {
-            FUNCTION_ERRMSG("ddca_set_continuous_vcp_value", rc);
-        }
-    });
-    
-    /* Set on internal laptop monitor */
-    get_udev_device(backlight_interface, "backlight", &ret_error, &dev);
+    get_udev_device(path, "backlight", NULL, &dev);
     if (dev) {
         int max = atoi(udev_device_get_sysattr_value(dev, "max_brightness"));
-        int value = perc * (double)max;
+        int value = pct * (double)max;
         char val[10] = {0};
         sprintf(val, "%d", value);
         r = udev_device_set_sysattr_value(dev, "brightness", val);
-        if (r < 0) {
-            udev_device_unref(dev);
-            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_ACCESS_DENIED, "Not authorized.");
-            return r;
-        }
         udev_device_unref(dev);
-    } else {
-        // dont leave if no backlight controller is present as this can be a desktop pc
-        sd_bus_error_set_errno(ret_error, 0);
-    }
-   
-    return sd_bus_reply_method_return(m, "d", perc);
-#endif
-}
-
-#ifdef USE_DDC
-int method_setbrightness_external(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    int val;
-    
-    if (!check_authorization(m)) {
-        sd_bus_error_set_errno(ret_error, EPERM);
-        return -EPERM;
     }
     
-    int r = sd_bus_message_read(m, "i", &val);
-    if (r < 0) {
-        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
-        return r;
-    }
-    
-    val = val < 0 ? 0 : val;
-    val = val > 100 ? 100 : val;
-    
-    DDCUTIL_LOOP({
-        rc = ddca_set_continuous_vcp_value(dh, br_code, val);
-        if (rc) {
-            FUNCTION_ERRMSG("ddca_set_continuous_vcp_value", rc);
-        }
-    });
-    return sd_bus_reply_method_return(m, "i", val);
-}
-
-int method_setbrightnesspct_external(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    double perc = 0.0;
-    
-    if (!check_authorization(m)) {
-        sd_bus_error_set_errno(ret_error, EPERM);
-        return -EPERM;
-    }
-    
-    int r = sd_bus_message_read(m, "d", &perc);
-    if (r < 0) {
-        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
-        return r;
-    }
-    
-    perc = perc < 0.0 ? 0.0 : perc;
-    perc = perc > 1.0 ? 1.0 : perc;
-    
-    DDCUTIL_LOOP({
-        int new_value = VALREC_MAX_VAL(valrec) * perc;
-        rc = ddca_set_continuous_vcp_value(dh, br_code, new_value);
-        if (rc) {
-            FUNCTION_ERRMSG("ddca_set_continuous_vcp_value", rc);
-        }
-    });
-    return sd_bus_reply_method_return(m, "d", perc);
-}
-
-int method_getbrightness_external(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    sd_bus_message *reply = NULL;
-    
-    sd_bus_message_new_method_return(m, &reply);
-    sd_bus_message_open_container(reply, SD_BUS_TYPE_ARRAY, "i");
-    
-    DDCUTIL_LOOP(sd_bus_message_append(reply, "i", VALREC_CUR_VAL(valrec)));
-    
-    sd_bus_message_close_container(reply);
-    int r = sd_bus_send(NULL, reply, NULL);
-    if (r < 0) {
-        fprintf(stderr, "%s\n", strerror(-r));
-    }
-    sd_bus_message_unref(reply);
     return r;
 }
 
-int method_getbrightnesspct_external(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    sd_bus_message *reply = NULL;
-    
-    sd_bus_message_new_method_return(m, &reply);
-    sd_bus_message_open_container(reply, SD_BUS_TYPE_ARRAY, "d");
-    
-    DDCUTIL_LOOP(sd_bus_message_append(reply, "d", (double)VALREC_CUR_VAL(valrec) / VALREC_MAX_VAL(valrec)));
-    
-    sd_bus_message_close_container(reply);
-    int r = sd_bus_send(NULL, reply, NULL);
-    if (r < 0) {
-        fprintf(stderr, "%s\n", strerror(-r));
-    }
-    sd_bus_message_unref(reply);
-    return r;
+static int set_external_backlight(const double pct, const char *sn) {
+    int ret = -1;
+    DDCUTIL_FUNC({
+        int new_value = VALREC_MAX_VAL(valrec) * pct;
+        ret = ddca_set_continuous_vcp_value(dh, br_code, new_value);
+    });
+    return ret;
 }
-#endif
 
 /**
- * Current brightness getter method
+ * Backlight pct getter method: for each screen (both internal and external)
+ * it founds, it will return a "(serialNumber, current backlight pct)" struct.
+ * Note that for internal laptop screen, serialNumber = syspath (eg: intel_backlight)
+ */
+int method_getallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+    sd_bus_message *reply = NULL;
+        
+    sd_bus_message_new_method_return(m, &reply);
+    sd_bus_message_open_container(reply, SD_BUS_TYPE_ARRAY, "(sd)");
+        
+    append_internal_backlight(reply, NULL, 1);
+    append_external_backlight(reply, NULL, 1);
+        
+    sd_bus_message_close_container(reply);
+    int r = sd_bus_send(NULL, reply, NULL);
+    sd_bus_message_unref(reply);
+    sd_bus_message_exit_container(m);
+    return r;
+}
+
+/**
+ * Current brightness pct getter method: for each serialNumber passed in,
+ * it will return its backlight value in pct
  */
 int method_getbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    struct udev_device *dev = NULL;
-    const char *backlight_interface;
-    
-    int r = sd_bus_message_read(m, "s", &backlight_interface);
-    if (r < 0) {
+    int r = sd_bus_message_enter_container(m, SD_BUS_TYPE_ARRAY, "s");
+    if (r >= 0) {
+        sd_bus_message *reply = NULL;
+        
+        const char *sn;
+        
+        sd_bus_message_new_method_return(m, &reply);
+        sd_bus_message_open_container(reply, SD_BUS_TYPE_ARRAY, "d");
+        
+        while (sd_bus_message_read(m, "s", &sn) > 0) {
+            if (append_internal_backlight(reply, sn, 0)){
+                append_external_backlight(reply, sn, 0);
+            }
+        }
+        
+        sd_bus_message_close_container(reply);
+        r = sd_bus_send(NULL, reply, NULL);
+        sd_bus_message_unref(reply);
+        sd_bus_message_exit_container(m);
+    } else {
         fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
-        return r;
     }
-    
-    get_udev_device(backlight_interface, "backlight", &ret_error, &dev);
-    if (sd_bus_error_is_set(ret_error)) {
-        return -sd_bus_error_get_errno(ret_error);
-    }
-    
-    int val = atoi(udev_device_get_sysattr_value(dev, "brightness"));    
-    udev_device_unref(dev);
-    return sd_bus_reply_method_return(m, "i", val);
+    return r;
 }
 
-/**
- * Current brightness pct getter method
- */
-int method_getbrightnesspct(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+static int append_internal_backlight(sd_bus_message *reply, const char *path, int all) {
+    int ret = -1;
     struct udev_device *dev = NULL;
-    const char *backlight_interface;
+    get_udev_device(path, "backlight", NULL, &dev);
     
-    int r = sd_bus_message_read(m, "s", &backlight_interface);
-    if (r < 0) {
-        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
-        return r;
-    }
+    if (dev) {
+        int val = atoi(udev_device_get_sysattr_value(dev, "brightness"));
+        int max = atoi(udev_device_get_sysattr_value(dev, "max_brightness"));
     
-    get_udev_device(backlight_interface, "backlight", &ret_error, &dev);
-    if (sd_bus_error_is_set(ret_error)) {
-        return -sd_bus_error_get_errno(ret_error);
-    }
-    
-    int val = atoi(udev_device_get_sysattr_value(dev, "brightness"));
-    int max = atoi(udev_device_get_sysattr_value(dev, "max_brightness"));
-    
-    double pct = (double)val / max;    
-    udev_device_unref(dev);
-    return sd_bus_reply_method_return(m, "d", pct);
+        double pct = (double)val / max;
+        if (!all) {
+            sd_bus_message_append(reply, "d", pct);
+        } else {
+            sd_bus_message_open_container(reply, SD_BUS_TYPE_STRUCT, "sd");
+            sd_bus_message_append(reply, "sd", udev_device_get_sysname(dev), pct);
+            sd_bus_message_close_container(reply);
+        }
+        udev_device_unref(dev);
+        ret = 0;
+    } 
+    return ret;
 }
 
-/**
- * Max brightness value getter method
- */
-int method_getmaxbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    int x, r;
-    struct udev_device *dev = NULL;
-    const char *backlight_interface;
+static int append_external_backlight(sd_bus_message *reply, const char *sn, int all) {
+    int ret = -1;
     
-    r = sd_bus_message_read(m, "s", &backlight_interface);
-    if (r < 0) {
-        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
-        return r;
+    if (!all) {
+        DDCUTIL_FUNC({
+            sd_bus_message_append(reply, "d", (double)VALREC_CUR_VAL(valrec) / VALREC_MAX_VAL(valrec));
+            ret = 0;
+        });
+    } else {
+        DDCUTIL_LOOP({
+            sd_bus_message_open_container(reply, SD_BUS_TYPE_STRUCT, "sd");
+            sd_bus_message_append(reply, "sd", dinfo->sn, (double)VALREC_CUR_VAL(valrec) / VALREC_MAX_VAL(valrec));
+            sd_bus_message_close_container(reply);
+            ret = 0;
+        });
     }
-    
-    get_udev_device(backlight_interface, "backlight", &ret_error, &dev);
-    if (sd_bus_error_is_set(ret_error)) {
-        return -sd_bus_error_get_errno(ret_error);
-    }
-    
-    x = atoi(udev_device_get_sysattr_value(dev, "max_brightness"));    
-    udev_device_unref(dev);
-    return sd_bus_reply_method_return(m, "i", x);
+    return ret;
 }
