@@ -15,7 +15,7 @@
 - [x] drop getactualbrightness method
 - [x] add a version property, clight will check this when it starts up
 - [x] setbrightnesspct_all should always be present, and just fallback to setbrightnesspct if ddcutil is not built
-- [ ] update README: bus interface
+- [x] update README: bus interface
 - [x] update README ddcutil
 - [x] in archlinux PKGBUILD, automatically install i2c_clightd.conf file in /etc/modules-load.d/
 - [x] update to new 0.8.6 ddcutil API
