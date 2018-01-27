@@ -59,9 +59,11 @@ Uninstall:
     $  cppcheck --enable=style --enable=performance --enable=unusedFunction
 
 ## Devel info
-Brightness related bus interface methods make all use of libudev to write and read current values (no fopen or other things like that).  
+Clightd brightness API was primarily developed with laptops in mind; it does now support desktop PCs too, through ddcutil.  
+
+For laptops, brightness related bus interface methods make all use of libudev to write and read current values (no fopen or other things like that).  
 All method calls use libudev to take correct device path, and fallback to first subsystem matching device if empty string is passed.  
-Strict error checking tries to enforce no issue of any kind.  
+For desktop PCs, ddcutil gets used to change external monitor brightness. For more info, see [ddcutil](https://github.com/FedeDP/Clightd/tree/ddcutil#ddcutil-support) section below.  
 
 Getgamma function supports 50-steps temperature values. It tries to fit temperature inside a 50 step (eg: it finds 5238, tries if 5200 or 5250 are fine too, and in case returns them. Otherwise, it returns 5238.)  
 
@@ -94,7 +96,7 @@ A clight replacement, using clightd, can be something like (pseudo-code):
 | setdpms_timeouts | ssiii | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New dpms timeouts</li></ul> | iii | New dpms timeouts | ✔ | ✔ |
 | getidletime | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current idle time in ms | | ✔ |
 
-Please note that for internal laptop screen, you can use backlight kernel interface (eg: intel_backlight) or empty string (to forcefully use first udev backlight subsystem matching device).
+Please note that for internal laptop screen, serialNumber must be your backlight kernel interface (eg: intel_backlight) or an empty string (to forcefully use first udev backlight subsystem matching device).
 
 ## Ddcutil support
 Clightd uses [ddcutil](https://github.com/rockowitz/ddcutil) C api to set external monitor brightness and thus supporting desktop PCs too.  
