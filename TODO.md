@@ -18,5 +18,13 @@
 - [x] update README: bus interface
 - [x] update README ddcutil
 - [x] in archlinux PKGBUILD, automatically install i2c_clightd.conf file in /etc/modules-load.d/
-- [x] update to new 0.8.6 ddcutil API
+- [x] update to new 0.8.7 ddcutil API
+
+- [x] fix setallbrightness
+- [ ] implement set_brightness
+- [x] implement set gamma smooth
+- [x] drop gamma_smooth, backlight_smooth and dimmer_smooth in clight
+- [x] install ddcutil module's load file if "make install WITH_DDC=1"
+
+- [ ] test
 - [ ] new release

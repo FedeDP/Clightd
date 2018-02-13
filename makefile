@@ -8,6 +8,8 @@ SYSTEMDSERVICE = clightd.service
 SYSTEMDDIR = /usr/lib/systemd/system
 POLKITPOLICYNAME = org.clightd.backlight.policy
 POLKITPOLICYDIR = /usr/share/polkit-1/actions
+MODULESLOADDDC = i2c_clightd.conf
+MODULESLOADDIR = /usr/lib/modules-load.d
 EXTRADIR = Scripts
 DEBIANDIR = ./Clightd
 DEBOUTPUTDIR = ./Debian
@@ -87,6 +89,7 @@ LIBS+=$(GAMMA) $(DPMS) $(IDLE) $(DDC)
 endif
 
 CLIGHTD_VERSION = $(shell git describe --abbrev=0 --always --tags)
+CFLAGS+=-DVERSION=\"$(CLIGHTD_VERSION)\"
 
 all: clightd clean
 
@@ -145,6 +148,12 @@ install:
 	$(info installing polkit policy file.)
 	@$(INSTALL_DIR) "$(DESTDIR)$(POLKITPOLICYDIR)"
 	@$(INSTALL_DATA) $(EXTRADIR)/$(POLKITPOLICYNAME) "$(DESTDIR)$(POLKITPOLICYDIR)"
+	
+ifeq ($(WITH_DDC),"1")
+	$(info installing ddc module load file.)
+	@$(INSTALL_DIR) "$(DESTDIR)$(MODULESLOADDIR)"
+	@$(INSTALL_DATA) $(EXTRADIR)/$(MODULESLOADDDC) "$(DESTDIR)$(MODULESLOADDIR)"
+endif
 
 uninstall:
 	$(info uninstalling bin.)
@@ -161,3 +170,6 @@ uninstall:
 	
 	$(info uninstalling polkit policy file.)
 	@$(RM) "$(DESTDIR)$(POLKITPOLICYDIR)/$(POLKITPOLICYNAME)"
+	
+	$(info uninstalling ddc module load file (if present).)
+	@$(RM) "$(DESTDIR)$(MODULESLOADDIR)/$(MODULESLOADDDC)"

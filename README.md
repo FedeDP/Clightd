@@ -25,7 +25,7 @@ Clightd is a bus interface that lets you easily set screen brightness, gamma tem
 * linux-api-headers (linux/videodev2.h)
 
 ### Needed only if built with ddcutil support:
-* ddcutil (ddcutil_c_api.h)
+* ddcutil >= 0.8.7 (ddcutil_c_api.h)
 
 ## Runtime deps:
 * shared objects from build libraries
@@ -85,7 +85,7 @@ A clight replacement, using clightd, can be something like (pseudo-code):
 | Method | IN | IN values | OUT | OUT values | Polkit restricted | X only |
 |-|:-:|-|:-:|-|:-:|-|
 | getbrightness | as | <ul><li>Array of screen serialnumbers</li></ul> | ad | Backlight pct for each screen | | |
-| getallbrightness | | | a(sd) | Array of struct with serialNumber and current backlight pct for each screen | | |
+| getallbrightness | s | <ul><li>Backlight interface for internal monitor. Can be NULL/empty.</li></ul> | a(sd) | Array of struct with serialNumber and current backlight pct for each screen | | |
 | setbrightness | a(sd) | <ul><li>Array of struct with serialNumber and desired backlight level in pct for each screen</li></ul> | i | Number of screens on which backlight has been changed | ✔ | |
 | getgamma | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current display gamma temp | | ✔ |
 | setgamma | ssi | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New gamma value</li></ul> | i | New setted gamma temp | ✔ | ✔ |

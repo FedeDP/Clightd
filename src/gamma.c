@@ -15,9 +15,49 @@ static unsigned short get_red(int temp);
 static unsigned short get_green(int temp);
 static unsigned short get_blue(int temp);
 static int get_temp(const unsigned short R, const unsigned short B);
-static void set_gamma(const char *display, const char *xauthority, int temp, int *err);
-static int get_gamma(const char *display, const char *xauthority, int *err);
+static int set_gamma(int temp, Display *dpy);
+static int get_gamma(Display *dpy);
 
+typedef struct {
+    int fd;
+    unsigned int target_temp;
+    unsigned int smooth_step;
+    unsigned int smooth_wait;
+    unsigned int current_temp;
+    Display *dpy;
+} smooth_change;
+
+static smooth_change sc;
+
+void set_gamma_smooth_fd(int fd) {
+    sc.fd = fd;
+}
+
+int gamma_smooth_cb(void) {
+    uint64_t t;
+    // nonblocking mode!
+    read(sc.fd, &t, sizeof(uint64_t));
+    
+    if (sc.target_temp < sc.current_temp) {
+        sc.current_temp = sc.current_temp - sc.smooth_step < sc.target_temp ? 
+                        sc.target_temp :
+                        sc.current_temp - sc.smooth_step;
+    } else {
+        sc.current_temp = sc.current_temp + sc.smooth_step > sc.target_temp ? 
+        sc.target_temp :
+        sc.current_temp + sc.smooth_step;
+    }
+    if (set_gamma(sc.current_temp, sc.dpy) == sc.target_temp) {
+        XCloseDisplay(sc.dpy);
+        unsetenv("XAUTHORITY");
+    } else {
+        struct itimerspec timerValue = {{0}};
+        timerValue.it_value.tv_sec = 0;
+        timerValue.it_value.tv_nsec = 1000 * 1000 * sc.smooth_wait; // ms
+        return timerfd_settime(sc.fd, 0, &timerValue, NULL);
+    }
+    return 0;
+}
 
 int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     int temp, error = 0;
@@ -35,10 +75,45 @@ int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) 
         return r;
     }
     
+    const int is_smooth;
+    const unsigned int smooth_step, smooth_wait;
+    
+    sd_bus_message_enter_container(m, SD_BUS_TYPE_STRUCT, "buu");
+    sd_bus_message_read(m, "buu", &is_smooth, &smooth_step, &smooth_wait);
+    sd_bus_message_exit_container(m);
+    
     if (temp < 1000 || temp > 10000) {
         error = EINVAL;
     } else {
-        set_gamma(display, xauthority, temp, &error);
+        /* set xauthority cookie */
+        setenv("XAUTHORITY", xauthority, 1);
+        
+        Display *dpy = XOpenDisplay(display);
+        if (dpy == NULL) {
+            perror("XopenDisplay");
+            error = ENXIO;
+            /* Drop xauthority cookie */
+            unsetenv("XAUTHORITY");
+        } else {
+            if (is_smooth && smooth_step && smooth_wait) {
+                sc.target_temp = temp;
+                sc.smooth_step = smooth_step;
+                sc.smooth_wait = smooth_wait;
+                sc.dpy = dpy;
+                sc.current_temp = get_gamma(sc.dpy);
+                
+                printf("Gamma value target set (smooth): %d\n", temp);
+                
+                gamma_smooth_cb(); // xauthority cookie will be dropped in smooth cb
+            } else {
+                set_gamma(temp, dpy);
+                printf("Gamma value set: %d\n", temp);
+            
+                XCloseDisplay(dpy);
+                /* Drop xauthority cookie */
+                unsetenv("XAUTHORITY");
+            }
+        }
     }
     if (error) {
         if (error == EINVAL) {
@@ -49,12 +124,11 @@ int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) 
         return -error;
     }
     
-    printf("Gamma value set: %d\n", temp);
-    return sd_bus_reply_method_return(m, "i", temp);
+    return sd_bus_reply_method_return(m, "b", !error);
 }
 
 int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    int error = 0;
+    int error = 0, temp;
     const char *display = NULL, *xauthority = NULL;
     
     /* Read the parameters */
@@ -64,7 +138,21 @@ int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) 
         return r;
     }
     
-    int temp = get_gamma(display, xauthority, &error);
+    /* set xauthority cookie */
+    setenv("XAUTHORITY", xauthority, 1);
+    
+    Display *dpy = XOpenDisplay(display);
+    if (dpy == NULL) {
+        perror("XopenDisplay");
+        error = ENXIO;
+    } else {
+        temp = get_gamma(dpy);
+        XCloseDisplay(dpy);
+    }
+    
+    /* Drop xauthority cookie */
+    unsetenv("XAUTHORITY");
+    
     if (error) {
         if (error == ENXIO) {
             sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Could not open X screen.");
@@ -75,13 +163,12 @@ int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) 
     }
     
     printf("Current gamma value: %d\n", temp);
-    
     return sd_bus_reply_method_return(m, "i", temp);
 }
 
 static unsigned short clamp(double x, double max) {
-    if (x > max) { 
-        return max; 
+    if (x > max) {
+        return max;
     }
     return x;
 }
@@ -166,17 +253,7 @@ static int get_temp(const unsigned short R, const unsigned short B) {
     return temperature;
 }
 
-static void set_gamma(const char *display, const char *xauthority, int temp, int *err) {
-    /* set xauthority cookie */
-    setenv("XAUTHORITY", xauthority, 1);
-    
-    Display *dpy = XOpenDisplay(display);
-    if (dpy == NULL) {
-        perror("XopenDisplay");
-        *err = ENXIO;
-        goto end;
-    }
-
+static int set_gamma(int temp, Display *dpy) {
     int screen = DefaultScreen(dpy);
     Window root = RootWindow(dpy, screen);
 
@@ -200,46 +277,20 @@ static void set_gamma(const char *display, const char *xauthority, int temp, int
         XFree(crtc_gamma);
     }
     XRRFreeScreenResources(res);
-    XCloseDisplay(dpy);
-
-end:
-    /* Drop xauthority cookie */
-    unsetenv("XAUTHORITY");
+    return temp;
 }
 
-static int get_gamma(const char *display, const char *xauthority, int *err) {
+static int get_gamma(Display *dpy) {
     int temp = -1;
-    
-    /* set xauthority cookie */
-    setenv("XAUTHORITY", xauthority, 1);
-    
-    Display *dpy = XOpenDisplay(display);
-    if (dpy == NULL) {
-        perror("XopenDisplay");
-        *err = ENXIO;
-        goto end;
-    }
     int screen = DefaultScreen(dpy);
     Window root = RootWindow(dpy, screen);
-
     XRRScreenResources *res = XRRGetScreenResourcesCurrent(dpy, root);
-
     if (res->ncrtc > 0) {
         XRRCrtcGamma *crtc_gamma = XRRGetCrtcGamma(dpy, res->crtcs[0]);
         temp = get_temp(clamp(crtc_gamma->red[1], 255), clamp(crtc_gamma->blue[1], 255));
         XFree(crtc_gamma);
     }
-
-    if (temp <= 0) {
-        *err = 1;
-    }
-
     XRRFreeScreenResources(res);
-    XCloseDisplay(dpy);
-
-end:
-    /* Drop xauthority cookie */
-    unsetenv("XAUTHORITY");
     return temp;
 }
 

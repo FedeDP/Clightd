@@ -31,13 +31,22 @@
 #include <poll.h>
 #include <signal.h>
 
+static int get_version( sd_bus *b, const char *path, const char *interface, const char *property,
+                        sd_bus_message *reply, void *userdata, sd_bus_error *error);
 static void bus_cb(void);
 static void signal_cb(void);
 static void set_pollfd(void);
 static void main_poll(void);
 static void close_mainp(void);
 
-enum poll_idx { BUS, SIGNAL, POLL_SIZE };
+enum poll_idx {
+    BUS,
+    SIGNAL,
+    BRIGHT_SMOOTH,
+#ifdef GAMMA_PRESENT
+    GAMMA_SMOOTH,
+#endif
+    POLL_SIZE };
 enum quit_codes { LEAVE_W_ERR = -1, SIGNAL_RCV = 1 };
 
 static const char object_path[] = "/org/clightd/backlight";
@@ -50,11 +59,13 @@ static int quit;
  */
 static const sd_bus_vtable clightd_vtable[] = {
     SD_BUS_VTABLE_START(0),
-    SD_BUS_METHOD("setbrightness", "a(sd)", "i", method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_PROPERTY("version", "s", get_version, 0, SD_BUS_VTABLE_PROPERTY_CONST),
+//     SD_BUS_METHOD("setbrightness", "das(buu)", "i", method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("setbrightness", "ds(bdu)", "b", method_setallbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getbrightness", "as", "ad", method_getbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("getallbrightness", "", "a(sd)", method_getallbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("getallbrightness", "s", "a(sd)", method_getallbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
 #ifdef GAMMA_PRESENT
-    SD_BUS_METHOD("setgamma", "ssi", "i", method_setgamma, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("setgamma", "ssi(buu)", "b", method_setgamma, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getgamma", "ss", "i", method_getgamma, SD_BUS_VTABLE_UNPRIVILEGED),
 #endif
 #ifndef DISABLE_FRAME_CAPTURES
@@ -71,6 +82,11 @@ static const sd_bus_vtable clightd_vtable[] = {
 #endif
     SD_BUS_VTABLE_END
 };
+
+static int get_version( sd_bus *b, const char *path, const char *interface, const char *property,
+                        sd_bus_message *reply, void *userdata, sd_bus_error *error) {
+    return sd_bus_message_append(reply, "s", VERSION);
+}
 
 static void bus_cb(void) {
     int r;
@@ -116,6 +132,21 @@ static void set_pollfd(void) {
         .fd = sigfd,
         .events = POLLIN,
     };
+    int bright_smooth_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+    main_p[BRIGHT_SMOOTH] = (struct pollfd) {
+        .fd = bright_smooth_fd,
+        .events = POLLIN,
+    };
+    set_brightness_smooth_fd(bright_smooth_fd);
+    
+#ifdef GAMMA_PRESENT
+    int gamma_smooth_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+    main_p[GAMMA_SMOOTH] = (struct pollfd) {
+        .fd = gamma_smooth_fd,
+        .events = POLLIN,
+    };
+    set_gamma_smooth_fd(gamma_smooth_fd);
+#endif
 }
 
 /*
@@ -139,6 +170,14 @@ static void main_poll(void) {
                 case SIGNAL:
                     signal_cb();
                     break;
+                case BRIGHT_SMOOTH:
+                    brightness_smooth_cb();
+                    break;
+#ifdef GAMMA_PRESENT
+                case GAMMA_SMOOTH:
+                    gamma_smooth_cb();
+                    break;
+#endif
                 }
                 r--;
             }
