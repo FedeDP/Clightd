@@ -25,6 +25,7 @@
 - [x] implement set gamma smooth
 - [x] drop gamma_smooth, backlight_smooth and dimmer_smooth in clight
 - [x] install ddcutil module's load file if "make install WITH_DDC=1"
+- [ ] better error checking in backlight.c
 
-- [ ] test
+- [x] test
 - [ ] new release

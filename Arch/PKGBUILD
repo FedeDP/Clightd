@@ -26,6 +26,5 @@ build() {
 
 package() {
     cd $srcdir/$_gitname
-    make DESTDIR="$pkgdir" install
-    install -D -m644 $srcdir/Scripts/i2c_clightd.conf $pkgdir/usr/lib/modules-load.d/i2c_clightd.conf
+    make DESTDIR="$pkgdir" install WITH_DDC=1
 }
