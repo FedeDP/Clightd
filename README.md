@@ -77,9 +77,9 @@ A clight replacement, using clightd, can be something like (pseudo-code):
 
     $ ambient_br = busctl call org.clightd.backlight /org/clightd/backlight org.clightd.backlight captureframes "si" "" 5
     $ avg_br_percent = compute_avg(ambient_br, 5)
-    $ busctl call org.clightd.backlight /org/clightd/backlight org.clightd.backlight setallbrightness "d(bdu)s" 0.8 1 0.05 80 ""
+    $ busctl call org.clightd.backlight /org/clightd/backlight org.clightd.backlight setallbrightness "d(bdu)s" avg_br_percent 1 0.05 80 ""
     
-Last line will smoothly change current backlight to 80% on every internal/external screen it finds.
+Last line will smoothly change current backlight on every internal/external screen it finds.
 
 **Note that passing an empty/NULL string as internal backlight interface parameter will make clightd use first subsystem matching device it finds (through libudev).** It should be good to go in most cases.
 

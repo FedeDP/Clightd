@@ -75,7 +75,7 @@ typedef struct {
     double smooth_step;
     unsigned int smooth_wait;
     device *d;
-    int num_sn;
+    int num_dev;
     int all;
 } smooth_change;
 
@@ -91,7 +91,7 @@ static smooth_change sc;
 
 static void reset_backlight_struct(double target_pct, int is_smooth, double smooth_step, unsigned int smooth_wait, int all) {
     if (sc.d) {
-        for (int i = 0; i < sc.num_sn; i++) {
+        for (int i = 0; i < sc.num_dev; i++) {
             free(sc.d[i].sn);
         }
         free(sc.d);
@@ -101,16 +101,16 @@ static void reset_backlight_struct(double target_pct, int is_smooth, double smoo
     sc.smooth_wait = is_smooth ? smooth_wait : 0;
     sc.target_pct = target_pct;
     sc.all = all;
-    sc.num_sn = 0;
+    sc.num_dev = 0;
 }
 
 static void add_backlight_sn(const char *sn) {
-    sc.d = realloc(sc.d, sizeof(device) * ++sc.num_sn);
-    sc.d[sc.num_sn - 1].reached_target = 0;
+    sc.d = realloc(sc.d, sizeof(device) * ++sc.num_dev);
+    sc.d[sc.num_dev - 1].reached_target = 0;
     if (sn) {
-        sc.d[sc.num_sn - 1].sn = strdup(sn);
+        sc.d[sc.num_dev - 1].sn = strdup(sn);
     } else {
-        sc.d[sc.num_sn - 1].sn = NULL;
+        sc.d[sc.num_dev - 1].sn = NULL;
     }
 }
 
@@ -192,7 +192,7 @@ int brightness_smooth_cb(void) {
         ret += set_external_backlight(-1);
     } else {
         int reached_count = 0;
-        for (int i = 0; i < sc.num_sn; reached_count += sc.d[i].reached_target, i++) {
+        for (int i = 0; i < sc.num_dev; reached_count += sc.d[i].reached_target, i++) {
             if (!sc.d[i].reached_target) {
                 ret = set_internal_backlight(i);
                 // error: it was not an internal backlight interface
@@ -202,7 +202,7 @@ int brightness_smooth_cb(void) {
                 }
             }
         }
-        if (reached_count == sc.num_sn) {
+        if (reached_count == sc.num_dev) {
             ret = -2; // stop!
         }
     }
