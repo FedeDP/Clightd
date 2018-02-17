@@ -60,7 +60,7 @@ end: \
 #else
 
 #define DDCUTIL_LOOP(func) do {} while(0)
-#define DDCUTIL_FUNC(func) do {} while(0)
+#define DDCUTIL_FUNC(sn, func) do {} while(0)
 
 #endif
 
