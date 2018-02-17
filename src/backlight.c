@@ -27,7 +27,7 @@
         ddca_free_display_info_list(dlist); \
     }
 
-#define DDCUTIL_FUNC(func) \
+#define DDCUTIL_FUNC(sn, func) \
     const DDCA_Vcp_Feature_Code br_code = 0x10; \
     DDCA_Display_Identifier pdid = NULL; \
     DDCA_Display_Ref dref = NULL; \
@@ -267,8 +267,7 @@ static int set_internal_backlight(int idx) {
 static int set_external_backlight(int idx) {
     int ret = -1;
     if (!sc.all) {
-        const char *sn = sc.d[idx].sn;
-        DDCUTIL_FUNC({
+        DDCUTIL_FUNC(sc.d[idx].sn, {
             const int max = VALREC_MAX_VAL(valrec);
             const int curr = VALREC_CUR_VAL(valrec);
             int new_value = next_backlight_level(curr, max, idx) * max;
@@ -373,7 +372,7 @@ static int append_internal_backlight(sd_bus_message *reply, const char *path) {
 
 static int append_external_backlight(sd_bus_message *reply, const char *sn) {    
     if (sn) {
-        DDCUTIL_FUNC({
+        DDCUTIL_FUNC(sn, {
             append_backlight(reply, sn, (double)VALREC_CUR_VAL(valrec) / VALREC_MAX_VAL(valrec));
         });
     } else {
