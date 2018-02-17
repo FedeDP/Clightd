@@ -67,7 +67,7 @@ For desktop PCs, ddcutil gets used to change external monitor brightness. For mo
 
 Getgamma function supports 50-steps temperature values. It tries to fit temperature inside a 50 step (eg: it finds 5238, tries if 5200 or 5250 are fine too, and in case returns them. Otherwise, it returns 5238.)  
 
-Clightd makes use of polkit for setgamma, setbrightness, setdpms and captureframes function. Only active sessions can call these methods.  
+Clightd makes use of polkit: active sessions only can call polkit-protected methods.  
 
 You may ask why did i developed this solution. The answer is quite simple: on linux there is no simple and unified way of changing screen brightness.  
 So, i thought it could be a good idea to develop a bus service that can be used by every other program.  
@@ -77,9 +77,11 @@ A clight replacement, using clightd, can be something like (pseudo-code):
 
     $ ambient_br = busctl call org.clightd.backlight /org/clightd/backlight org.clightd.backlight captureframes "si" "" 5
     $ avg_br_percent = compute_avg(ambient_br, 5)
-    $ busctl call org.clightd.backlight /org/clightd/backlight org.clightd.backlight setbrightness "a(sd)" 1 "" avg_br_percent
+    $ busctl call org.clightd.backlight /org/clightd/backlight org.clightd.backlight setallbrightness "d(bdu)s" 0.8 1 0.05 80 ""
+    
+Last line will smoothly change current backlight to 80% on every internal/external screen it finds.
 
-**Note that passing an empty/NULL string as first parameter will make clightd use first subsystem matching device it finds (through libudev).** It should be good to go in most cases.
+**Note that passing an empty/NULL string as internal backlight interface parameter will make clightd use first subsystem matching device it finds (through libudev).** It should be good to go in most cases.
 
 ## Bus interface
 | Method | IN | IN values | OUT | OUT values | Polkit restricted | X only |
@@ -106,7 +108,10 @@ Clightd uses [ddcutil](https://github.com/rockowitz/ddcutil) C api to set extern
 
 Its support is obviously optional, as it is unfortunately not widely available (eg: ubuntu/debian do not even package ddcutil C api).  
 It is being pushed though (kde plasma is going to use it: https://phabricator.kde.org/D5381).  
-Users must manually create a file in /etc/modules-load.d/ to load i2c-dev module at boot, like this [one](https://github.com/FedeDP/Clightd/blob/ddcutil/Scripts/i2c_clightd.conf).  
+Users wishing to use ddcutil features, should install a modules-load.d conf file. Use:
+
+    # make install WITH_DDC=1
+
 On archlinux this is automatically accomplished by PKGBUILD.
 
 ## Arch AUR packages
@@ -120,8 +125,8 @@ You only need to issue:
     $ make deb
 
 A deb file will be created in "Debian" folder, inside Clightd root.  
-Please note that while i am using Debian testing at my job, i am developing clightd from archlinux.  
-Thus, you can encounter some packaging issues. Please, report back.  
+Please note that i am developing clightd from archlinux, thus you can encounter some packaging issues. Please, report back.  
+Note also that debian package misses ddcutil dependency (as ddcutil C api/shared object is not yet packaged), so its support will be disabled.  
 
 ## License
 This software is distributed with GPL license, see [COPYING](https://github.com/FedeDP/Clightd/blob/master/COPYING) file for more informations.

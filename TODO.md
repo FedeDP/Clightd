@@ -21,11 +21,15 @@
 - [x] update to new 0.8.7 ddcutil API
 
 - [x] fix setallbrightness
-- [ ] implement set_brightness
+- [x] implement set_brightness
 - [x] implement set gamma smooth
 - [x] drop gamma_smooth, backlight_smooth and dimmer_smooth in clight
 - [x] install ddcutil module's load file if "make install WITH_DDC=1"
+- [x] uniform getbrightness and  getallbrightness
+- [x] refactor setbrightness code a bit
 - [ ] better error checking in backlight.c
+- [x] Updated README with proper new example
+- [ ] update readme interface
 
 - [x] test
 - [ ] new release

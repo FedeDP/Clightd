@@ -65,23 +65,86 @@ end: \
 #endif
 
 typedef struct {
+    char *sn;
+    int reached_target;
+} device;
+
+typedef struct {
     int fd;
     double target_pct;
     double smooth_step;
     unsigned int smooth_wait;
-    char interface[1024];
+    device *d;
+    int num_sn;
+    int all;
 } smooth_change;
 
-static int set_internal_backlight(const double pct, const char *path, const double smooth_step);
-static int set_external_backlight(const double pct, const char *sn, const double smooth_step);
-static int append_internal_backlight(sd_bus_message *reply, const char *path, int all);
-static int append_external_backlight(sd_bus_message *reply, const char *sn, int all);
+static void reset_backlight_struct(double target_pct, int is_smooth, double smooth_step, unsigned int smooth_wait, int all);
+static void add_backlight_sn(const char *sn);
+static int set_internal_backlight(int idx);
+static int set_external_backlight(int idx);
+static void append_backlight(sd_bus_message *reply, const char *name, const double pct);
+static int append_internal_backlight(sd_bus_message *reply, const char *path);
+static int append_external_backlight(sd_bus_message *reply, const char *sn);
 
 static smooth_change sc;
 
-/**
- * Brightness pct setter method
- */
+static void reset_backlight_struct(double target_pct, int is_smooth, double smooth_step, unsigned int smooth_wait, int all) {
+    if (sc.d) {
+        for (int i = 0; i < sc.num_sn; i++) {
+            free(sc.d[i].sn);
+        }
+        free(sc.d);
+        sc.d = NULL;
+    }
+    sc.smooth_step = is_smooth ? smooth_step : 0;
+    sc.smooth_wait = is_smooth ? smooth_wait : 0;
+    sc.target_pct = target_pct;
+    sc.all = all;
+    sc.num_sn = 0;
+}
+
+static void add_backlight_sn(const char *sn) {
+    sc.d = realloc(sc.d, sizeof(device) * ++sc.num_sn);
+    sc.d[sc.num_sn - 1].reached_target = 0;
+    if (sn) {
+        sc.d[sc.num_sn - 1].sn = strdup(sn);
+    } else {
+        sc.d[sc.num_sn - 1].sn = NULL;
+    }
+}
+
+int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+    if (!check_authorization(m)) {
+        sd_bus_error_set_errno(ret_error, EPERM);
+        return -EPERM;
+    }
+    
+    const char *sn = NULL;
+    const double target_pct = -1, smooth_step = 0;
+    const int is_smooth = 0;
+    const unsigned int smooth_wait = 0;
+    
+    // read d(bdu) params
+    sd_bus_message_read(m, "d", &target_pct);
+    sd_bus_message_enter_container(m, SD_BUS_TYPE_STRUCT, "bdu");
+    sd_bus_message_read(m, "bdu", &is_smooth, &smooth_step, &smooth_wait);
+    sd_bus_message_exit_container(m);
+    
+    reset_backlight_struct(target_pct, is_smooth, smooth_step, smooth_wait, 0);
+    
+    // read backlight_interface/monitor id params
+    sd_bus_message_enter_container(m, SD_BUS_TYPE_ARRAY, "s");
+    while (sd_bus_message_read(m, "s", &sn) > 0) {
+        add_backlight_sn(sn);
+    }
+    sd_bus_message_exit_container(m);
+
+    int ok = brightness_smooth_cb();
+    // Returns true if no errors happened
+    return sd_bus_reply_method_return(m, "b", !ok);
+}
+
 int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     if (!check_authorization(m)) {
         sd_bus_error_set_errno(ret_error, EPERM);
@@ -89,33 +152,20 @@ int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret
     }
     
     const char *backlight_interface = NULL;
-    const double target_pct = -1, smooth_step;
+    const double target_pct = -1, smooth_step = 0.0;
     const int is_smooth = 0;
     const unsigned int smooth_wait = 0;
-        
-    sd_bus_message_read(m, "ds", &target_pct, &backlight_interface);
+    
+    // read d(bdu)s params
+    sd_bus_message_read(m, "d", &target_pct);
     sd_bus_message_enter_container(m, SD_BUS_TYPE_STRUCT, "bdu");
     sd_bus_message_read(m, "bdu", &is_smooth, &smooth_step, &smooth_wait);
     sd_bus_message_exit_container(m);
+    sd_bus_message_read(m, "s", &backlight_interface);
     
-    int ok = 0;
-    if (is_smooth && smooth_step && smooth_wait) {
-        sc.smooth_step = smooth_step;
-        sc.smooth_wait = smooth_wait;
-        sc.target_pct = target_pct;
-        if (backlight_interface) {
-            strncpy(sc.interface, backlight_interface, sizeof(sc.interface));
-        } else {
-            memset(sc.interface, 0, sizeof(sc.interface));
-        }
-        printf("Started backlight smooth transition, target: %lf\n", sc.target_pct);
-        ok = brightness_smooth_cb();
-    } else {
-        printf("Setting backlight: %lf\n", target_pct);
-        set_internal_backlight(target_pct, backlight_interface, 0);
-        set_external_backlight(target_pct, NULL, 0);
-    }
-    
+    reset_backlight_struct(target_pct, is_smooth, smooth_step, smooth_wait, 1);
+    add_backlight_sn(backlight_interface);
+    int ok = brightness_smooth_cb();
     // Returns true if no errors happened
     return sd_bus_reply_method_return(m, "b", ok == 0);
 }
@@ -129,8 +179,33 @@ int brightness_smooth_cb(void) {
     // nonblocking mode!
     read(sc.fd, &t, sizeof(uint64_t));
     
-    int ret = set_internal_backlight(sc.target_pct, sc.interface, sc.smooth_step);
-    ret += set_external_backlight(sc.target_pct, NULL, sc.smooth_step);
+    int ret;
+    if (sc.all) {
+        // first and only sn stored is desired internal backlight interface
+        if (!sc.d[0].reached_target) {
+            ret = set_internal_backlight(0);
+        }
+        // no else here because reached_target value can be changed in set_internal_backlight
+        if (sc.d[0].reached_target) {
+            ret = -1;
+        }
+        ret += set_external_backlight(-1);
+    } else {
+        int reached_count = 0;
+        for (int i = 0; i < sc.num_sn; reached_count += sc.d[i].reached_target, i++) {
+            if (!sc.d[i].reached_target) {
+                ret = set_internal_backlight(i);
+                // error: it was not an internal backlight interface
+                if (ret == -1) {
+                    // try to use it as external backlight sn
+                    set_external_backlight(i);
+                }
+            }
+        }
+        if (reached_count == sc.num_sn) {
+            ret = -2; // stop!
+        }
+    }
     
     // set new timer if needed
     if (ret != -2) {
@@ -139,71 +214,80 @@ int brightness_smooth_cb(void) {
         timerValue.it_value.tv_nsec = 1000 * 1000 * sc.smooth_wait; // ms
         return timerfd_settime(sc.fd, 0, &timerValue, NULL);
     }
+    
+    /* Free all resources */
+    reset_backlight_struct(0, 0, 0, 0, 0);
     return 0;
 }
 
-static int set_internal_backlight(const double pct, const char *path, const double smooth_step) {
-    int r = -1;
-    struct udev_device *dev = NULL;
-    get_udev_device(path, "backlight", NULL, &dev);
-    if (dev) {
-        double curr_pct;
-        
-        int max = atoi(udev_device_get_sysattr_value(dev, "max_brightness"));
-        if (smooth_step > 0) {
-            int curr = atoi(udev_device_get_sysattr_value(dev, "brightness"));
-            curr_pct = curr / (double)max;
-            if (pct < curr_pct) {
-                curr_pct = (curr_pct - smooth_step < pct) ? pct : curr_pct - smooth_step;
-            } else if (pct > curr_pct) {
-                curr_pct = (curr_pct + smooth_step) > pct ? pct : curr_pct + smooth_step;
-            } else {
-                return -1;
-            }
+static double next_backlight_level(int curr, int max, int idx) {
+    double curr_pct;
+    if (sc.smooth_step > 0) {
+        curr_pct = curr / (double)max;
+        if (sc.target_pct < curr_pct) {
+            curr_pct = (curr_pct - sc.smooth_step < sc.target_pct) ? 
+            sc.target_pct : curr_pct - sc.smooth_step;
+        } else if (sc.target_pct > curr_pct) {
+            curr_pct = (curr_pct + sc.smooth_step) > sc.target_pct ? 
+            sc.target_pct : curr_pct + sc.smooth_step;
         } else {
-            curr_pct = pct;
+            curr_pct = -1.0f;
         }
-        int value = curr_pct * max;
-       
-        char val[10] = {0};
-        sprintf(val, "%d", value);
-        r = udev_device_set_sysattr_value(dev, "brightness", val);
+    } else {
+        curr_pct = sc.target_pct;
+    }
+    
+    if (idx >= 0 && curr_pct == sc.target_pct) {
+        sc.d[idx].reached_target = 1;
+    }
+    
+    return curr_pct;
+}
+
+static int set_internal_backlight(int idx) {
+    int r = -1;
+    
+    struct udev_device *dev = NULL;
+    get_udev_device(sc.d[idx].sn, "backlight", NULL, &dev);
+    if (dev) {
+        int max = atoi(udev_device_get_sysattr_value(dev, "max_brightness"));
+        int curr = atoi(udev_device_get_sysattr_value(dev, "brightness"));
+        int value = next_backlight_level(curr, max, idx) * max;
+        /* Check if next_backlight_level returned -1 */
+        if (value >= 0) {
+            char val[10] = {0};
+            sprintf(val, "%d", value);
+            r = udev_device_set_sysattr_value(dev, "brightness", val);
+        }
         udev_device_unref(dev);
     }
     return r;
 }
 
-static int set_external_backlight(const double pct, const char *sn, const double smooth_step) {
+static int set_external_backlight(int idx) {
     int ret = -1;
-    if (sn) {
+    if (!sc.all) {
+        const char *sn = sc.d[idx].sn;
         DDCUTIL_FUNC({
-            int new_value = VALREC_MAX_VAL(valrec) * pct;
-            ret = ddca_set_continuous_vcp_value(dh, br_code, new_value);
+            const int max = VALREC_MAX_VAL(valrec);
+            const int curr = VALREC_CUR_VAL(valrec);
+            int new_value = next_backlight_level(curr, max, idx) * max;
+            if (new_value >= 0 && ddca_set_continuous_vcp_value(dh, br_code, new_value) == 0) {
+                ret = 0;
+            }
         });
     } else {
-        ret = 0;
         DDCUTIL_LOOP({
-            double curr_pct;
             const int max = VALREC_MAX_VAL(valrec);
-            
-            if (smooth_step > 0) {
-                curr_pct = (double)VALREC_CUR_VAL(valrec) / max;
-                if (pct < curr_pct) {
-                    curr_pct = (curr_pct - smooth_step) < pct ? pct : curr_pct - smooth_step;
-                } else if (pct > curr_pct) {
-                    curr_pct = (curr_pct + smooth_step) > pct ? pct : curr_pct + smooth_step;
-                } else {
-                    curr_pct = -1;
-                }
-            } else {
-                curr_pct = pct;
-            }
-            if (curr_pct != -1.0f) {
-                int new_value = (double)max * curr_pct;
-                ddca_set_continuous_vcp_value(dh, br_code, new_value);
+            const int curr = VALREC_CUR_VAL(valrec);
+            int new_value = next_backlight_level(curr, max, idx) * max;
+            if (new_value >= 0 && ddca_set_continuous_vcp_value(dh, br_code, new_value)) {
                 ret++; // number of screens
             }
         });
+        if (ret) {
+            ret++; // number of screen changed started from -1
+        }
     }
     return ret;
 }
@@ -222,8 +306,8 @@ int method_getallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret
         sd_bus_message_new_method_return(m, &reply);
         sd_bus_message_open_container(reply, SD_BUS_TYPE_ARRAY, "(sd)");
         
-        append_internal_backlight(reply, backlight_interface, 1);
-        append_external_backlight(reply, NULL, 1);
+        append_internal_backlight(reply, backlight_interface);
+        append_external_backlight(reply, NULL);
         
         sd_bus_message_close_container(reply);
         r = sd_bus_send(NULL, reply, NULL);
@@ -243,15 +327,14 @@ int method_getbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_er
     int r = sd_bus_message_enter_container(m, SD_BUS_TYPE_ARRAY, "s");
     if (r >= 0) {
         sd_bus_message *reply = NULL;
-        
         const char *sn;
         
         sd_bus_message_new_method_return(m, &reply);
-        sd_bus_message_open_container(reply, SD_BUS_TYPE_ARRAY, "d");
+        sd_bus_message_open_container(reply, SD_BUS_TYPE_ARRAY, "(sd)");
         
         while (sd_bus_message_read(m, "s", &sn) > 0) {
-            if (append_internal_backlight(reply, sn, 0)){
-                append_external_backlight(reply, sn, 0);
+            if (append_internal_backlight(reply, sn)){
+                append_external_backlight(reply, sn);
             }
         }
         
@@ -265,7 +348,13 @@ int method_getbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_er
     return r;
 }
 
-static int append_internal_backlight(sd_bus_message *reply, const char *path, int all) {
+static void append_backlight(sd_bus_message *reply, const char *name, const double pct) {
+    sd_bus_message_open_container(reply, SD_BUS_TYPE_STRUCT, "sd");
+    sd_bus_message_append(reply, "sd", name, pct);
+    sd_bus_message_close_container(reply);
+}
+
+static int append_internal_backlight(sd_bus_message *reply, const char *path) {
     int ret = -1;
     struct udev_device *dev = NULL;
     get_udev_device(path, "backlight", NULL, &dev);
@@ -275,34 +364,22 @@ static int append_internal_backlight(sd_bus_message *reply, const char *path, in
         int max = atoi(udev_device_get_sysattr_value(dev, "max_brightness"));
     
         double pct = (double)val / max;
-        if (!all) {
-            sd_bus_message_append(reply, "d", pct);
-        } else {
-            sd_bus_message_open_container(reply, SD_BUS_TYPE_STRUCT, "sd");
-            sd_bus_message_append(reply, "sd", udev_device_get_sysname(dev), pct);
-            sd_bus_message_close_container(reply);
-        }
+        append_backlight(reply, udev_device_get_sysname(dev), pct);
         udev_device_unref(dev);
         ret = 0;
     } 
     return ret;
 }
 
-static int append_external_backlight(sd_bus_message *reply, const char *sn, int all) {
-    int ret = -1;
-    
-    if (!all) {
+static int append_external_backlight(sd_bus_message *reply, const char *sn) {    
+    if (sn) {
         DDCUTIL_FUNC({
-            sd_bus_message_append(reply, "d", (double)VALREC_CUR_VAL(valrec) / VALREC_MAX_VAL(valrec));
-            ret = 0;
+            append_backlight(reply, sn, (double)VALREC_CUR_VAL(valrec) / VALREC_MAX_VAL(valrec));
         });
     } else {
         DDCUTIL_LOOP({
-            sd_bus_message_open_container(reply, SD_BUS_TYPE_STRUCT, "sd");
-            sd_bus_message_append(reply, "sd", dinfo->sn, (double)VALREC_CUR_VAL(valrec) / VALREC_MAX_VAL(valrec));
-            sd_bus_message_close_container(reply);
-            ret = 0;
+            append_backlight(reply, dinfo->sn, (double)VALREC_CUR_VAL(valrec) / VALREC_MAX_VAL(valrec));
         });
     }
-    return ret;
+    return 0;
 }

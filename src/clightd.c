@@ -60,9 +60,9 @@ static int quit;
 static const sd_bus_vtable clightd_vtable[] = {
     SD_BUS_VTABLE_START(0),
     SD_BUS_PROPERTY("version", "s", get_version, 0, SD_BUS_VTABLE_PROPERTY_CONST),
-//     SD_BUS_METHOD("setbrightness", "das(buu)", "i", method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("setbrightness", "ds(bdu)", "b", method_setallbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("getbrightness", "as", "ad", method_getbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("setbrightness", "d(bdu)as", "b", method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("setallbrightness", "d(bdu)s", "b", method_setallbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("getbrightness", "as", "a(sd)", method_getbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getallbrightness", "s", "a(sd)", method_getallbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
 #ifdef GAMMA_PRESENT
     SD_BUS_METHOD("setgamma", "ssi(buu)", "b", method_setgamma, SD_BUS_VTABLE_UNPRIVILEGED),
