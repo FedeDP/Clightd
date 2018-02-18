@@ -76,6 +76,9 @@ ifneq ("$(DISABLE_DDC)","1")
 DDC=$(shell pkg-config --silence-errors --libs ddcutil)
 ifneq ("$(DDC)","")
 CFLAGS+=-DUSE_DDC $(shell pkg-config --cflags ddcutil)
+DDCUTIL_VERSION_MAJ=$(shell pkg-config --modversion ddcutil | cut -d '.' -f1)
+DDCUTIL_VERSION_MIN=$(shell pkg-config --modversion ddcutil | cut -d '.' -f2)
+DDCUTIL_VERSION_PATCH=$(shell pkg-config --modversion ddcutil | cut -d '.' -f3)
 $(info DDCutil support enabled.)
 else
 $(info DDCutil support disabled.)
@@ -89,7 +92,7 @@ LIBS+=$(GAMMA) $(DPMS) $(IDLE) $(DDC)
 endif
 
 CLIGHTD_VERSION = $(shell git describe --abbrev=0 --always --tags)
-CFLAGS+=-DVERSION=\"$(CLIGHTD_VERSION)\"
+CFLAGS+=-DVERSION=\"$(CLIGHTD_VERSION)\" -DDDCUTIL_VERSION_MAJ=$(DDCUTIL_VERSION_MAJ) -DDDCUTIL_VERSION_MIN=$(DDCUTIL_VERSION_MIN) -DDDCUTIL_VERSION_PATCH=$(DDCUTIL_VERSION_PATCH)
 
 all: clightd clean
 

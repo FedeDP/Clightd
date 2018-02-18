@@ -27,9 +27,10 @@
 - [x] install ddcutil module's load file if "make install WITH_DDC=1"
 - [x] uniform getbrightness and  getallbrightness
 - [x] refactor setbrightness code a bit
-- [ ] better error checking in backlight.c
+- [ ] stricter error checking in backlight.c
+- [x] support ddcutil 0.8.6 too
 - [x] Updated README with proper new example
-- [ ] update readme interface
+- [x] update readme interface
 
 - [x] test
 - [ ] new release

@@ -6,6 +6,10 @@
 
 #include <ddcutil_c_api.h>
 
+#if DDCUTIL_VERSION_MAJ == 0 && DDCUTIL_VERSION_MIN == 8 && DDCUTIL_VERSION_PATCH < 7
+    #define ddca_free_any_vcp_value(x) (void)x
+#endif
+
 #define DDCUTIL_LOOP(func) \
     const DDCA_Vcp_Feature_Code br_code = 0x10; \
     DDCA_Display_Info_List *dlist = ddca_get_display_info_list(); \

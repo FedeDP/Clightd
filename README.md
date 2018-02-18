@@ -25,7 +25,7 @@ Clightd is a bus interface that lets you easily set screen brightness, gamma tem
 * linux-api-headers (linux/videodev2.h)
 
 ### Needed only if built with ddcutil support:
-* ddcutil >= 0.8.7 (ddcutil_c_api.h)
+* ddcutil (ddcutil_c_api.h)
 
 ## Runtime deps:
 * shared objects from build libraries
@@ -84,21 +84,30 @@ Last line will smoothly change current backlight on every internal/external scre
 **Note that passing an empty/NULL string as internal backlight interface parameter will make clightd use first subsystem matching device it finds (through libudev).** It should be good to go in most cases.
 
 ## Bus interface
+
+Please note that for internal laptop screen, serialNumber must be your backlight kernel interface (eg: intel_backlight) or an empty string (to forcefully use first udev backlight subsystem matching device).  
+
+A "version" bus property is exported too. It will return a "s" of clightd version.  
+
+*Smooth struct* here means:  
+* b -> isSmooth (true for smooth change)
+* d (u for gamma) -> smooth step (eg: 0.02 for brightness, or 50 for gamma)
+* u -> smooth timeout: timeout for smoothing
+
 | Method | IN | IN values | OUT | OUT values | Polkit restricted | X only |
 |-|:-:|-|:-:|-|:-:|-|
-| getbrightness | as | <ul><li>Array of screen serialnumbers</li></ul> | ad | Backlight pct for each screen | | |
-| getallbrightness | s | <ul><li>Backlight interface for internal monitor. Can be NULL/empty.</li></ul> | a(sd) | Array of struct with serialNumber and current backlight pct for each screen | | |
-| setbrightness | a(sd) | <ul><li>Array of struct with serialNumber and desired backlight level in pct for each screen</li></ul> | i | Number of screens on which backlight has been changed | ✔ | |
+| getbrightness | as | <ul><li>Array of screen serialNumbers</li></ul> | a(sd) | Array of struct with serialNumber and current backlight pct for each desired screen | | |
+| getallbrightness | s | <ul><li>Backlight interface for internal monitor</li></ul> | a(sd) | Array of struct with serialNumber and current backlight pct for each screen | | |
+| setbrightness | d(bdu)as | <ul><li>Target pct</li><li>Smooth struct</li><li>Array of screen serialNumbers</li></ul> | b | True if no error happens | ✔ | |
+| setallbrightness | d(bdu)s | <ul><li>Target pct</li><li>Smooth struct</li><li>Internal laptop's screen interface</li></ul> | b | True if no error happens | ✔ | |
 | getgamma | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current display gamma temp | | ✔ |
-| setgamma | ssi | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New gamma value</li></ul> | i | New setted gamma temp | ✔ | ✔ |
+| setgamma | ssi(buu) | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New gamma value</li><li>Smooth struct</li></ul> | b | True if no error happens | ✔ | ✔ |
 | captureframes | si | <ul><li>video sysname(eg: Video0)</li><li>Number of frames</li></ul> | ad | Each frame's brightness (0-255) | ✔ | |
 | getdpms | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current dpms state | |✔|
 | setdpms | ssi | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New dpms state</li></ul> | i | New setted dpms state | ✔ | ✔ |
 | getdpms_timeouts | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | iii | Dpms timeouts values |  | ✔ |
 | setdpms_timeouts | ssiii | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New dpms timeouts</li></ul> | iii | New dpms timeouts | ✔ | ✔ |
 | getidletime | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current idle time in ms | | ✔ |
-
-Please note that for internal laptop screen, serialNumber must be your backlight kernel interface (eg: intel_backlight) or an empty string (to forcefully use first udev backlight subsystem matching device).
 
 ## Ddcutil support
 Clightd uses [ddcutil](https://github.com/rockowitz/ddcutil) C api to set external monitor brightness and thus supporting desktop PCs too.  
