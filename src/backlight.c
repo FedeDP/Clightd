@@ -85,6 +85,8 @@ typedef struct {
 
 static void reset_backlight_struct(double target_pct, int is_smooth, double smooth_step, unsigned int smooth_wait, int all);
 static void add_backlight_sn(const char *sn);
+static int read_brightness_params(sd_bus_message *m, const double *target_pct, const int *is_smooth, 
+                                  const double *smooth_step, const unsigned int *smooth_wait);
 static int set_internal_backlight(int idx);
 static int set_external_backlight(int idx);
 static void append_backlight(sd_bus_message *reply, const char *name, const double pct);
@@ -118,6 +120,21 @@ static void add_backlight_sn(const char *sn) {
     }
 }
 
+static int read_brightness_params(sd_bus_message *m, const double *target_pct, const int *is_smooth, 
+                                  const double *smooth_step, const unsigned int *smooth_wait) {
+    // read d(bdu) params
+    int r;
+    if ((r = sd_bus_message_read(m, "d", target_pct)) >= 0 && 
+        (r = sd_bus_message_enter_container(m, SD_BUS_TYPE_STRUCT, "bdu")) >= 0 && 
+        (r = sd_bus_message_read(m, "bdu", is_smooth, smooth_step, smooth_wait)) >= 0 && 
+        (r = sd_bus_message_exit_container(m)) >= 0) {
+        return 0;
+    }
+
+    fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
+    return -r;
+}
+
 int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     if (!check_authorization(m)) {
         sd_bus_error_set_errno(ret_error, EPERM);
@@ -129,24 +146,24 @@ int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_er
     const int is_smooth = 0;
     const unsigned int smooth_wait = 0;
     
-    // read d(bdu) params
-    sd_bus_message_read(m, "d", &target_pct);
-    sd_bus_message_enter_container(m, SD_BUS_TYPE_STRUCT, "bdu");
-    sd_bus_message_read(m, "bdu", &is_smooth, &smooth_step, &smooth_wait);
-    sd_bus_message_exit_container(m);
+    int r = read_brightness_params(m, &target_pct, &is_smooth, &smooth_step, &smooth_wait);
+    if (!r) {
+        reset_backlight_struct(target_pct, is_smooth, smooth_step, smooth_wait, 0);
     
-    reset_backlight_struct(target_pct, is_smooth, smooth_step, smooth_wait, 0);
-    
-    // read backlight_interface/monitor id params
-    sd_bus_message_enter_container(m, SD_BUS_TYPE_ARRAY, "s");
-    while (sd_bus_message_read(m, "s", &sn) > 0) {
-        add_backlight_sn(sn);
-    }
-    sd_bus_message_exit_container(m);
+        // read backlight_interface/monitor id params
+        r = sd_bus_message_enter_container(m, SD_BUS_TYPE_ARRAY, "s");
+        if (r > 0) {
+            while (sd_bus_message_read(m, "s", &sn) > 0) {
+                add_backlight_sn(sn);
+            }
+            sd_bus_message_exit_container(m);
 
-    int ok = brightness_smooth_cb();
-    // Returns true if no errors happened
-    return sd_bus_reply_method_return(m, "b", !ok);
+            int ok = brightness_smooth_cb();
+            // Returns true if no errors happened
+            return sd_bus_reply_method_return(m, "b", !ok);
+        }
+    }
+    return r;
 }
 
 int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
@@ -160,18 +177,19 @@ int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret
     const int is_smooth = 0;
     const unsigned int smooth_wait = 0;
     
-    // read d(bdu)s params
-    sd_bus_message_read(m, "d", &target_pct);
-    sd_bus_message_enter_container(m, SD_BUS_TYPE_STRUCT, "bdu");
-    sd_bus_message_read(m, "bdu", &is_smooth, &smooth_step, &smooth_wait);
-    sd_bus_message_exit_container(m);
-    sd_bus_message_read(m, "s", &backlight_interface);
+    int r = read_brightness_params(m, &target_pct, &is_smooth, &smooth_step, &smooth_wait);
+    if (!r) {
+        r = sd_bus_message_read(m, "s", &backlight_interface);
     
-    reset_backlight_struct(target_pct, is_smooth, smooth_step, smooth_wait, 1);
-    add_backlight_sn(backlight_interface);
-    int ok = brightness_smooth_cb();
-    // Returns true if no errors happened
-    return sd_bus_reply_method_return(m, "b", ok == 0);
+        if (r >= 0) {
+            reset_backlight_struct(target_pct, is_smooth, smooth_step, smooth_wait, 1);
+            add_backlight_sn(backlight_interface);
+            int ok = brightness_smooth_cb();
+            // Returns true if no errors happened
+            return sd_bus_reply_method_return(m, "b", ok == 0);
+        }
+    }
+    return r;
 }
 
 void set_brightness_smooth_fd(int fd) {

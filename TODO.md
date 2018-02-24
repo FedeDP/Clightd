@@ -18,7 +18,7 @@
 - [x] update README: bus interface
 - [x] update README ddcutil
 - [x] in archlinux PKGBUILD, automatically install i2c_clightd.conf file in /etc/modules-load.d/
-- [x] update to new 0.8.7 ddcutil API
+- [x] update to new 0.8.7 ddcutil API (unrelease yet)
 
 - [x] fix setallbrightness
 - [x] implement set_brightness
@@ -27,7 +27,7 @@
 - [x] install ddcutil module's load file if "make install WITH_DDC=1"
 - [x] uniform getbrightness and  getallbrightness
 - [x] refactor setbrightness code a bit
-- [ ] stricter error checking in backlight.c
+- [x] stricter error checking in backlight.c
 - [x] support ddcutil 0.8.6 too
 - [x] Updated README with proper new example
 - [x] update readme interface
