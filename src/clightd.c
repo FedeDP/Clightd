@@ -70,6 +70,7 @@ static const sd_bus_vtable clightd_vtable[] = {
 #endif
 #ifndef DISABLE_FRAME_CAPTURES
     SD_BUS_METHOD("captureframes", "si", "ad", method_captureframes, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("iswebcamavailable", "", "b", method_iswebcamavailable, SD_BUS_VTABLE_UNPRIVILEGED),
 #endif
 #ifdef DPMS_PRESENT
     SD_BUS_METHOD("getdpms", "ss", "i", method_getdpms, SD_BUS_VTABLE_UNPRIVILEGED),

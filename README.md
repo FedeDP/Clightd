@@ -48,7 +48,7 @@ Uninstall:
 
     # make uninstall
 
-**It is fully valgrind and cppcheck clean.**  
+**It is fully valgrind and cppcheck clean.**
 
 ### Valgrind is run with:
 
@@ -103,6 +103,7 @@ A "version" bus property is exported too. It will return a "s" of clightd versio
 | getgamma | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current display gamma temp | | ✔ |
 | setgamma | ssi(buu) | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New gamma value</li><li>Smooth struct</li></ul> | b | True if no error happens | ✔ | ✔ |
 | captureframes | si | <ul><li>video sysname(eg: Video0)</li><li>Number of frames</li></ul> | ad | Each frame's brightness (0-255) | ✔ | |
+| iswebcamavailable | | | b | True if any webcam could be found | | |
 | getdpms | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current dpms state | |✔|
 | setdpms | ssi | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New dpms state</li></ul> | i | New setted dpms state | ✔ | ✔ |
 | getdpms_timeouts | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | iii | Dpms timeouts values |  | ✔ |
