@@ -32,5 +32,7 @@
 - [x] Updated README with proper new example
 - [x] update readme interface
 
+- [x] properly install i2c-dev conf file if installed with WITH_DDC=1
+
 - [x] test
 - [ ] new release
