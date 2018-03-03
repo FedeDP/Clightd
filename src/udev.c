@@ -30,7 +30,7 @@ void get_udev_device(const char *backlight_interface, const char *subsystem,
     } else {
         *dev = udev_device_new_from_subsystem_sysname(udev, subsystem, backlight_interface);
     }
-    if (!(*dev)) {
+    if (!(*dev) && ret_error) {
         sd_bus_error_set_errno(*ret_error, ENODEV);
     }
 }

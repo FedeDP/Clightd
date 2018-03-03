@@ -11,6 +11,14 @@
         </defaults>
     </action>
     
+    <action id="org.clightd.backlight.setallbrightness">
+        <defaults>
+            <allow_any>no</allow_any>
+            <allow_inactive>no</allow_inactive>
+            <allow_active>yes</allow_active>
+        </defaults>
+    </action>
+    
     <action id="org.clightd.backlight.setgamma">
         <defaults>
             <allow_any>no</allow_any>

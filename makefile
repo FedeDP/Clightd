@@ -8,6 +8,8 @@ SYSTEMDSERVICE = clightd.service
 SYSTEMDDIR = /usr/lib/systemd/system
 POLKITPOLICYNAME = org.clightd.backlight.policy
 POLKITPOLICYDIR = /usr/share/polkit-1/actions
+MODULESLOADDDC = i2c_clightd.conf
+MODULESLOADDIR = /usr/lib/modules-load.d
 EXTRADIR = Scripts
 DEBIANDIR = ./Clightd
 DEBOUTPUTDIR = ./Debian
@@ -38,7 +40,6 @@ ifneq ("$(DISABLE_GAMMA)","1")
 GAMMA=$(shell pkg-config --silence-errors --libs x11 xrandr)
 ifneq ("$(GAMMA)","")
 CFLAGS+=-DGAMMA_PRESENT $(shell pkg-config --cflags x11 xrandr)
-LIBS+=$(GAMMA)
 $(info Gamma support enabled.)
 else
 $(info Gamma support disabled.)
@@ -51,7 +52,6 @@ ifneq ("$(DISABLE_DPMS)","1")
 DPMS=$(shell pkg-config --silence-errors --libs x11 xext)
 ifneq ("$(DPMS)","")
 CFLAGS+=-DDPMS_PRESENT $(shell pkg-config --cflags x11 xext)
-LIBS+=$(DPMS)
 $(info DPMS support enabled.)
 else
 $(info DPMS support disabled.)
@@ -64,7 +64,6 @@ ifneq ("$(DISABLE_IDLE)","1")
 IDLE=$(shell pkg-config --silence-errors --libs x11 xscrnsaver)
 ifneq ("$(IDLE)","")
 CFLAGS+=-DIDLE_PRESENT $(shell pkg-config --cflags x11 xscrnsaver)
-LIBS+=$(IDLE)
 $(info idle support enabled.)
 else
 $(info idle support disabled.)
@@ -73,9 +72,27 @@ else
 $(info idle support disabled.)
 endif
 
+ifneq ("$(DISABLE_DDC)","1")
+DDC=$(shell pkg-config --silence-errors --libs ddcutil)
+ifneq ("$(DDC)","")
+CFLAGS+=-DUSE_DDC $(shell pkg-config --cflags ddcutil)
+DDCUTIL_VERSION_MAJ=$(shell pkg-config --modversion ddcutil | cut -d '.' -f1)
+DDCUTIL_VERSION_MIN=$(shell pkg-config --modversion ddcutil | cut -d '.' -f2)
+DDCUTIL_VERSION_PATCH=$(shell pkg-config --modversion ddcutil | cut -d '.' -f3)
+$(info DDCutil support enabled.)
+else
+$(info DDCutil support disabled.)
+endif
+else
+$(info DDCutil support disabled.)
+endif
+
+LIBS+=$(GAMMA) $(DPMS) $(IDLE) $(DDC)
+
 endif
 
 CLIGHTD_VERSION = $(shell git describe --abbrev=0 --always --tags)
+CFLAGS+=-DVERSION=\"$(CLIGHTD_VERSION)\" -DDDCUTIL_VERSION_MAJ=$(DDCUTIL_VERSION_MAJ) -DDDCUTIL_VERSION_MIN=$(DDCUTIL_VERSION_MIN) -DDDCUTIL_VERSION_PATCH=$(DDCUTIL_VERSION_PATCH)
 
 all: clightd clean
 
@@ -134,6 +151,12 @@ install:
 	$(info installing polkit policy file.)
 	@$(INSTALL_DIR) "$(DESTDIR)$(POLKITPOLICYDIR)"
 	@$(INSTALL_DATA) $(EXTRADIR)/$(POLKITPOLICYNAME) "$(DESTDIR)$(POLKITPOLICYDIR)"
+	
+ifeq ($(WITH_DDC),"1")
+	$(info installing ddc module load file.)
+	@$(INSTALL_DIR) "$(DESTDIR)$(MODULESLOADDIR)"
+	@$(INSTALL_DATA) $(EXTRADIR)/$(MODULESLOADDDC) "$(DESTDIR)$(MODULESLOADDIR)"
+endif
 
 uninstall:
 	$(info uninstalling bin.)
@@ -150,3 +173,6 @@ uninstall:
 	
 	$(info uninstalling polkit policy file.)
 	@$(RM) "$(DESTDIR)$(POLKITPOLICYDIR)/$(POLKITPOLICYNAME)"
+	
+	$(info uninstalling ddc module load file (if present).)
+	@$(RM) "$(DESTDIR)$(MODULESLOADDIR)/$(MODULESLOADDDC)"

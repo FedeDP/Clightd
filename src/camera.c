@@ -3,7 +3,6 @@
 #include "../inc/camera.h"
 #include "../inc/polkit.h"
 #include "../inc/udev.h"
-#include <string.h>
 #include <sys/mman.h>
 #include <linux/videodev2.h>
 #include <fcntl.h>
@@ -33,6 +32,19 @@ struct state {
 };
 
 static struct state state;
+
+int method_iswebcamavailable(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+    struct udev_device *dev = NULL;
+    int present = 0;
+    
+    get_udev_device(NULL, "video4linux", NULL, &dev);
+    if (dev) {
+        printf("Camera device found.\n");
+        present = 1;
+        udev_device_unref(dev);
+    }
+    return sd_bus_reply_method_return(m, "b", present);
+}
 
 /*
  * Frame capturing method

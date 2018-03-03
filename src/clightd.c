@@ -31,38 +31,46 @@
 #include <poll.h>
 #include <signal.h>
 
+static int get_version( sd_bus *b, const char *path, const char *interface, const char *property,
+                        sd_bus_message *reply, void *userdata, sd_bus_error *error);
 static void bus_cb(void);
 static void signal_cb(void);
 static void set_pollfd(void);
 static void main_poll(void);
 static void close_mainp(void);
 
-// enum poll_idx { BUS, SIGNAL, UDEV, POLL_SIZE };
-enum poll_idx { BUS, SIGNAL, POLL_SIZE };
+enum poll_idx {
+    BUS,
+    SIGNAL,
+    BRIGHT_SMOOTH,
+#ifdef GAMMA_PRESENT
+    GAMMA_SMOOTH,
+#endif
+    POLL_SIZE };
 enum quit_codes { LEAVE_W_ERR = -1, SIGNAL_RCV = 1 };
 
 static const char object_path[] = "/org/clightd/backlight";
 static const char bus_interface[] = "org.clightd.backlight";
 static struct pollfd main_p[POLL_SIZE];
 static int quit;
-// static struct udev_monitor *mon;
 
 /**
  * Bus spec: https://dbus.freedesktop.org/doc/dbus-specification.html
  */
 static const sd_bus_vtable clightd_vtable[] = {
     SD_BUS_VTABLE_START(0),
-    SD_BUS_METHOD("setbrightness", "si", "i", method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("getbrightness", "s", "i", method_getbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("getmaxbrightness", "s", "i", method_getmaxbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("getactualbrightness", "s", "i", method_getactualbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("isbacklightinterfaceenabled", "s", "b", method_isinterface_enabled, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_PROPERTY("version", "s", get_version, 0, SD_BUS_VTABLE_PROPERTY_CONST),
+    SD_BUS_METHOD("setbrightness", "d(bdu)as", "b", method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("setallbrightness", "d(bdu)s", "b", method_setallbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("getbrightness", "as", "a(sd)", method_getbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("getallbrightness", "s", "a(sd)", method_getallbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
 #ifdef GAMMA_PRESENT
-    SD_BUS_METHOD("setgamma", "ssi", "i", method_setgamma, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("setgamma", "ssi(buu)", "b", method_setgamma, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("getgamma", "ss", "i", method_getgamma, SD_BUS_VTABLE_UNPRIVILEGED),
 #endif
 #ifndef DISABLE_FRAME_CAPTURES
     SD_BUS_METHOD("captureframes", "si", "ad", method_captureframes, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("iswebcamavailable", "", "b", method_iswebcamavailable, SD_BUS_VTABLE_UNPRIVILEGED),
 #endif
 #ifdef DPMS_PRESENT
     SD_BUS_METHOD("getdpms", "ss", "i", method_getdpms, SD_BUS_VTABLE_UNPRIVILEGED),
@@ -75,6 +83,11 @@ static const sd_bus_vtable clightd_vtable[] = {
 #endif
     SD_BUS_VTABLE_END
 };
+
+static int get_version( sd_bus *b, const char *path, const char *interface, const char *property,
+                        sd_bus_message *reply, void *userdata, sd_bus_error *error) {
+    return sd_bus_message_append(reply, "s", VERSION);
+}
 
 static void bus_cb(void) {
     int r;
@@ -120,18 +133,27 @@ static void set_pollfd(void) {
         .fd = sigfd,
         .events = POLLIN,
     };
+    int bright_smooth_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+    main_p[BRIGHT_SMOOTH] = (struct pollfd) {
+        .fd = bright_smooth_fd,
+        .events = POLLIN,
+    };
+    set_brightness_smooth_fd(bright_smooth_fd);
     
-//     main_p[UDEV] = (struct pollfd) {
-//         .fd = udev_monitor_get_fd(mon),
-//         .events = POLLIN,
-//     };
+#ifdef GAMMA_PRESENT
+    int gamma_smooth_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+    main_p[GAMMA_SMOOTH] = (struct pollfd) {
+        .fd = gamma_smooth_fd,
+        .events = POLLIN,
+    };
+    set_gamma_smooth_fd(gamma_smooth_fd);
+#endif
 }
 
 /*
  * Listens on fds
  */
 static void main_poll(void) {
-//     struct udev_device *dev;
     while (!quit) {
         int r = poll(main_p, POLL_SIZE, -1);
         
@@ -149,16 +171,14 @@ static void main_poll(void) {
                 case SIGNAL:
                     signal_cb();
                     break;
-//                     case UDEV:
-//                         dev = udev_monitor_receive_device(mon);
-//                         if (dev) {
-//                             printf("I: ACTION=%s\n", udev_device_get_action(dev));
-//                             printf("I: DEVNAME=%s\n", udev_device_get_sysname(dev));
-//                             printf("I: DEVPATH=%s\n", udev_device_get_devpath(dev));
-//                             printf("---\n");
-//                             udev_device_unref(dev);
-//                         }
-//                         break;
+                case BRIGHT_SMOOTH:
+                    brightness_smooth_cb();
+                    break;
+#ifdef GAMMA_PRESENT
+                case GAMMA_SMOOTH:
+                    gamma_smooth_cb();
+                    break;
+#endif
                 }
                 r--;
             }
@@ -177,7 +197,6 @@ static void close_mainp(void) {
 int main(void) {
     int r;
     udev = udev_new();
-    
     /* Connect to the system bus */
     r = sd_bus_default_system(&bus);
     if (r < 0) {
@@ -197,17 +216,11 @@ int main(void) {
         goto finish;
     }
     
-    /* Take a well-known service name so that clients can find us */
     r = sd_bus_request_name(bus, bus_interface, 0);
     if (r < 0) {
         fprintf(stderr, "Failed to acquire service name: %s\n", strerror(-r));
         goto finish;
     }
-    
-    /* not working...it seems my driver does not send proper udev events */
-//     mon = udev_monitor_new_from_netlink(udev, "udev");
-//     udev_monitor_filter_add_match_subsystem_devtype(mon, "drm", "drm_minor");
-//     udev_monitor_enable_receiving(mon);
     
     set_pollfd();
    /*
@@ -222,7 +235,6 @@ finish:
     if (bus) {
         sd_bus_flush_close_unref(bus);
     }
-//     udev_monitor_unref(mon);
     udev_unref(udev);
     close_mainp();
     return quit == LEAVE_W_ERR ? EXIT_FAILURE : EXIT_SUCCESS;
