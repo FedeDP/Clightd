@@ -5,6 +5,8 @@
 
 Clightd is a bus interface that lets you easily set screen brightness, gamma temperature and get ambient brightness through webcam frames capture.
 
+**Please note that current ddcutil version (0.8.6) has some memleaks; these memleaks were spotted and reported during development of clightd 2.0 and were fixed by main ddcutil developer. Next ddcutil release will fix them.**
+
 ## It currently needs:
 * libsystemd >= 221 (systemd/sd-bus.h)
 * libudev (libudev.h)
