@@ -225,6 +225,8 @@ static int get_temp(const unsigned short R, const unsigned short B) {
     int max_temp = R == 255 ? 6500 : 10000; // upper bound
     unsigned short testR, testB;
     
+    int ctr = 0;
+    
     /* Compute first temperature with same R and B value as parameters */
     do {
         temperature = (max_temp + min_temp) / 2;
@@ -235,7 +237,8 @@ static int get_temp(const unsigned short R, const unsigned short B) {
         } else {
             min_temp = temperature;
         }
-    } while (testR != R || testB != B);
+        ctr++;
+    } while ((testR != R || testB != B) && (ctr < 10));
     
     /* try to fit value in 50-steps temp -> ie: instead of 5238, try 5200 or 5250 */
     if (temperature % 50 != 0) {
