@@ -264,11 +264,11 @@ static int set_gamma(int temp, Display *dpy) {
     double blue = get_blue(temp) / (double)255;
         
     for (int i = 0; i < res->ncrtc; i++) {
-        int crtcxid = res->crtcs[i];
-        int size = XRRGetCrtcGammaSize(dpy, crtcxid);
+        const int crtcxid = res->crtcs[i];
+        const int size = XRRGetCrtcGammaSize(dpy, crtcxid);
         XRRCrtcGamma *crtc_gamma = XRRAllocGamma(size);
         for (int j = 0; j < size; j++) {
-            double g = 65535.0 * j / size;
+            const double g = 65535.0 * j / size;
             crtc_gamma->red[j] = g * red;
             crtc_gamma->green[j] = g * green;
             crtc_gamma->blue[j] = g * blue;
@@ -287,7 +287,9 @@ static int get_gamma(Display *dpy) {
     XRRScreenResources *res = XRRGetScreenResourcesCurrent(dpy, root);
     if (res->ncrtc > 0) {
         XRRCrtcGamma *crtc_gamma = XRRGetCrtcGamma(dpy, res->crtcs[0]);
-        temp = get_temp(clamp(crtc_gamma->red[1], 255), clamp(crtc_gamma->blue[1], 255));
+        const int size = crtc_gamma->size;
+        const int g = (65535.0 * (size - 1) / size) / 255;
+        temp = get_temp(clamp(crtc_gamma->red[size - 1] / g, 255), clamp(crtc_gamma->blue[size - 1] / g, 255));
         XFree(crtc_gamma);
     }
     XRRFreeScreenResources(res);
