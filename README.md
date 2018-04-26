@@ -38,7 +38,7 @@ Clightd is a bus interface that lets you easily set screen brightness, gamma tem
 * DISABLE_GAMMA=1 (to disable gamma support)
 * DISABLE_DPMS=1 (to disable dpms support)
 * DISABLE_IDLE=1 (to disable user idle time support)
-* DISABLE_DDC=1 (to disable [ddcutil](https://github.com/FedeDP/Clightd/tree/ddcutil#ddcutil-support) support)
+* DISABLE_DDC=1 (to disable [ddcutil](https://github.com/FedeDP/Clightd#ddcutil-support) support)
 
 ## Build instructions:
 Build and install:
