@@ -6,13 +6,10 @@
 
 #include <ddcutil_c_api.h>
 
-#if DDCUTIL_VERSION_MAJ == 0 && DDCUTIL_VERSION_MIN == 8 && DDCUTIL_VERSION_PATCH < 7
-    #define ddca_free_any_vcp_value(x) (void)x
-#endif
-
 #define DDCUTIL_LOOP(func) \
     const DDCA_Vcp_Feature_Code br_code = 0x10; \
-    DDCA_Display_Info_List *dlist = ddca_get_display_info_list(); \
+    DDCA_Display_Info_List *dlist = NULL; \
+    ddca_get_display_info_list2(0, &dlist); \
     if (dlist) { \
         for (int ndx = 0; ndx < dlist->ct; ndx++) { \
             DDCA_Display_Info *dinfo = &dlist->info[ndx]; \
@@ -22,7 +19,7 @@
                 continue; \
             } \
             DDCA_Any_Vcp_Value *valrec; \
-            if (!ddca_get_any_vcp_value(dh, br_code, DDCA_NON_TABLE_VCP_VALUE, &valrec)) { \
+            if (!ddca_get_any_vcp_value_using_explicit_type(dh, br_code, DDCA_NON_TABLE_VCP_VALUE, &valrec)) { \
                 func; \
                 ddca_free_any_vcp_value(valrec); \
             } \
@@ -46,7 +43,7 @@
     if (ddca_open_display(dref, &dh)) { \
         goto end; \
     } \
-    if (!ddca_get_any_vcp_value(dh, br_code, DDCA_NON_TABLE_VCP_VALUE, &valrec)) { \
+    if (!ddca_get_any_vcp_value_using_explicit_type(dh, br_code, DDCA_NON_TABLE_VCP_VALUE, &valrec)) { \
         func; \
         ddca_free_any_vcp_value(valrec); \
     } \
@@ -184,6 +181,9 @@ int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret
         if (r >= 0) {
             reset_backlight_struct(target_pct, is_smooth, smooth_step, smooth_wait, 1);
             add_backlight_sn(backlight_interface);
+            DDCUTIL_LOOP({
+                add_backlight_sn(dinfo->sn);
+            });
             int ok = brightness_smooth_cb();
             // Returns true if no errors happened
             return sd_bus_reply_method_return(m, "b", ok == 0);
@@ -201,36 +201,18 @@ int brightness_smooth_cb(void) {
     // nonblocking mode!
     read(sc.fd, &t, sizeof(uint64_t));
     
-    int ret;
-    if (sc.all) {
-        // first and only sn stored is desired internal backlight interface
-        if (!sc.d[0].reached_target) {
-            ret = set_internal_backlight(0);
-        }
-        // no else here because reached_target value can be changed in set_internal_backlight
-        if (sc.d[0].reached_target) {
-            ret = -1;
-        }
-        ret += set_external_backlight(-1);
-    } else {
-        int reached_count = 0;
-        for (int i = 0; i < sc.num_dev; reached_count += sc.d[i].reached_target, i++) {
-            if (!sc.d[i].reached_target) {
-                ret = set_internal_backlight(i);
-                // error: it was not an internal backlight interface
-                if (ret == -1) {
-                    // try to use it as external backlight sn
-                    set_external_backlight(i);
-                }
+    int reached_count = 0;
+    for (int i = 0; i < sc.num_dev; reached_count += sc.d[i].reached_target, i++) {
+        if (!sc.d[i].reached_target) {
+            int ret = set_internal_backlight(i);
+            // error: it was not an internal backlight interface
+            if (ret == -1) {
+                // try to use it as external backlight sn
+                set_external_backlight(i);
             }
         }
-        if (reached_count == sc.num_dev) {
-            ret = -2; // stop!
-        }
     }
-    
-    // set new timer if needed
-    if (ret != -2) {
+    if (reached_count != sc.num_dev) {
         struct itimerspec timerValue = {{0}};
         timerValue.it_value.tv_sec = 0;
         timerValue.it_value.tv_nsec = 1000 * 1000 * sc.smooth_wait; // ms
@@ -288,28 +270,17 @@ static int set_internal_backlight(int idx) {
 
 static int set_external_backlight(int idx) {
     int ret = -1;
-    if (!sc.all) {
-        DDCUTIL_FUNC(sc.d[idx].sn, {
-            const int max = VALREC_MAX_VAL(valrec);
-            const int curr = VALREC_CUR_VAL(valrec);
-            int new_value = next_backlight_level(curr, max, idx) * max;
-            if (new_value >= 0 && ddca_set_continuous_vcp_value(dh, br_code, new_value) == 0) {
-                ret = 0;
-            }
-        });
-    } else {
-        DDCUTIL_LOOP({
-            const int max = VALREC_MAX_VAL(valrec);
-            const int curr = VALREC_CUR_VAL(valrec);
-            int new_value = next_backlight_level(curr, max, idx) * max;
-            if (new_value >= 0 && ddca_set_continuous_vcp_value(dh, br_code, new_value)) {
-                ret++; // number of screens
-            }
-        });
-        if (ret) {
-            ret++; // number of screen changed started from -1
+    
+    DDCUTIL_FUNC(sc.d[idx].sn, {
+        const uint16_t max = VALREC_MAX_VAL(valrec);
+        const uint16_t curr = VALREC_CUR_VAL(valrec);
+        int16_t new_value = next_backlight_level(curr, max, idx) * max;
+        int8_t new_sh = new_value >> 8;
+        int8_t new_sl = new_value & 0xff;
+        if (new_value >= 0 && ddca_set_non_table_vcp_value(dh, br_code, new_sh, new_sl) == 0) {
+            ret = 0;
         }
-    }
+    });
     return ret;
 }
 
