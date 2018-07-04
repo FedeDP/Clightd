@@ -5,6 +5,8 @@
 
 Clightd is a bus interface that lets you easily set screen brightness, gamma temperature and get ambient brightness through webcam frames capture.
 
+**Please note that in Ubuntu 16.04 polkit.service was named polkitd.service. You must manually change the "Require=" line in clightd.service.**
+
 ## It currently needs:
 * libsystemd >= 221 (systemd/sd-bus.h)
 * libudev (libudev.h)
