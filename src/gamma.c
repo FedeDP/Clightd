@@ -47,16 +47,16 @@ int gamma_smooth_cb(void) {
         sc.target_temp :
         sc.current_temp + sc.smooth_step;
     }
+    
+    struct itimerspec timerValue = {{0}};
     if (set_gamma(sc.current_temp, sc.dpy) == sc.target_temp) {
         XCloseDisplay(sc.dpy);
         unsetenv("XAUTHORITY");
     } else {
-        struct itimerspec timerValue = {{0}};
         timerValue.it_value.tv_sec = 0;
         timerValue.it_value.tv_nsec = 1000 * 1000 * sc.smooth_wait; // ms
-        return timerfd_settime(sc.fd, 0, &timerValue, NULL);
     }
-    return 0;
+    return timerfd_settime(sc.fd, 0, &timerValue, NULL);
 }
 
 int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
