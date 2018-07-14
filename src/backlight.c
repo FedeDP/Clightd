@@ -217,11 +217,10 @@ int brightness_smooth_cb(void) {
     if (reached_count != sc.num_dev) {
         timerValue.it_value.tv_sec = 0;
         timerValue.it_value.tv_nsec = 1000 * 1000 * sc.smooth_wait; // ms
-        return timerfd_settime(sc.fd, 0, &timerValue, NULL);
+    } else {
+        /* Free all resources */
+        reset_backlight_struct(0, 0, 0, 0, 0);
     }
-    
-    /* Free all resources */
-    reset_backlight_struct(0, 0, 0, 0, 0);
     /* disarm the timer */
     return timerfd_settime(sc.fd, 0, &timerValue, NULL);
 }
