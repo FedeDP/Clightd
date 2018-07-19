@@ -1,8 +1,3 @@
-/**
- * Taken from sct.c
- * http://www.tedunangst.com/flak/post/sct-set-color-temperature
- */
-
 #ifdef GAMMA_PRESENT
 
 #include "commons.h"

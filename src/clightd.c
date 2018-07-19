@@ -54,6 +54,9 @@ static const char bus_interface[] = "org.clightd.backlight";
 static struct pollfd main_p[POLL_SIZE];
 static int quit;
 
+sd_bus *bus;
+struct udev *udev;
+
 /**
  * Bus spec: https://dbus.freedesktop.org/doc/dbus-specification.html
  */
