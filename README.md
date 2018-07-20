@@ -129,16 +129,5 @@ On archlinux this is automatically accomplished by PKGBUILD.
 ## Arch AUR packages
 Clightd is available on AUR: https://aur.archlinux.org/packages/clightd-git/ .
 
-## Deb packages
-Deb package for amd64 architecture is provided for each [release](https://github.com/FedeDP/Clightd/releases).  
-Moreover, you can very easily build your own packages, if you wish to test latest Clightd code.  
-You only need to issue:
-
-    $ make deb
-
-A deb file will be created in "Debian" folder, inside Clightd root.  
-Please note that i am developing clightd from archlinux, thus you can encounter some packaging issues. Please, report back.  
-Note also that debian package misses ddcutil dependency (as ddcutil C api/shared object is not yet packaged), so its support will be disabled.  
-
 ## License
 This software is distributed with GPL license, see [COPYING](https://github.com/FedeDP/Clightd/blob/master/COPYING) file for more informations.
