@@ -11,6 +11,7 @@ POLKITPOLICYDIR = /usr/share/polkit-1/actions
 MODULESLOADDDC = i2c_clightd.conf
 MODULESLOADDIR = /usr/lib/modules-load.d
 EXTRADIR = Scripts
+LICENSEDIR = /usr/share/licenses/clightd
 RM = rm -f
 RMDIR = rm -rf
 INSTALL = install -p
@@ -129,6 +130,10 @@ install:
 	@$(INSTALL_DIR) "$(DESTDIR)$(POLKITPOLICYDIR)"
 	@$(INSTALL_DATA) $(EXTRADIR)/$(POLKITPOLICYNAME) "$(DESTDIR)$(POLKITPOLICYDIR)"
 	
+	$(info installing license file.)
+	@$(INSTALL_DIR) "$(DESTDIR)$(LICENSEDIR)"
+	@$(INSTALL_DATA) COPYING "$(DESTDIR)$(LICENSEDIR)"
+	
 ifeq ("$(WITH_DDC)","1")
 	$(info installing ddc module load file.)
 	@$(INSTALL_DIR) "$(DESTDIR)$(MODULESLOADDIR)"
@@ -150,6 +155,9 @@ uninstall:
 	
 	$(info uninstalling polkit policy file.)
 	@$(RM) "$(DESTDIR)$(POLKITPOLICYDIR)/$(POLKITPOLICYNAME)"
+	
+	$(info uninstalling license file.)
+	@$(RMDIR) "$(DESTDIR)$(LICENSEDIR)"
 	
 	$(info uninstalling ddc module load file (if present).)
 	@$(RM) "$(DESTDIR)$(MODULESLOADDIR)/$(MODULESLOADDDC)"
