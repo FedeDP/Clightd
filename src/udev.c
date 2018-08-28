@@ -6,16 +6,12 @@ static void get_first_matching_device(struct udev_device **dev, const char *subs
  * Set dev to first device in subsystem
  */
 static void get_first_matching_device(struct udev_device **dev, const char *subsystem) {
-    struct udev_enumerate *enumerate;
-    struct udev_list_entry *devices;
-    
-    enumerate = udev_enumerate_new(udev);
+    struct udev_enumerate *enumerate = udev_enumerate_new(udev);
     udev_enumerate_add_match_subsystem(enumerate, subsystem);
     udev_enumerate_scan_devices(enumerate);
-    devices = udev_enumerate_get_list_entry(enumerate);
+    struct udev_list_entry *devices = udev_enumerate_get_list_entry(enumerate);
     if (devices) {
-        const char *path;
-        path = udev_list_entry_get_name(devices);
+        const char *path = udev_list_entry_get_name(devices);
         *dev = udev_device_new_from_syspath(udev, path);
     }
     /* Free the enumerator object */

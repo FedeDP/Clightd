@@ -9,7 +9,7 @@
 #define DDCUTIL_LOOP(func) \
     const DDCA_Vcp_Feature_Code br_code = 0x10; \
     DDCA_Display_Info_List *dlist = NULL; \
-    ddca_get_display_info_list2(0, &dlist); \
+    ddca_get_display_info_list2(false, &dlist); \
     if (dlist) { \
         for (int ndx = 0; ndx < dlist->ct; ndx++) { \
             DDCA_Display_Info *dinfo = &dlist->info[ndx]; \
