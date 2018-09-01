@@ -18,13 +18,17 @@ static void get_first_matching_device(struct udev_device **dev, const char *subs
     udev_enumerate_unref(enumerate);
 }
 
-void get_udev_device(const char *backlight_interface, const char *subsystem,
+void get_udev_device(const char *interface, const char *subsystem,
                             sd_bus_error **ret_error, struct udev_device **dev) {
     /* if no backlight_interface is specified, try to get first matching device */
-    if (!backlight_interface || !strlen(backlight_interface)) {
+    if (!interface || !strlen(interface)) {
         get_first_matching_device(dev, subsystem);
     } else {
-        *dev = udev_device_new_from_subsystem_sysname(udev, subsystem, backlight_interface);
+        char *name = strrchr(interface, '/');
+        if (name) {
+            return get_udev_device(++name, subsystem, ret_error, dev);
+        }
+        *dev = udev_device_new_from_subsystem_sysname(udev, subsystem, interface);
     }
     if (!(*dev) && ret_error) {
         sd_bus_error_set_errno(*ret_error, ENODEV);
