@@ -89,7 +89,7 @@ Last line will smoothly change current backlight on every internal/external scre
 
 Please note that for internal laptop screen, serialNumber must be your backlight kernel interface (eg: intel_backlight) or an empty string (to forcefully use first udev backlight subsystem matching device).  
 
-A "version" bus property is exported too. It will return a "s" of clightd version.  
+### Methods
 
 *Smooth struct* here means:  
 * b -> isSmooth (true for smooth change)
@@ -111,6 +111,19 @@ A "version" bus property is exported too. It will return a "s" of clightd versio
 | getdpms_timeouts | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | iii | Dpms timeouts values |  | ✔ |
 | setdpms_timeouts | ssiii | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New dpms timeouts</li></ul> | iii | New dpms timeouts | ✔ | ✔ |
 | getidletime | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current idle time in ms | | ✔ |
+
+### Properties
+
+| Prop | OUT | OUT values |
+|-|:-:|-|
+| version | s | Clightd version |
+
+### Signals
+
+| Sig | OUT | OUT values |
+|-|:-:|-|
+| WebcamChanged | ss | <ul><li>Webcam's devpath</li><li>Action string, as received from udev. Eg: "add", "remove".</li></ul> |
+
 
 ## Ddcutil support
 Clightd uses [ddcutil](https://github.com/rockowitz/ddcutil) C api to set external monitor brightness and thus supporting desktop PCs too.  

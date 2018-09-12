@@ -46,6 +46,9 @@ enum poll_idx {
 #ifdef GAMMA_PRESENT
     GAMMA_SMOOTH,
 #endif
+#ifndef DISABLE_FRAME_CAPTURES
+    UDEV_MON,
+#endif
     POLL_SIZE };
 enum quit_codes { LEAVE_W_ERR = -1, SIGNAL_RCV = 1 };
 
@@ -74,6 +77,7 @@ static const sd_bus_vtable clightd_vtable[] = {
 #ifndef DISABLE_FRAME_CAPTURES
     SD_BUS_METHOD("captureframes", "si", "ad", method_captureframes, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("iswebcamavailable", "", "b", method_iswebcamavailable, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_SIGNAL("WebcamChanged", "ss", 0),
 #endif
 #ifdef DPMS_PRESENT
     SD_BUS_METHOD("getdpms", "ss", "i", method_getdpms, SD_BUS_VTABLE_UNPRIVILEGED),
@@ -151,6 +155,12 @@ static void set_pollfd(void) {
     };
     set_gamma_smooth_fd(gamma_smooth_fd);
 #endif
+#ifndef DISABLE_FRAME_CAPTURES
+    main_p[UDEV_MON] = (struct pollfd) {
+        .fd = init_udev_monitor("video4linux"),
+        .events = POLLIN,
+    };
+#endif
 }
 
 /*
@@ -181,6 +191,17 @@ static void main_poll(void) {
                 case GAMMA_SMOOTH:
                     gamma_smooth_cb();
                     break;
+#endif
+#ifndef DISABLE_FRAME_CAPTURES
+                case UDEV_MON: {
+                    struct udev_device *dev = NULL;
+                    receive_udev_device(&dev);
+                    if (dev) {
+                        sd_bus_emit_signal(bus, object_path, bus_interface, "WebcamChanged", "ss", udev_device_get_devnode(dev), udev_device_get_action(dev));
+                        udev_device_unref(dev);
+                    }
+                    break;
+                }
 #endif
                 }
                 r--;

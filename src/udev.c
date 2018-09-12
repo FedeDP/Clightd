@@ -2,6 +2,21 @@
 
 static void get_first_matching_device(struct udev_device **dev, const char *subsystem);
 
+#ifndef DISABLE_FRAME_CAPTURES
+static struct udev_monitor *mon;
+
+int init_udev_monitor(const char *subsystem) {
+    mon = udev_monitor_new_from_netlink(udev, "udev");
+    udev_monitor_filter_add_match_subsystem_devtype(mon, subsystem, NULL);
+    udev_monitor_enable_receiving(mon);
+    return udev_monitor_get_fd(mon);
+}
+
+void receive_udev_device(struct udev_device **dev) {
+    *dev = udev_monitor_receive_device(mon);
+}
+#endif
+
 /**
  * Set dev to first device in subsystem
  */
