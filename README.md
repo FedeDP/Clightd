@@ -116,13 +116,13 @@ Please note that for internal laptop screen, serialNumber must be your backlight
 
 | Prop | OUT | OUT values |
 |-|:-:|-|
-| version | s | Clightd version |
+| version | s | <ul><li>Clightd version</li></ul> |
 
 ### Signals
 
 | Sig | OUT | OUT values |
 |-|:-:|-|
-| WebcamChanged | ss | <ul><li>Webcam's devpath</li><li>Action string, as received from udev. Eg: "add", "remove".</li></ul> |
+| WebcamChanged | ss | <ul><li>Webcam's devpath</li><li>Action string, as received from udev. Eg: "add", "remove"</li></ul> |
 
 
 ## Ddcutil support
