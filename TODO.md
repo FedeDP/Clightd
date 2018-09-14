@@ -1,6 +1,3 @@
-## 2.4
-- [x] Add WebcamChanged signal that will be sent when a new webcam is connected/a webcam is disconnected
-
 ## 2.5
 - [ ] Add gamma (and dpms + idle) support on wayland (wlroots)
 https://github.com/swaywm/wlroots/blob/master/examples/gamma-control.c
