@@ -1,5 +1,3 @@
-#ifndef DISABLE_FRAME_CAPTURES
-
 #include "../inc/camera.h"
 #include "../inc/polkit.h"
 #include "../inc/udev.h"
@@ -8,6 +6,8 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <stdint.h>
+
+#define CAMERA_SUBSYSTEM        "video4linux"
 
 static void capture_frames(const char *interface, int num_captures, int *err);
 static void open_device(const char *interface);
@@ -37,9 +37,8 @@ int method_iswebcamavailable(sd_bus_message *m, void *userdata, sd_bus_error *re
     struct udev_device *dev = NULL;
     int present = 0;
     
-    get_udev_device(NULL, "video4linux", NULL, &dev);
+    get_udev_device(NULL, CAMERA_SUBSYSTEM, NULL, &dev);
     if (dev) {
-        printf("Camera device found.\n");
         present = 1;
         udev_device_unref(dev);
     }
@@ -73,7 +72,7 @@ int method_captureframes(sd_bus_message *m, void *userdata, sd_bus_error *ret_er
     }
     
     // if no video device is specified, try to get first matching device
-    get_udev_device(video_interface, "video4linux", &ret_error, &dev);
+    get_udev_device(video_interface, CAMERA_SUBSYSTEM, &ret_error, &dev);
     if (sd_bus_error_is_set(ret_error)) {
         return -sd_bus_error_get_errno(ret_error);
     }
@@ -336,5 +335,3 @@ static void free_all(void) {
     /* reset state */
     memset(&state, 0, sizeof(struct state));
 }
-
-#endif

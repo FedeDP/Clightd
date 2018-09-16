@@ -34,7 +34,6 @@ Clightd is a bus interface that lets you easily set screen brightness, gamma tem
 * polkit
 
 ## Build time switches:
-* DISABLE_FRAME_CAPTURES=1 (to disable frame captures support)
 * DISABLE_GAMMA=1 (to disable gamma support)
 * DISABLE_DPMS=1 (to disable dpms support)
 * DISABLE_IDLE=1 (to disable user idle time support)

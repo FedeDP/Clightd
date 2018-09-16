@@ -2,12 +2,19 @@
 
 static void get_first_matching_device(struct udev_device **dev, const char *subsystem);
 
-#ifndef DISABLE_FRAME_CAPTURES
 static struct udev_monitor *mon;
 
-int init_udev_monitor(const char *subsystem) {
+int init_udev_monitor(char *subsystem) {
     mon = udev_monitor_new_from_netlink(udev, "udev");
-    udev_monitor_filter_add_match_subsystem_devtype(mon, subsystem, NULL);
+    
+    const char s[2] = "|";
+    char *token;
+    
+    token = strtok(subsystem, s);
+    while (token != NULL) {
+        udev_monitor_filter_add_match_subsystem_devtype(mon, token, NULL);
+        token = strtok(NULL, s);
+    }
     udev_monitor_enable_receiving(mon);
     return udev_monitor_get_fd(mon);
 }
@@ -15,7 +22,6 @@ int init_udev_monitor(const char *subsystem) {
 void receive_udev_device(struct udev_device **dev) {
     *dev = udev_monitor_receive_device(mon);
 }
-#endif
 
 /**
  * Set dev to first device in subsystem
@@ -35,7 +41,8 @@ static void get_first_matching_device(struct udev_device **dev, const char *subs
 
 void get_udev_device(const char *interface, const char *subsystem,
                             sd_bus_error **ret_error, struct udev_device **dev) {
-    /* if no backlight_interface is specified, try to get first matching device */
+    *dev = NULL;
+    /* if no interface is specified, try to get first matching device */
     if (!interface || !strlen(interface)) {
         get_first_matching_device(dev, subsystem);
     } else {
