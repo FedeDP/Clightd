@@ -15,7 +15,7 @@
             DDCA_Display_Info *dinfo = &dlist->info[ndx]; \
             DDCA_Display_Ref dref = dinfo->dref; \
             DDCA_Display_Handle dh = NULL; \
-            if (ddca_open_display(dref, &dh)) { \
+            if (ddca_open_display2(dref, false, &dh)) { \
                 continue; \
             } \
             DDCA_Any_Vcp_Value *valrec; \
@@ -40,7 +40,7 @@
     if (ddca_create_display_ref(pdid, &dref)) { \
         goto end; \
     } \
-    if (ddca_open_display(dref, &dh)) { \
+    if (ddca_open_display2(dref, false, &dh)) { \
         goto end; \
     } \
     if (!ddca_get_any_vcp_value_using_explicit_type(dh, br_code, DDCA_NON_TABLE_VCP_VALUE, &valrec)) { \
