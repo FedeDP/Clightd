@@ -9,7 +9,7 @@ Clightd is a bus interface that lets you easily set screen brightness, gamma tem
 
 ## It currently needs:
 * libsystemd >= 221 (systemd/sd-bus.h) or elogind (elogind/sd-bus.h)
-* libudev (libudev.h) or libeudev
+* libudev or libeudev (libudev.h)
 
 ### Needed only if built with gamma support:
 * libxrandr (X11/extensions/Xrandr.h)
