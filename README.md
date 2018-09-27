@@ -8,8 +8,8 @@ Clightd is a bus interface that lets you easily set screen brightness, gamma tem
 **Please note that in Ubuntu 16.04 polkit.service was named polkitd.service. You must manually change the "Require=" line in clightd.service.**
 
 ## It currently needs:
-* libsystemd >= 221 (systemd/sd-bus.h)
-* libudev (libudev.h)
+* libsystemd >= 221 (systemd/sd-bus.h) or elogind (elogind/sd-bus.h)
+* libudev (libudev.h) or libeudev
 
 ### Needed only if built with gamma support:
 * libxrandr (X11/extensions/Xrandr.h)
