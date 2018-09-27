@@ -19,13 +19,21 @@ INSTALL_PROGRAM = $(INSTALL) -m755
 INSTALL_DATA = $(INSTALL) -m644
 INSTALL_DIR = $(INSTALL) -d
 SRCDIR = src/
-LIBS = -lm $(shell pkg-config --libs libsystemd libudev)
-CFLAGS = $(shell pkg-config --cflags libsystemd libudev) -D_GNU_SOURCE -std=c99
+LIBS = -lm $(shell pkg-config --libs libudev)
+CFLAGS = $(shell pkg-config --cflags libudev) -D_GNU_SOURCE -std=c99
 
 ifeq (,$(findstring $(MAKECMDGOALS),"clean install uninstall"))
 
-ifneq ("$(shell pkg-config --atleast-version=221 systemd && echo yes)", "yes")
+ifeq ("$(shell pkg-config --exists libelogind && echo yes)", "yes")
+LIBS+=$(shell pkg-config --libs libelogind)
+CFLAGS+=$(shell pkg-config --cflags libelogind)
+else
+ifeq ("$(shell pkg-config --atleast-version=221 systemd && echo yes)", "yes")
+LIBS+=$(shell pkg-config --libs libsystemd)
+CFLAGS+=$(shell pkg-config --cflags libsystemd)
+else
 $(error systemd minimum required version 221.)
+endif
 endif
 
 ifneq ("$(DISABLE_FRAME_CAPTURES)","1")
