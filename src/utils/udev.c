@@ -1,4 +1,4 @@
-#include "../inc/udev.h"
+#include <udev.h>
 
 static void get_first_matching_device(struct udev_device **dev, const char *subsystem, const char *sysname);
 

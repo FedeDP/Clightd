@@ -1,7 +1,7 @@
 #ifdef DPMS_PRESENT
 
-#include "../inc/dpms.h"
-#include "../inc/polkit.h"
+#include <dpms.h>
+#include <polkit.h>
 #include <X11/Xlib.h>
 #include <X11/extensions/dpms.h>
 

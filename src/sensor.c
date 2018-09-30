@@ -1,5 +1,5 @@
-#include "../inc/sensor.h"
-#include "../inc/polkit.h"
+#include <sensor.h>
+#include <polkit.h>
 
 static enum sensors get_sensor_type(const char *str);
 static int is_sensor_available(sensor_t *sensor, const char *interface, 

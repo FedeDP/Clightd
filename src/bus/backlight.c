@@ -1,6 +1,6 @@
-#include "../inc/backlight.h"
-#include "../inc/polkit.h"
-#include "../inc/udev.h"
+#include <backlight.h>
+#include <polkit.h>
+#include <udev.h>
 
 #ifdef USE_DDC
 
@@ -138,37 +138,6 @@ int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_er
         return -EPERM;
     }
     
-    const char *sn = NULL;
-    const double target_pct = -1, smooth_step = 0;
-    const int is_smooth = 0;
-    const unsigned int smooth_wait = 0;
-    
-    int r = read_brightness_params(m, &target_pct, &is_smooth, &smooth_step, &smooth_wait);
-    if (!r) {
-        reset_backlight_struct(target_pct, is_smooth, smooth_step, smooth_wait, 0);
-    
-        // read backlight_interface/monitor id params
-        r = sd_bus_message_enter_container(m, SD_BUS_TYPE_ARRAY, "s");
-        if (r > 0) {
-            while (sd_bus_message_read(m, "s", &sn) > 0) {
-                add_backlight_sn(sn);
-            }
-            sd_bus_message_exit_container(m);
-
-            int ok = brightness_smooth_cb();
-            // Returns true if no errors happened
-            return sd_bus_reply_method_return(m, "b", !ok);
-        }
-    }
-    return r;
-}
-
-int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    if (!check_authorization(m)) {
-        sd_bus_error_set_errno(ret_error, EPERM);
-        return -EPERM;
-    }
-    
     const char *backlight_interface = NULL;
     const double target_pct = -1, smooth_step = 0.0;
     const int is_smooth = 0;
@@ -290,7 +259,7 @@ static int set_external_backlight(int idx) {
  * it founds, it will return a "(serialNumber, current backlight pct)" struct.
  * Note that for internal laptop screen, serialNumber = syspath (eg: intel_backlight)
  */
-int method_getallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+int method_getbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     sd_bus_message *reply = NULL;
     const char *backlight_interface = NULL;
     
@@ -301,35 +270,6 @@ int method_getallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret
         
         append_internal_backlight(reply, backlight_interface);
         append_external_backlight(reply, NULL);
-        
-        sd_bus_message_close_container(reply);
-        r = sd_bus_send(NULL, reply, NULL);
-        sd_bus_message_unref(reply);
-        sd_bus_message_exit_container(m);
-    } else {
-        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
-    }
-    return r;
-}
-
-/**
- * Current brightness pct getter method: for each serialNumber passed in,
- * it will return its backlight value in pct
- */
-int method_getbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    int r = sd_bus_message_enter_container(m, SD_BUS_TYPE_ARRAY, "s");
-    if (r >= 0) {
-        sd_bus_message *reply = NULL;
-        const char *sn;
-        
-        sd_bus_message_new_method_return(m, &reply);
-        sd_bus_message_open_container(reply, SD_BUS_TYPE_ARRAY, "(sd)");
-        
-        while (sd_bus_message_read(m, "s", &sn) > 0) {
-            if (append_internal_backlight(reply, sn)){
-                append_external_backlight(reply, sn);
-            }
-        }
         
         sd_bus_message_close_container(reply);
         r = sd_bus_send(NULL, reply, NULL);

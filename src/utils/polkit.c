@@ -1,4 +1,4 @@
-#include "../inc/polkit.h"
+#include <polkit.h>
 
 int check_authorization(sd_bus_message *m) {
     int authorized = 0;

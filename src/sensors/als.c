@@ -1,4 +1,4 @@
-#include "../inc/sensor.h"
+#include <sensor.h>
 
 #define ILL_MAX         4096
 #define ALS_SUBSYSTEM   "iio"

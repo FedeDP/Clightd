@@ -1,6 +1,6 @@
 #ifdef IDLE_PRESENT
 
-#include "../inc/idle.h"
+#include <idle.h>
 #include <X11/extensions/scrnsaver.h>
 
 static time_t get_idle_time(const char *display, const char *xauthority);

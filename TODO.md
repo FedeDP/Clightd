@@ -7,10 +7,11 @@
 - [x] Rename methods with camelcase
 - [x] Fix for CaptureSensor method
 - [ ] init_udev_monitor should be inited for ALS with acpi-als name filter (is it possible?)
-- [ ] Change directory structure -> sensors/{als.c,camera.c}, utils/{udev.c,polkit.c}, bus/{backlight,dpms,gamma,idle}. Rename clightd.c in main.c
+- [x] Change directory structure -> sensors/{als.c,camera.c}, utils/{udev.c,polkit.c}, bus/{backlight,dpms,gamma,idle}. Rename clightd.c in main.c
 - [x] CaptureWebcam should take a single frame and return a single double, adhering to CaptureSensor interface (ie: require a "s" and returning a "d")
 - [x] Updated org.clightd.backlight policy
-- [ ] Drop setBrightness and getBrightness (useless methods) and rename setAll and getAll -> drop them from org.clightd.backlight policy too!
+- [x] Drop setBrightness and getBrightness (useless methods) and rename setAll and getAll -> drop them from org.clightd.backlight policy too!
+- [x] Document new API
 
 ## 2.5 (3.1)
 - [ ] Add gamma (and dpms + idle) support on wayland (wlroots)

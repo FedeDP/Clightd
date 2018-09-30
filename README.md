@@ -94,32 +94,35 @@ Please note that for internal laptop screen, serialNumber must be your backlight
 
 | Method | IN | IN values | OUT | OUT values | Polkit restricted | X only |
 |-|:-:|-|:-:|-|:-:|-|
-| getbrightness | as | <ul><li>Array of screen serialNumbers</li></ul> | a(sd) | Array of struct with serialNumber and current backlight pct for each desired screen | | |
-| getallbrightness | s | <ul><li>Backlight interface for internal monitor</li></ul> | a(sd) | Array of struct with serialNumber and current backlight pct for each screen | | |
-| setbrightness | d(bdu)as | <ul><li>Target pct</li><li>Smooth struct</li><li>Array of screen serialNumbers</li></ul> | b | True if no error happens | ✔ | |
-| setallbrightness | d(bdu)s | <ul><li>Target pct</li><li>Smooth struct</li><li>Internal laptop's screen interface</li></ul> | b | True if no error happens | ✔ | |
-| getgamma | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current display gamma temp | | ✔ |
-| setgamma | ssi(buu) | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New gamma value</li><li>Smooth struct</li></ul> | b | True if no error happens | ✔ | ✔ |
-| captureframes | si | <ul><li>video sysname(eg: Video0)</li><li>Number of frames</li></ul> | ad | Each frame's brightness (0-255) | ✔ | |
-| iswebcamavailable | | | b | True if any webcam could be found | | |
-| getdpms | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current dpms state | |✔|
-| setdpms | ssi | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New dpms state</li></ul> | i | New setted dpms state | ✔ | ✔ |
-| getdpms_timeouts | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | iii | Dpms timeouts values |  | ✔ |
-| setdpms_timeouts | ssiii | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New dpms timeouts</li></ul> | iii | New dpms timeouts | ✔ | ✔ |
-| getidletime | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current idle time in ms | | ✔ |
+| GetBrightness | s | <ul><li>Backlight interface for internal monitor</li></ul> | a(sd) | Array of struct with serialNumber and current backlight pct for each screen | | |
+| SetBrightness | d(bdu)s | <ul><li>Target pct</li><li>Smooth struct</li><li>Internal laptop's screen interface</li></ul> | b | True if no error happens | ✔ | |
+| GetGamma | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current display gamma temp | | ✔ |
+| SetGamma | ssi(buu) | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New gamma value</li><li>Smooth struct</li></ul> | b | True if no error happens | ✔ | ✔ |
+| CaptureWebcam | s | <ul><li>Webcam sysname(eg: Video0)</li></ul> | d | Frame's brightness in pct | ✔ | |
+| IsWebcamAvailable | | | b | True if any webcam could be found | | |
+| CaptureAls | s | <ul><li>Als sysname</li></ul> | d | Current ambient brightness in pct | ✔ | |
+| IsAlsAvailable | | | b | True if any als sensor could be found | | |
+| CaptureSensor | s | <ul><li>Sensor (webcam or als) sysname</li></ul> | d | Ambient brightness in pct | ✔ | |
+| IsSensorAvailable | | | b | True if any sensor (webcam or als) could be found | | |
+| GetDpms | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current dpms state | |✔|
+| SetDpms | ssi | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New dpms state</li></ul> | i | New setted dpms state | ✔ | ✔ |
+| GetDpmsTimeouts | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | iii | Dpms timeouts values |  | ✔ |
+| SetDpmsTimeouts | ssiii | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New dpms timeouts</li></ul> | iii | New dpms timeouts | ✔ | ✔ |
+| GetIdleTime | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current idle time in ms | | ✔ |
 
 ### Properties
 
 | Prop | OUT | OUT values |
 |-|:-:|-|
-| version | s | <ul><li>Clightd version</li></ul> |
+| Version | s | <ul><li>Clightd version</li></ul> |
 
 ### Signals
 
 | Sig | OUT | OUT values |
 |-|:-:|-|
 | WebcamChanged | ss | <ul><li>Webcam's devpath</li><li>Action string, as received from udev. Eg: "add", "remove"</li></ul> |
-
+| AlsChanged | ss | <ul><li>Als' devpath</li><li>Action string, as received from udev. Eg: "add", "remove"</li></ul> |
+| SensorChanged | ss | <ul><li>Sensor's (webcam or als) devpath</li><li>Action string, as received from udev. Eg: "add", "remove"</li></ul> |
 
 ## Ddcutil support
 Clightd uses [ddcutil](https://github.com/rockowitz/ddcutil) C api to set external monitor brightness and thus supporting desktop PCs too.  

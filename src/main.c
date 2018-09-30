@@ -21,12 +21,12 @@
  *
  * END_COMMON_COPYRIGHT_HEADER */
 
-#include "../inc/gamma.h"
-#include "../inc/dpms.h"
-#include "../inc/backlight.h"
-#include "../inc/idle.h"
-#include "../inc/udev.h"
-#include "../inc/sensor.h"
+#include <gamma.h>
+#include <dpms.h>
+#include <backlight.h>
+#include <idle.h>
+#include <udev.h>
+#include <sensor.h>
 #include <sys/signalfd.h>
 #include <poll.h>
 #include <signal.h>
@@ -62,10 +62,8 @@ struct udev *udev;
 static const sd_bus_vtable clightd_vtable[] = {
     SD_BUS_VTABLE_START(0),
     SD_BUS_PROPERTY("Version", "s", get_version, 0, SD_BUS_VTABLE_PROPERTY_CONST),
-    SD_BUS_METHOD("SetBrightness", "d(bdu)as", "b", method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("SetAllBrightness", "d(bdu)s", "b", method_setallbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("GetBrightness", "as", "a(sd)", method_getbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("GetAllBrightness", "s", "a(sd)", method_getallbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("SetBrightness", "d(bdu)s", "b", method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("GetBrightness", "s", "a(sd)", method_getbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
 #ifdef GAMMA_PRESENT
     SD_BUS_METHOD("SetGamma", "ssi(buu)", "b", method_setgamma, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("GetGamma", "ss", "i", method_getgamma, SD_BUS_VTABLE_UNPRIVILEGED),

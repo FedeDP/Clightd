@@ -5,8 +5,8 @@
 
 #ifdef GAMMA_PRESENT
 
-#include "../inc/gamma.h"
-#include "../inc/polkit.h"
+#include <gamma.h>
+#include <polkit.h>
 #include <X11/extensions/Xrandr.h>
 #include <math.h>
 

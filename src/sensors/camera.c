@@ -3,7 +3,7 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <stdint.h>
-#include "../inc/sensor.h"
+#include <sensor.h>
 
 #define CAMERA_SUBSYSTEM        "video4linux"
 
