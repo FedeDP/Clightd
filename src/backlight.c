@@ -253,7 +253,7 @@ static int set_internal_backlight(int idx) {
     int r = -1;
     
     struct udev_device *dev = NULL;
-    get_udev_device(sc.d[idx].sn, "backlight", NULL, &dev);
+    get_udev_device(sc.d[idx].sn, "backlight", NULL, NULL, &dev);
     if (dev) {
         int max = atoi(udev_device_get_sysattr_value(dev, "max_brightness"));
         int curr = atoi(udev_device_get_sysattr_value(dev, "brightness"));
@@ -350,7 +350,7 @@ static void append_backlight(sd_bus_message *reply, const char *name, const doub
 static int append_internal_backlight(sd_bus_message *reply, const char *path) {
     int ret = -1;
     struct udev_device *dev = NULL;
-    get_udev_device(path, "backlight", NULL, &dev);
+    get_udev_device(path, "backlight", NULL, NULL, &dev);
     
     if (dev) {
         int val = atoi(udev_device_get_sysattr_value(dev, "brightness"));

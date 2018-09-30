@@ -3,7 +3,7 @@
 "http://www.freedesktop.org/software/polkit/policyconfig-1.dtd">
 <policyconfig>
 
-    <action id="org.clightd.backlight.setbrightness">
+    <action id="org.clightd.backlight.SetBrightness">
         <defaults>
             <allow_any>no</allow_any>
             <allow_inactive>no</allow_inactive>
@@ -11,7 +11,7 @@
         </defaults>
     </action>
     
-    <action id="org.clightd.backlight.setallbrightness">
+    <action id="org.clightd.backlight.SetAllBrightness">
         <defaults>
             <allow_any>no</allow_any>
             <allow_inactive>no</allow_inactive>
@@ -19,7 +19,7 @@
         </defaults>
     </action>
     
-    <action id="org.clightd.backlight.setgamma">
+    <action id="org.clightd.backlight.SetGamma">
         <defaults>
             <allow_any>no</allow_any>
             <allow_inactive>no</allow_inactive>
@@ -27,7 +27,7 @@
         </defaults>
     </action>
     
-    <action id="org.clightd.backlight.captureframes">
+    <action id="org.clightd.backlight.CaptureWebcam">
         <defaults>
             <allow_any>no</allow_any>
             <allow_inactive>no</allow_inactive>
@@ -35,7 +35,7 @@
         </defaults>
     </action>
     
-    <action id="org.clightd.backlight.setdpms">
+    <action id="org.clightd.backlight.CaptureAls">
         <defaults>
             <allow_any>no</allow_any>
             <allow_inactive>no</allow_inactive>
@@ -43,7 +43,23 @@
         </defaults>
     </action>
     
-    <action id="org.clightd.backlight.setdpms_timeouts">
+    <action id="org.clightd.backlight.CaptureSensor">
+        <defaults>
+            <allow_any>no</allow_any>
+            <allow_inactive>no</allow_inactive>
+            <allow_active>yes</allow_active>
+        </defaults>
+    </action>
+    
+    <action id="org.clightd.backlight.SetDpms">
+        <defaults>
+            <allow_any>no</allow_any>
+            <allow_inactive>no</allow_inactive>
+            <allow_active>yes</allow_active>
+        </defaults>
+    </action>
+    
+    <action id="org.clightd.backlight.SetDpmsTimeouts">
         <defaults>
             <allow_any>no</allow_any>
             <allow_inactive>no</allow_inactive>

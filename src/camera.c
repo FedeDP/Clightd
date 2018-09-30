@@ -1,14 +1,13 @@
-#include "../inc/camera.h"
-#include "../inc/polkit.h"
-#include "../inc/udev.h"
 #include <sys/mman.h>
 #include <linux/videodev2.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <stdint.h>
+#include "../inc/sensor.h"
 
 #define CAMERA_SUBSYSTEM        "video4linux"
 
+static int method_captureframes(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static void capture_frames(const char *interface, int num_captures, int *err);
 static void open_device(const char *interface);
 static void init(void);
@@ -33,67 +32,26 @@ struct state {
 
 static struct state state;
 
-int method_iswebcamavailable(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    struct udev_device *dev = NULL;
-    int present = 0;
-    
-    get_udev_device(NULL, CAMERA_SUBSYSTEM, NULL, &dev);
-    if (dev) {
-        present = 1;
-        udev_device_unref(dev);
-    }
-    return sd_bus_reply_method_return(m, "b", present);
-}
+SENSOR("webcam", CAMERA_SUBSYSTEM, NULL, method_captureframes);
 
 /*
  * Frame capturing method
  */
-int method_captureframes(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    sd_bus_message *reply = NULL;
-    int r, error = 0, num_captures;
-    struct udev_device *dev = NULL;
-    const char *video_interface;
-    
-    if (!check_authorization(m)) {
-        sd_bus_error_set_errno(ret_error, EPERM);
-        return -EPERM;
-    }
-    
-    /* Read the parameters */
-    r = sd_bus_message_read(m, "si", &video_interface, &num_captures);
-    if (r < 0) {
-        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
-        return r;
-    }
-    
-    if (num_captures <= 0 || num_captures > 20) {
-        sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Number of captures should be between 1 and 20.");
-        return -EINVAL;
-    }
-    
-    // if no video device is specified, try to get first matching device
-    get_udev_device(video_interface, CAMERA_SUBSYSTEM, &ret_error, &dev);
-    if (sd_bus_error_is_set(ret_error)) {
-        return -sd_bus_error_get_errno(ret_error);
-    }
-    
-    capture_frames(udev_device_get_devnode(dev), num_captures, &error);
+static int method_captureframes(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+    int r, error = 0;
+    struct udev_device *dev = (struct udev_device *)userdata;
+
+    /* 
+     * Only single frame capturing is supported now for the bus api.
+     * Leaving num_captures parameter here for future reference 
+     */
+    capture_frames(udev_device_get_devnode(dev), 1, &error);
     if (error) {
         sd_bus_error_set_errno(ret_error, error);
         r = -error;
-        goto end;
+    } else {
+        r = sd_bus_reply_method_return(m, "d", state.brightness_values[0]);
     }
-
-    printf("%d frames captured by %s.\n", num_captures, udev_device_get_sysname(dev));
-    
-    /* Reply with array response */
-    sd_bus_message_new_method_return(m, &reply);
-    sd_bus_message_append_array(reply, 'd', state.brightness_values, num_captures * sizeof(double));
-    r = sd_bus_send(NULL, reply, NULL);
-    sd_bus_message_unref(reply);
-    
-end:
-    udev_device_unref(dev);
     free_all();
     return r;
 }
