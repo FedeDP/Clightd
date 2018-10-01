@@ -3,7 +3,7 @@
 
 static enum sensors get_sensor_type(const char *str);
 static int is_sensor_available(sensor_t *sensor, const char *interface, 
-                               sd_bus_error **ret_error, struct udev_device **device);
+                            sd_bus_error **ret_error, struct udev_device **device);
 
 static sensor_t sensors[SENSOR_NUM];
 
@@ -37,7 +37,7 @@ static enum sensors get_sensor_type(const char *str) {
 }
 
 static int is_sensor_available(sensor_t *sensor, const char *interface, 
-                               sd_bus_error **ret_error, struct udev_device **device) {
+                            sd_bus_error **ret_error, struct udev_device **device) {
     int present = 0;
     
     struct udev_device *dev = NULL;
@@ -58,18 +58,18 @@ int method_issensoravailable(sd_bus_message *m, void *userdata, sd_bus_error *re
     const enum sensors s = get_sensor_type(member);
     
     int present = 0;
-	const char *interface = NULL;
-	int r = sd_bus_message_read(m, "s", &interface);
-	if (r < 0) {
-		fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
-		return r;
-	}
-	
-	if (s < SENSOR_NUM) {
+    const char *interface = NULL;
+    int r = sd_bus_message_read(m, "s", &interface);
+    if (r < 0) {
+        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
+        return r;
+    }
+
+    if (s < SENSOR_NUM) {
         present = is_sensor_available(&sensors[s], interface, NULL, NULL);
     } else {
         for (int i = 0; i < SENSOR_NUM; i++) {
-			present += is_sensor_available(&sensors[i], interface, NULL, NULL);
+            present += is_sensor_available(&sensors[i], interface, NULL, NULL);
         }
     }
     return sd_bus_reply_method_return(m, "b", present);
