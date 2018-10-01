@@ -20,9 +20,10 @@ typedef struct _sensor {
     int (*capture_method)(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 } sensor_t;
 
-#define SENSOR(type, subsystem, udev_name, method) \
+#define SENSOR(type, subsystem, udev_name) \
+    static int capture(sd_bus_message *m, void *userdata, sd_bus_error *ret_error); \
     static void _ctor_ register_sensor(void) { \
-        const sensor_t self = { type, subsystem, udev_name, method }; \
+        const sensor_t self = { type, subsystem, udev_name, capture }; \
         register_new_sensor(&self); \
     }
     

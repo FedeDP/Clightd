@@ -12,6 +12,7 @@
 - [x] Updated org.clightd.backlight policy
 - [x] Drop setBrightness and getBrightness (useless methods) and rename setAll and getAll -> drop them from org.clightd.backlight policy too!
 - [x] Document new API
+- [x] IsXAvailable should take a "s" (interface) parameter
 
 ## 2.5 (3.1)
 - [ ] Add gamma (and dpms + idle) support on wayland (wlroots)

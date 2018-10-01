@@ -7,7 +7,6 @@
 
 #define CAMERA_SUBSYSTEM        "video4linux"
 
-static int method_captureframes(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static void capture_frames(const char *interface, int num_captures, int *err);
 static void open_device(const char *interface);
 static void init(void);
@@ -32,12 +31,12 @@ struct state {
 
 static struct state state;
 
-SENSOR("webcam", CAMERA_SUBSYSTEM, NULL, method_captureframes);
+SENSOR("webcam", CAMERA_SUBSYSTEM, NULL);
 
 /*
  * Frame capturing method
  */
-static int method_captureframes(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+static int capture(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     int r, error = 0;
     struct udev_device *dev = (struct udev_device *)userdata;
 

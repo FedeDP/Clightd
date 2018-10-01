@@ -4,11 +4,9 @@
 #define ALS_SUBSYSTEM   "iio"
 #define ALS_SYSNAME     "acpi-als"
 
-static int method_captureals(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
+SENSOR("als", ALS_SUBSYSTEM, "acpi-als");
 
-SENSOR("als", ALS_SUBSYSTEM, "acpi-als", method_captureals);
-
-static int method_captureals(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+static int capture(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     struct udev_device *dev = (struct udev_device *)userdata;
     int32_t illuminance = atoi(udev_device_get_sysattr_value(dev, "in_illuminance_input"));
     double pct = illuminance / ILL_MAX;

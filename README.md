@@ -99,11 +99,11 @@ Please note that for internal laptop screen, serialNumber must be your backlight
 | GetGamma | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current display gamma temp | | ✔ |
 | SetGamma | ssi(buu) | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New gamma value</li><li>Smooth struct</li></ul> | b | True if no error happens | ✔ | ✔ |
 | CaptureWebcam | s | <ul><li>Webcam sysname(eg: Video0)</li></ul> | d | Frame's brightness in pct | ✔ | |
-| IsWebcamAvailable | | | b | True if any webcam could be found | | |
+| IsWebcamAvailable | s | <ul><li>Webcam sysname(eg: Video0) to be checked. NULL or Empty to check if any Webcam is available.</li></ul> | b | True if any webcam could be found | | |
 | CaptureAls | s | <ul><li>Als sysname</li></ul> | d | Current ambient brightness in pct | ✔ | |
-| IsAlsAvailable | | | b | True if any als sensor could be found | | |
+| IsAlsAvailable | s | <ul><li>Als sysname to be checked. NULL or Empty to check if any Als device is available.</li></ul> | b | True if any als sensor could be found | | |
 | CaptureSensor | s | <ul><li>Sensor (webcam or als) sysname</li></ul> | d | Ambient brightness in pct | ✔ | |
-| IsSensorAvailable | | | b | True if any sensor (webcam or als) could be found | | |
+| IsSensorAvailable | s | <ul><li>Webcam or Als sysname to be checked. NULL or Empty to check if any Sensor is available.</li></ul> | b | True if any sensor (webcam or als) could be found | | |
 | GetDpms | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | i | Current dpms state | |✔|
 | SetDpms | ssi | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li><li>New dpms state</li></ul> | i | New setted dpms state | ✔ | ✔ |
 | GetDpmsTimeouts | ss | <ul><li>env DISPLAY</li><li>env XAUTHORITY</li></ul> | iii | Dpms timeouts values |  | ✔ |

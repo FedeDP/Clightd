@@ -41,7 +41,7 @@ static int is_sensor_available(sensor_t *sensor, const char *interface,
     int present = 0;
     
     struct udev_device *dev = NULL;
-    get_udev_device(NULL, sensor->subsystem, sensor->udev_name, NULL, &dev);
+    get_udev_device(interface, sensor->subsystem, sensor->udev_name, ret_error, &dev);
     if (dev) {
         present = 1;
         if (device) {
@@ -58,11 +58,18 @@ int method_issensoravailable(sd_bus_message *m, void *userdata, sd_bus_error *re
     const enum sensors s = get_sensor_type(member);
     
     int present = 0;
-    if (s < SENSOR_NUM) {
-        present = is_sensor_available(&sensors[s], NULL, NULL, NULL);
+	const char *interface = NULL;
+	int r = sd_bus_message_read(m, "s", &interface);
+	if (r < 0) {
+		fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
+		return r;
+	}
+	
+	if (s < SENSOR_NUM) {
+        present = is_sensor_available(&sensors[s], interface, NULL, NULL);
     } else {
         for (int i = 0; i < SENSOR_NUM; i++) {
-            present += is_sensor_available(&sensors[i], NULL, NULL, NULL);
+			present += is_sensor_available(&sensors[i], interface, NULL, NULL);
         }
     }
     return sd_bus_reply_method_return(m, "b", present);

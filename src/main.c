@@ -70,15 +70,15 @@ static const sd_bus_vtable clightd_vtable[] = {
 #endif
     /* Webcam related methods */
     SD_BUS_METHOD("CaptureWebcam", "s", "d", method_capturesensor, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("IsWebcamAvailable", "", "b", method_issensoravailable, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("IsWebcamAvailable", "s", "b", method_issensoravailable, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_SIGNAL("WebcamChanged", "ss", 0),
     /* ALS related methods */
     SD_BUS_METHOD("CaptureAls", "s", "d", method_capturesensor, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("IsAlsAvailable", "", "b", method_issensoravailable, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("IsAlsAvailable", "s", "b", method_issensoravailable, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_SIGNAL("AlsChanged", "ss", 0),
     /* Sensors related methods -> ie: generic to use first matching sensor */
     SD_BUS_METHOD("CaptureSensor", "s", "d", method_capturesensor, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("IsSensorAvailable", "", "b", method_issensoravailable, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("IsSensorAvailable", "s", "b", method_issensoravailable, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_SIGNAL("SensorChanged", "ss", 0),
 #ifdef DPMS_PRESENT
     SD_BUS_METHOD("GetDpms", "ss", "i", method_getdpms, SD_BUS_VTABLE_UNPRIVILEGED),
