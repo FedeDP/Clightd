@@ -23,8 +23,8 @@ int sensor_get_monitor(const enum sensors s) {
 void sensor_receive_device(const enum sensors s, struct udev_device **dev) {
     struct udev_device *d = NULL;
     receive_udev_device(&d);
-    if (d && !sensors[s].udev_name || 
-        !strcmp(udev_device_get_sysattr_value(d, "name"), sensors[s].udev_name)) {
+    if (d && (!sensors[s].udev_name || 
+        !strcmp(udev_device_get_sysattr_value(d, "name"), sensors[s].udev_name))) {
          
         *dev = d;
     } else {
