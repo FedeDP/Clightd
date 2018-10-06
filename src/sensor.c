@@ -7,7 +7,7 @@ static int is_sensor_available(sensor_t *sensor, const char *interface,
 
 static sensor_t sensors[SENSOR_NUM];
 
-void register_new_sensor(const sensor_t *sensor) {
+void sensor_register_new(const sensor_t *sensor) {
     const enum sensors s = get_sensor_type(sensor->name);
     if (s < SENSOR_NUM) {
         sensors[s] = *sensor;
@@ -18,6 +18,18 @@ void register_new_sensor(const sensor_t *sensor) {
 
 int sensor_get_monitor(const enum sensors s) {
     return init_udev_monitor(sensors[s].subsystem);
+}
+
+void sensor_receive_device(const enum sensors s, struct udev_device **dev) {
+    struct udev_device *d = NULL;
+    receive_udev_device(&d);
+    if (d && !sensors[s].udev_name || 
+        !strcmp(udev_device_get_sysattr_value(d, "name"), sensors[s].udev_name)) {
+         
+        *dev = d;
+    } else {
+        *dev = NULL;
+    }
 }
 
 static enum sensors get_sensor_type(const char *str) {

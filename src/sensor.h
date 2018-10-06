@@ -24,10 +24,11 @@ typedef struct _sensor {
     static int capture(sd_bus_message *m, void *userdata, sd_bus_error *ret_error); \
     static void _ctor_ register_sensor(void) { \
         const sensor_t self = { type, subsystem, udev_name, capture }; \
-        register_new_sensor(&self); \
+        sensor_register_new(&self); \
     }
     
-void register_new_sensor(const sensor_t *sensor);
+void sensor_register_new(const sensor_t *sensor);
 int sensor_get_monitor(const enum sensors s);
+void sensor_receive_device(const enum sensors s, struct udev_device **dev);
 int method_issensoravailable(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);

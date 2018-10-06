@@ -198,7 +198,7 @@ static void main_poll(void) {
                 case WEBCAM_MON:
                 case ALS_MON: {
                     struct udev_device *dev = NULL;
-                    receive_udev_device(&dev);
+                    sensor_receive_device(i == WEBCAM_MON ? WEBCAM : ALS, &dev);
                     if (dev) {
                         const char *signal = i == WEBCAM_MON ? "WebcamChanged" : "AlsChanged";
                         sd_bus_emit_signal(bus, object_path, bus_interface, signal, "ss", udev_device_get_devnode(dev), udev_device_get_action(dev));
