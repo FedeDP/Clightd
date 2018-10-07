@@ -3,7 +3,7 @@
 - [x] Use ALS_SUBSYSTEM and CAMERA_SUBSYSTEM where needed (put them in their headers)
 - [x] Add a common interface for both camera and als (to be used by clight)
 - [x] For Als, properly check that dev->name == "acpi-als" as iio subsystem covers much more sensors
-- [ ] Move to gh wiki pages
+- [x] Move to gh wiki pages
 - [x] Rename methods with camelcase
 - [x] Fix for CaptureSensor method
 - [x] Change directory structure -> sensors/{als.c,camera.c}, utils/{udev.c,polkit.c}, bus/{backlight,dpms,gamma,idle}. Rename clightd.c in main.c
