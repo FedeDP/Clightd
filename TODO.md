@@ -12,6 +12,22 @@
 - [x] Drop setBrightness and getBrightness (useless methods) and rename setAll and getAll -> drop them from org.clightd.backlight policy too!
 - [x] Document new API
 - [x] IsXAvailable should take a "s" (interface) parameter
+- [ ] IsXAvailable and CaptureX to return name of used device too
+- [ ] unify sensor capture return code for all sensors (return double value)
+
+## 3.1
+- [ ] add support for GetSensorData android app
+- [ ] it will come as bash scripts
+- [ ] add a new Sensor with type "SCRIPT"
+- [ ] Scripts will be parsed and used by priority -> "99-SensorSteam", "60-x" etc etc
+- [ ] "CaptureScript" method
+- [ ] Bash scripts will expose a "isAvailable" and a "capture" functions
+- [ ] bash functions will write to stdout; called by popen()
+- [ ] android apps need screen to be turned on, as otherwise Doze will kill them...state it in the gh wiki
+- [ ] ScriptAdded bus signal when a new script is added. Inotify on scripts folder!
+- [ ] devname = "Script" or devname = "GSD" (to be used by clight conf if user is willing to force a script)
+- [ ] force script timeout from clightd (eg popen("timeout 1 MYSCRIPT") and check if it returns 124 (timed out)
+
 
 ## Ideas
 - [ ] Add gamma (and dpms + idle) support on wayland (wlroots)
