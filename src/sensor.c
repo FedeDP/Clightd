@@ -3,7 +3,7 @@
 
 static enum sensors get_sensor_type(const char *str);
 static int is_sensor_available(sensor_t *sensor, const char *interface, 
-                            sd_bus_error **ret_error, struct udev_device **device);
+                                struct udev_device **device);
 
 static sensor_t sensors[SENSOR_NUM];
 
@@ -49,11 +49,11 @@ static enum sensors get_sensor_type(const char *str) {
 }
 
 static int is_sensor_available(sensor_t *sensor, const char *interface, 
-                            sd_bus_error **ret_error, struct udev_device **device) {
+                                struct udev_device **device) {
     int present = 0;
     
     struct udev_device *dev = NULL;
-    get_udev_device(interface, sensor->subsystem, sensor->udev_name, ret_error, &dev);
+    get_udev_device(interface, sensor->subsystem, sensor->udev_name, NULL, &dev);
     if (dev) {
         present = 1;
         if (device) {
@@ -77,14 +77,22 @@ int method_issensoravailable(sd_bus_message *m, void *userdata, sd_bus_error *re
         return r;
     }
 
+    struct udev_device *dev = NULL;
     if (s < SENSOR_NUM) {
-        present = is_sensor_available(&sensors[s], interface, NULL, NULL);
+        present = is_sensor_available(&sensors[s], interface, &dev);
     } else {
-        for (int i = 0; i < SENSOR_NUM; i++) {
-            present += is_sensor_available(&sensors[i], interface, NULL, NULL);
+        for (int i = 0; i < SENSOR_NUM && !present; i++) {
+            present = is_sensor_available(&sensors[i], interface, &dev);
         }
     }
-    return sd_bus_reply_method_return(m, "b", present);
+    
+    if (dev) {
+        r = sd_bus_reply_method_return(m, "sb", udev_device_get_devnode(dev), present);
+        udev_device_unref(dev);
+    } else {
+        r = sd_bus_reply_method_return(m, "sb", interface, present);
+    }
+    return r;
 }
 
 int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
@@ -101,21 +109,32 @@ int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error *ret_er
     }
     
     struct udev_device *dev = NULL;
+    double pct = -1.0;
     const char *member = sd_bus_message_get_member(m);
     enum sensors s = get_sensor_type(member);
+    
+    // default value
+    r = -ENODEV;
     if (s != SENSOR_NUM) {
-        if (is_sensor_available(&sensors[s], interface, &ret_error, &dev)) {
+        if (is_sensor_available(&sensors[s], interface, &dev)) {
             /* Bus Interface required sensor-specific method */
-            r = sensors[s].capture_method(m, dev, ret_error);
+            r = sensors[s].capture_method(dev, &pct);
         }
     } else {
         /* For CaptureSensor generic method, call capture_method on first available sensor */
         for (s = 0; s < SENSOR_NUM; s++) {
-            if (is_sensor_available(&sensors[s], interface, &ret_error, &dev)) {
-                r = sensors[s].capture_method(m, dev, ret_error);
+            if (is_sensor_available(&sensors[s], interface, &dev)) {
+                r = sensors[s].capture_method(dev, &pct);
                 break;
             }
         }
+    }
+    
+    /* No sensors available */
+    if (r < 0) {
+        sd_bus_error_set_errno(ret_error, -r);
+    } else {
+        r = sd_bus_reply_method_return(m, "sd", udev_device_get_devnode(dev), pct);
     }
     
     /* Properly free dev if needed */
@@ -123,9 +142,5 @@ int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error *ret_er
         udev_device_unref(dev);
     }
     
-    /* No sensors available */
-    if (sd_bus_error_is_set(ret_error)) {
-        return -sd_bus_error_get_errno(ret_error);
-    }
     return r;
 }

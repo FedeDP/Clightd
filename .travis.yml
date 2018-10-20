@@ -8,6 +8,9 @@ notifications:
 
 language: c
 
+services:
+  - docker
+
 compiler:
   - gcc
   - clang

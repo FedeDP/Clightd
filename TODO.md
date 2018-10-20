@@ -12,8 +12,9 @@
 - [x] Drop setBrightness and getBrightness (useless methods) and rename setAll and getAll -> drop them from org.clightd.backlight policy too!
 - [x] Document new API
 - [x] IsXAvailable should take a "s" (interface) parameter
-- [ ] IsXAvailable and CaptureX to return name of used device too
-- [ ] unify sensor capture return code for all sensors (return double value)
+- [x] IsXAvailable and CaptureX to return name of used device too
+- [x] unify sensor capture return code for all sensors (return double value)
+- [x] Drop webcam support for multiple frames capture
 
 ## 3.1
 - [ ] add support for GetSensorData android app
