@@ -17,6 +17,7 @@ compiler:
 
 arch:
     packages:
+        - clang
         - systemd
         - linux-api-headers
         - libx11
