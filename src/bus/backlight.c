@@ -141,7 +141,7 @@ int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_er
     const char *backlight_interface = NULL;
     const double target_pct, smooth_step;
     const int is_smooth;
-    const unsigned int smooth_wait = 0;
+    const unsigned int smooth_wait;
     
     int r = read_brightness_params(m, &target_pct, &is_smooth, &smooth_step, &smooth_wait);
     if (!r) {
