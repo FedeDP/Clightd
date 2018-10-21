@@ -75,8 +75,8 @@ int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) 
         return r;
     }
     
-    const int is_smooth = 0;
-    const unsigned int smooth_step = 0, smooth_wait = 0;
+    const int is_smooth;
+    const unsigned int smooth_step, smooth_wait;
     
     sd_bus_message_enter_container(m, SD_BUS_TYPE_STRUCT, "buu");
     sd_bus_message_read(m, "buu", &is_smooth, &smooth_step, &smooth_wait);
