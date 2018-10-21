@@ -16,6 +16,7 @@
 - [x] unify sensor capture return code for all sensors (return double value)
 - [x] Drop webcam support for multiple frames capture
 - [x] Update api doc
+- [ ] Add back support for multiple sensor captures (useful for webcam)?
 
 ## 3.1
 - [ ] add support for GetSensorData android app
