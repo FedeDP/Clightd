@@ -17,11 +17,11 @@ typedef struct _sensor {
     const char *name;       // actually sensor name -> note that exposed bus methods should have "name" in them
     const char *subsystem;  // udev subsystem
     const char *udev_name;  // required udev name (used by als sensor that REQUIRES "acpi-als" name, as "iio" subsystem alone is not enough to identify it)
-    int (*capture_method)(struct udev_device *userdata, double *pct);
+    int (*capture_method)(struct udev_device *userdata, double *pct, const int num_captures);
 } sensor_t;
 
 #define SENSOR(type, subsystem, udev_name) \
-    static int capture(struct udev_device *dev, double *pct); \
+    static int capture(struct udev_device *dev, double *pct, const int num_captures); \
     static void _ctor_ register_sensor(void) { \
         const sensor_t self = { type, subsystem, udev_name, capture }; \
         sensor_register_new(&self); \

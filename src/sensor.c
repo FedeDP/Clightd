@@ -102,45 +102,61 @@ int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error *ret_er
     }
     
     const char *interface = NULL;
-    int r = sd_bus_message_read(m, "s", &interface);
+    const int num_captures;
+    int r = sd_bus_message_read(m, "si", &interface, &num_captures);
     if (r < 0) {
         fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
         return r;
     }
     
-    struct udev_device *dev = NULL;
-    double pct = -1.0;
-    const char *member = sd_bus_message_get_member(m);
-    enum sensors s = get_sensor_type(member);
+    if (num_captures <= 0 || num_captures > 20) {
+        sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Number of captures should be between 1 and 20.");
+        return -EINVAL;
+    }
     
-    // default value
-    r = -ENODEV;
-    if (s != SENSOR_NUM) {
-        if (is_sensor_available(&sensors[s], interface, &dev)) {
-            /* Bus Interface required sensor-specific method */
-            r = sensors[s].capture_method(dev, &pct);
-        }
-    } else {
-        /* For CaptureSensor generic method, call capture_method on first available sensor */
-        for (s = 0; s < SENSOR_NUM; s++) {
+    struct udev_device *dev = NULL;
+    double *pct = calloc(num_captures, sizeof(double));
+    if (pct) {
+        const char *member = sd_bus_message_get_member(m);
+        enum sensors s = get_sensor_type(member);
+    
+        // default value
+        r = -ENODEV;
+        if (s != SENSOR_NUM) {
             if (is_sensor_available(&sensors[s], interface, &dev)) {
-                r = sensors[s].capture_method(dev, &pct);
-                break;
+                /* Bus Interface required sensor-specific method */
+                r = sensors[s].capture_method(dev, pct, num_captures);
+            }
+        } else {
+            /* For CaptureSensor generic method, call capture_method on first available sensor */
+            for (s = 0; s < SENSOR_NUM; s++) {
+                if (is_sensor_available(&sensors[s], interface, &dev)) {
+                    r = sensors[s].capture_method(dev, pct, num_captures);
+                    break;
+                }
             }
         }
+    } else {
+        r = -ENOMEM;
     }
     
     /* No sensors available */
     if (r < 0) {
         sd_bus_error_set_errno(ret_error, -r);
     } else {
-        r = sd_bus_reply_method_return(m, "sd", udev_device_get_devnode(dev), pct);
+        /* Reply with array response */
+        sd_bus_message *reply = NULL;
+        sd_bus_message_new_method_return(m, &reply);
+        sd_bus_message_append(reply, "s", udev_device_get_devnode(dev));
+        sd_bus_message_append_array(reply, 'd', pct, num_captures * sizeof(double));
+        r = sd_bus_send(NULL, reply, NULL);
+        sd_bus_message_unref(reply);
     }
     
     /* Properly free dev if needed */
     if (dev) {
         udev_device_unref(dev);
     }
-    
+    free(pct);
     return r;
 }

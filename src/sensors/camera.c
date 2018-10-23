@@ -5,17 +5,18 @@
 #include <stdint.h>
 #include <sensor.h>
 
+#define CAMERA_ILL_MAX          255
 #define CAMERA_SUBSYSTEM        "video4linux"
 
-static void recv_frame(const char *interface, int *err);
+static int recv_frames(const char *interface);
 static void open_device(const char *interface);
 static void init(void);
 static void init_mmap(void);
 static int xioctl(int request, void *arg);
 static void start_stream(void);
 static void stop_stream(void);
-static void capture_frame(void);
-static double compute_brightness(const unsigned int size);
+static void capture_frame(int i);
+static double compute_brightness(const int idx, const unsigned int size);
 static void free_all();
 
 struct buffer {
@@ -24,9 +25,9 @@ struct buffer {
 };
 
 struct state {
-    int quit, width, height, device_fd;
-    double brightness;
-    struct buffer buf;
+    int quit, width, height, device_fd, num_captures;
+    double *brightness;
+    struct buffer *buffers;
 };
 
 static struct state state;
@@ -36,21 +37,15 @@ SENSOR("webcam", CAMERA_SUBSYSTEM, NULL);
 /*
  * Frame capturing method
  */
-static int capture(struct udev_device *dev, double *pct) {
-    int r = 0;
-    /* 
-     * Only single frame capturing is supported now for the bus api.
-     * Leaving num_captures parameter here for future reference 
-     */
-    recv_frame(udev_device_get_devnode(dev), &r);
-    if (!r) {
-        *pct = state.brightness;
-    }
+static int capture(struct udev_device *dev, double *pct, const int num_captures) {
+    state.num_captures = num_captures;
+    state.brightness = pct;
+    int r = recv_frames(udev_device_get_devnode(dev));
     free_all();
     return -r;
 }
 
-static void recv_frame(const char *interface, int *err) {
+static int recv_frames(const char *interface) {
     open_device(interface);
     if (!state.quit) {
         init();
@@ -62,19 +57,17 @@ static void recv_frame(const char *interface, int *err) {
         if (state.quit) {
             goto end;
         }
-
         start_stream();
         if (state.quit) {
             goto end;
         }
-        capture_frame();
+        for (int i = 0; i < state.num_captures && !state.quit; i++) {
+            capture_frame(i);
+        }
         stop_stream();
     }
-    
 end:
-    if (state.quit) {
-        *err = state.quit;
-    }
+    return state.quit;
 }
 
 static void open_device(const char *interface) {
@@ -154,7 +147,7 @@ static void init(void) {
 
 static void init_mmap(void) {
     struct v4l2_requestbuffers req = {0};
-    req.count = 1;
+    req.count = state.num_captures;
     req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     req.memory = V4L2_MEMORY_MMAP;
     
@@ -163,25 +156,35 @@ static void init_mmap(void) {
         return;
     }
     
-    struct v4l2_buffer buf = {0};
-    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    buf.memory = V4L2_MEMORY_MMAP;
-    if(-1 == xioctl(VIDIOC_QUERYBUF, &buf)) {
-        perror("Querying Buffer");
+    state.buffers = calloc(req.count, sizeof(struct buffer));
+    if (!state.buffers) {
+        state.quit = 1;
+        perror("State->buffers");
         return;
     }
     
-    state.buf.start = mmap(NULL /* start anywhere */,
-                            buf.length,
-                            PROT_READ | PROT_WRITE /* required */,
-                            MAP_SHARED /* recommended */,
-                            state.device_fd, buf.m.offset);
+    for (int i = 0; i < req.count; i++) {
+        struct v4l2_buffer buf = {0};
+        buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        buf.memory = V4L2_MEMORY_MMAP;
+        if(-1 == xioctl(VIDIOC_QUERYBUF, &buf)) {
+            perror("Querying Buffer");
+            return;
+        }
         
-    if (MAP_FAILED == state.buf.start) {
-        perror("mmap");
-        state.quit = 1;
+        state.buffers[i].start = mmap(NULL /* start anywhere */,
+                                      buf.length,
+                                      PROT_READ | PROT_WRITE /* required */,
+                                      MAP_SHARED /* recommended */,
+                                      state.device_fd, buf.m.offset);
+        
+        if (MAP_FAILED == state.buffers[i].start) {
+            perror("mmap");
+            state.quit = 1;
+            break;
+        }
+        state.buffers[i].length = buf.length;
     }
-    state.buf.length = buf.length;
 }
 
 static int xioctl(int request, void *arg) {
@@ -198,14 +201,16 @@ static int xioctl(int request, void *arg) {
 }
 
 static void start_stream(void) {
-    struct v4l2_buffer buf = {0};
+    for (int i = 0; i < state.num_captures; i++) {
+        struct v4l2_buffer buf = {0};
         
-    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    buf.memory = V4L2_MEMORY_MMAP;
-    buf.index = 0;
+        buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        buf.memory = V4L2_MEMORY_MMAP;
+        buf.index = i;
         
-    if (-1 == xioctl(VIDIOC_QBUF, &buf)) {
-        perror("VIDIOC_QBUF");
+        if (-1 == xioctl(VIDIOC_QBUF, &buf)) {
+            perror("VIDIOC_QBUF");
+        }
     }
     
     enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -221,7 +226,7 @@ static void stop_stream(void) {
     }
 }
 
-static void capture_frame(void) {
+static void capture_frame(int i) {
     struct v4l2_buffer buf = {0};
     
     buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -233,21 +238,34 @@ static void capture_frame(void) {
         return;
     }
     
-    state.brightness = compute_brightness(buf.bytesused);
+    state.brightness[i] = compute_brightness(i, buf.bytesused) / CAMERA_ILL_MAX;
+    
+    // query a buffer from camera if needed
+    if (i < state.num_captures - 1) {
+        if(-1 == xioctl(VIDIOC_QBUF, &buf)) {
+            perror("Query Buffer");
+            return stop_stream();
+        }
+    }
 }
 
-static double compute_brightness(const unsigned int size) {
+static double compute_brightness(const int idx, const unsigned int size) {
     double brightness = 0.0;
     
     for (int i = 0; i < size; i += 2) {
-        brightness += (unsigned int) (state.buf.start[i]);
+        brightness += (unsigned int) (state.buffers[idx].start[i]);
     }
     brightness /= state.width * state.height;
     return brightness;
 }
 
 static void free_all(void) {
-    munmap(state.buf.start, state.buf.length);
+    if (state.buffers) {
+        for (int i = 0; i < state.num_captures; i++) {
+            munmap(state.buffers[i].start, state.buffers[i].length);
+        }
+        free(state.buffers);
+    }
     if (state.device_fd != -1) {
         close(state.device_fd);
     }
