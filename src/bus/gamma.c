@@ -102,12 +102,12 @@ int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) 
                 sc.dpy = dpy;
                 sc.current_temp = get_gamma(sc.dpy);
                 
-                printf("Gamma value target set (smooth): %d\n", temp);
+                printf("Gamma value target set (smooth): %d.\n", temp);
                 
                 gamma_smooth_cb(); // xauthority cookie will be dropped in smooth cb
             } else {
                 set_gamma(temp, dpy);
-                printf("Gamma value set: %d\n", temp);
+                printf("Gamma value set: %d.\n", temp);
             
                 XCloseDisplay(dpy);
                 /* Drop xauthority cookie */
@@ -162,7 +162,7 @@ int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) 
         return -error;
     }
     
-    printf("Current gamma value: %d\n", temp);
+    printf("Current gamma value: %d.\n", temp);
     return sd_bus_reply_method_return(m, "i", temp);
 }
 

@@ -151,6 +151,8 @@ int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error *ret_er
         sd_bus_message_append_array(reply, 'd', pct, num_captures * sizeof(double));
         r = sd_bus_send(NULL, reply, NULL);
         sd_bus_message_unref(reply);
+        
+        printf("%d frames captured by %s.\n", num_captures, udev_device_get_devnode(dev));
     }
     
     /* Properly free dev if needed */
