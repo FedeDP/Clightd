@@ -17,15 +17,15 @@ void sensor_register_new(const sensor_t *sensor) {
 }
 
 int sensor_get_monitor(const enum sensors s) {
-    return init_udev_monitor(sensors[s].subsystem);
+    return init_udev_monitor(sensors[s].subsystem, &sensors[s].mon_handler);
 }
 
 void sensor_receive_device(const enum sensors s, struct udev_device **dev) {
     struct udev_device *d = NULL;
-    receive_udev_device(&d);
+    receive_udev_device(&d, sensors[s].mon_handler);
     if (d && (!sensors[s].udev_name || 
         !strcmp(udev_device_get_sysattr_value(d, "name"), sensors[s].udev_name))) {
-         
+
         *dev = d;
     } else {
         *dev = NULL;
@@ -161,4 +161,8 @@ int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error *ret_er
     }
     free(pct);
     return r;
+}
+
+void sensor_destroy(void) {
+    destroy_monitors();
 }

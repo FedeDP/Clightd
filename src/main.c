@@ -264,6 +264,7 @@ finish:
     if (bus) {
         sd_bus_flush_close_unref(bus);
     }
+    sensor_destroy();
     udev_unref(udev);
     close_mainp();
     return quit == LEAVE_W_ERR ? EXIT_FAILURE : EXIT_SUCCESS;
