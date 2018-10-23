@@ -20,6 +20,9 @@
 - [x] Properly return value between 0 and 1.0 in CaptureWebcam
 - [x] Updated api Doc
 - [x] Fix udev monitors interface
+- [x] Drop root privileges and gain them when needed
+- [x] Leave brightness_smooth_cb if no internal backlight is present
+- [x] Udev monitors must be unref'd!
 
 ## 3.1
 - [ ] add support for GetSensorData android app

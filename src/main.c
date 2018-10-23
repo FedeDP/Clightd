@@ -250,7 +250,11 @@ int main(void) {
         fprintf(stderr, "Failed to acquire service name: %s\n", strerror(-r));
         goto finish;
     }
-    
+
+    /* Drop root privileges */
+    drop_priv();
+
+    /* Populate our pollfd array */
     set_pollfd();
    /*
     * Need to parse initial bus messages 
@@ -264,8 +268,8 @@ finish:
     if (bus) {
         sd_bus_flush_close_unref(bus);
     }
+    close_mainp();
     sensor_destroy();
     udev_unref(udev);
-    close_mainp();
     return quit == LEAVE_W_ERR ? EXIT_FAILURE : EXIT_SUCCESS;
 }

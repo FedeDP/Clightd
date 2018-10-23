@@ -164,5 +164,5 @@ int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error *ret_er
 }
 
 void sensor_destroy(void) {
-    destroy_monitors();
+    destroy_udev_monitors();
 }

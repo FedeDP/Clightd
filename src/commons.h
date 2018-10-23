@@ -6,5 +6,6 @@
 #include <libudev.h>
 #include <unistd.h>
 #include <sys/timerfd.h>
+#include <privilege.h>
 
 extern sd_bus *bus;

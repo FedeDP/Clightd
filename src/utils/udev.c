@@ -26,7 +26,10 @@ void receive_udev_device(struct udev_device **dev, int handler) {
     }
 }
 
-void destroy_monitors(void) {
+void destroy_udev_monitors(void) {
+    for (int i = 0; i < num_monitor; i++) {
+        udev_monitor_unref(mons[i]);
+    }
     free(mons);
     num_monitor = 0;
 }

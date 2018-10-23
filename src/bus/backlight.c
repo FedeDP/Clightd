@@ -1,6 +1,7 @@
 #include <backlight.h>
 #include <polkit.h>
 #include <udev.h>
+#include <privilege.h>
 
 #ifdef USE_DDC
 
@@ -81,7 +82,7 @@ typedef struct {
 } smooth_change;
 
 static void reset_backlight_struct(double target_pct, int is_smooth, double smooth_step, unsigned int smooth_wait, int all);
-static void add_backlight_sn(const char *sn);
+static void add_backlight_sn(const char *sn, int internal);
 static int read_brightness_params(sd_bus_message *m, const double *target_pct, const int *is_smooth, 
                                   const double *smooth_step, const unsigned int *smooth_wait);
 static int set_internal_backlight(int idx);
@@ -107,13 +108,27 @@ static void reset_backlight_struct(double target_pct, int is_smooth, double smoo
     sc.num_dev = 0;
 }
 
-static void add_backlight_sn(const char *sn) {
-    sc.d = realloc(sc.d, sizeof(device) * ++sc.num_dev);
-    sc.d[sc.num_dev - 1].reached_target = 0;
-    if (sn) {
-        sc.d[sc.num_dev - 1].sn = strdup(sn);
-    } else {
-        sc.d[sc.num_dev - 1].sn = NULL;
+static void add_backlight_sn(const char *sn, int internal) {
+    int ok = !internal;
+    
+    /* Properly check internal interface exists before adding it */
+    if (internal) {
+        struct udev_device *dev = NULL;
+        get_udev_device(sn, "backlight", NULL, NULL, &dev);
+        if (dev) {
+            ok = 1;
+            udev_device_unref(dev);
+        }
+    }
+    
+    if (ok) {
+        sc.d = realloc(sc.d, sizeof(device) * ++sc.num_dev);
+        sc.d[sc.num_dev - 1].reached_target = 0;
+        if (sn) {
+            sc.d[sc.num_dev - 1].sn = strdup(sn);
+        } else {
+            sc.d[sc.num_dev - 1].sn = NULL;
+        }
     }
 }
 
@@ -148,10 +163,13 @@ int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_er
         r = sd_bus_message_read(m, "s", &backlight_interface);
     
         if (r >= 0) {
+            /* We need root access here */
+            gain_priv();
+            
             reset_backlight_struct(target_pct, is_smooth, smooth_step, smooth_wait, 1);
-            add_backlight_sn(backlight_interface);
+            add_backlight_sn(backlight_interface, 1);
             DDCUTIL_LOOP({
-                add_backlight_sn(dinfo->sn);
+                add_backlight_sn(dinfo->sn, 0);
             });
             int ok = brightness_smooth_cb();
             // Returns true if no errors happened
@@ -187,6 +205,9 @@ int brightness_smooth_cb(void) {
         timerValue.it_value.tv_sec = 0;
         timerValue.it_value.tv_nsec = 1000 * 1000 * sc.smooth_wait; // ms
     } else {
+        /* We can now drop root access */
+        drop_priv();
+        
         /* Free all resources */
         reset_backlight_struct(0, 0, 0, 0, 0);
     }
