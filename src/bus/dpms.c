@@ -1,7 +1,7 @@
 #ifdef DPMS_PRESENT
 
-#include "../inc/dpms.h"
-#include "../inc/polkit.h"
+#include <dpms.h>
+#include <polkit.h>
 #include <X11/Xlib.h>
 #include <X11/extensions/dpms.h>
 
@@ -38,7 +38,7 @@ int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     if (dpms_state == DPMS_DISABLED) {
         printf("Dpms is currently disabled.\n");
     } else {
-        printf("Current dpms state: %d\n", dpms_state);
+        printf("Current dpms state: %d.\n", dpms_state);
     }
     return sd_bus_reply_method_return(m, "i", dpms_state);
 }
@@ -72,7 +72,7 @@ int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     }
     
     if (level != DPMS_DISABLED) {
-        printf("New dpms state: %d\n", level);
+        printf("New dpms state: %d.\n", level);
     } else {
         printf("Dpms disabled.\n");
     }

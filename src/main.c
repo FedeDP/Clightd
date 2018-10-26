@@ -21,12 +21,12 @@
  *
  * END_COMMON_COPYRIGHT_HEADER */
 
-#include "../inc/camera.h"
-#include "../inc/gamma.h"
-#include "../inc/dpms.h"
-#include "../inc/backlight.h"
-#include "../inc/idle.h"
-#include "../inc/udev.h"
+#include <gamma.h>
+#include <dpms.h>
+#include <backlight.h>
+#include <idle.h>
+#include <udev.h>
+#include <sensor.h>
 #include <sys/signalfd.h>
 #include <poll.h>
 #include <signal.h>
@@ -46,9 +46,8 @@ enum poll_idx {
 #ifdef GAMMA_PRESENT
     GAMMA_SMOOTH,
 #endif
-#ifndef DISABLE_FRAME_CAPTURES
-    UDEV_MON,
-#endif
+    WEBCAM_MON,
+    ALS_MON,
     POLL_SIZE };
 enum quit_codes { LEAVE_W_ERR = -1, SIGNAL_RCV = 1 };
 
@@ -60,33 +59,35 @@ static int quit;
 sd_bus *bus;
 struct udev *udev;
 
-/**
- * Bus spec: https://dbus.freedesktop.org/doc/dbus-specification.html
- */
 static const sd_bus_vtable clightd_vtable[] = {
     SD_BUS_VTABLE_START(0),
-    SD_BUS_PROPERTY("version", "s", get_version, 0, SD_BUS_VTABLE_PROPERTY_CONST),
-    SD_BUS_METHOD("setbrightness", "d(bdu)as", "b", method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("setallbrightness", "d(bdu)s", "b", method_setallbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("getbrightness", "as", "a(sd)", method_getbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("getallbrightness", "s", "a(sd)", method_getallbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_PROPERTY("Version", "s", get_version, 0, SD_BUS_VTABLE_PROPERTY_CONST),
+    SD_BUS_METHOD("SetBrightness", "d(bdu)s", "b", method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("GetBrightness", "s", "a(sd)", method_getbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
 #ifdef GAMMA_PRESENT
-    SD_BUS_METHOD("setgamma", "ssi(buu)", "b", method_setgamma, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("getgamma", "ss", "i", method_getgamma, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("SetGamma", "ssi(buu)", "b", method_setgamma, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("GetGamma", "ss", "i", method_getgamma, SD_BUS_VTABLE_UNPRIVILEGED),
 #endif
-#ifndef DISABLE_FRAME_CAPTURES
-    SD_BUS_METHOD("captureframes", "si", "ad", method_captureframes, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("iswebcamavailable", "", "b", method_iswebcamavailable, SD_BUS_VTABLE_UNPRIVILEGED),
+    /* Webcam related methods */
+    SD_BUS_METHOD("CaptureWebcam", "si", "sad", method_capturesensor, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("IsWebcamAvailable", "s", "sb", method_issensoravailable, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_SIGNAL("WebcamChanged", "ss", 0),
-#endif
+    /* ALS related methods */
+    SD_BUS_METHOD("CaptureAls", "si", "sad", method_capturesensor, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("IsAlsAvailable", "s", "sb", method_issensoravailable, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_SIGNAL("AlsChanged", "ss", 0),
+    /* Sensors related methods -> ie: generic to use first matching sensor */
+    SD_BUS_METHOD("CaptureSensor", "si", "sad", method_capturesensor, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("IsSensorAvailable", "s", "sb", method_issensoravailable, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_SIGNAL("SensorChanged", "ss", 0),
 #ifdef DPMS_PRESENT
-    SD_BUS_METHOD("getdpms", "ss", "i", method_getdpms, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("setdpms", "ssi", "i", method_setdpms, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("getdpms_timeouts", "ss", "iii", method_getdpms_timeouts, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("setdpms_timeouts", "ssiii", "iii", method_setdpms_timeouts, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("GetDpms", "ss", "i", method_getdpms, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("SetDpms", "ssi", "i", method_setdpms, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("GetDpmsTimeouts", "ss", "iii", method_getdpms_timeouts, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("SetDpmsTimeouts", "ssiii", "iii", method_setdpms_timeouts, SD_BUS_VTABLE_UNPRIVILEGED),
 #endif
 #ifdef IDLE_PRESENT
-    SD_BUS_METHOD("getidletime", "ss", "i", method_get_idle_time, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("GetIdleTime", "ss", "i", method_get_idle_time, SD_BUS_VTABLE_UNPRIVILEGED),
 #endif
     SD_BUS_VTABLE_END
 };
@@ -155,12 +156,14 @@ static void set_pollfd(void) {
     };
     set_gamma_smooth_fd(gamma_smooth_fd);
 #endif
-#ifndef DISABLE_FRAME_CAPTURES
-    main_p[UDEV_MON] = (struct pollfd) {
-        .fd = init_udev_monitor("video4linux"),
+    main_p[WEBCAM_MON] = (struct pollfd) {
+        .fd = sensor_get_monitor(WEBCAM),
         .events = POLLIN,
     };
-#endif
+    main_p[ALS_MON] = (struct pollfd) {
+        .fd = sensor_get_monitor(ALS),
+        .events = POLLIN,
+    };
 }
 
 /*
@@ -192,17 +195,19 @@ static void main_poll(void) {
                     gamma_smooth_cb();
                     break;
 #endif
-#ifndef DISABLE_FRAME_CAPTURES
-                case UDEV_MON: {
+                case WEBCAM_MON:
+                case ALS_MON: {
                     struct udev_device *dev = NULL;
-                    receive_udev_device(&dev);
+                    sensor_receive_device(i == WEBCAM_MON ? WEBCAM : ALS, &dev);
                     if (dev) {
-                        sd_bus_emit_signal(bus, object_path, bus_interface, "WebcamChanged", "ss", udev_device_get_devnode(dev), udev_device_get_action(dev));
+                        const char *signal = i == WEBCAM_MON ? "WebcamChanged" : "AlsChanged";
+                        sd_bus_emit_signal(bus, object_path, bus_interface, signal, "ss", udev_device_get_devnode(dev), udev_device_get_action(dev));
+                        /* SensorChanged is emitted for every sensor */
+                        sd_bus_emit_signal(bus, object_path, bus_interface, "SensorChanged", "ss", udev_device_get_devnode(dev), udev_device_get_action(dev));
                         udev_device_unref(dev);
                     }
                     break;
                 }
-#endif
                 }
                 r--;
             }
@@ -245,7 +250,11 @@ int main(void) {
         fprintf(stderr, "Failed to acquire service name: %s\n", strerror(-r));
         goto finish;
     }
-    
+
+    /* Drop root privileges */
+    drop_priv();
+
+    /* Populate our pollfd array */
     set_pollfd();
    /*
     * Need to parse initial bus messages 
@@ -259,7 +268,8 @@ finish:
     if (bus) {
         sd_bus_flush_close_unref(bus);
     }
-    udev_unref(udev);
     close_mainp();
+    sensor_destroy();
+    udev_unref(udev);
     return quit == LEAVE_W_ERR ? EXIT_FAILURE : EXIT_SUCCESS;
 }

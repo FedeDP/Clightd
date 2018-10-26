@@ -1,15 +1,14 @@
-#ifndef DISABLE_FRAME_CAPTURES
-
-#include "../inc/camera.h"
-#include "../inc/polkit.h"
-#include "../inc/udev.h"
 #include <sys/mman.h>
 #include <linux/videodev2.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <stdint.h>
+#include <sensor.h>
 
-static void capture_frames(const char *interface, int num_captures, int *err);
+#define CAMERA_ILL_MAX          255
+#define CAMERA_SUBSYSTEM        "video4linux"
+
+static int recv_frames(const char *interface);
 static void open_device(const char *interface);
 static void init(void);
 static void init_mmap(void);
@@ -27,80 +26,26 @@ struct buffer {
 
 struct state {
     int quit, width, height, device_fd, num_captures;
-    double *brightness_values;
+    double *brightness;
     struct buffer *buffers;
 };
 
 static struct state state;
 
-int method_iswebcamavailable(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    struct udev_device *dev = NULL;
-    int present = 0;
-    
-    get_udev_device(NULL, "video4linux", NULL, &dev);
-    if (dev) {
-        printf("Camera device found.\n");
-        present = 1;
-        udev_device_unref(dev);
-    }
-    return sd_bus_reply_method_return(m, "b", present);
-}
+SENSOR("webcam", CAMERA_SUBSYSTEM, NULL);
 
 /*
  * Frame capturing method
  */
-int method_captureframes(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    sd_bus_message *reply = NULL;
-    int r, error = 0, num_captures;
-    struct udev_device *dev = NULL;
-    const char *video_interface;
-    
-    if (!check_authorization(m)) {
-        sd_bus_error_set_errno(ret_error, EPERM);
-        return -EPERM;
-    }
-    
-    /* Read the parameters */
-    r = sd_bus_message_read(m, "si", &video_interface, &num_captures);
-    if (r < 0) {
-        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
-        return r;
-    }
-    
-    if (num_captures <= 0 || num_captures > 20) {
-        sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Number of captures should be between 1 and 20.");
-        return -EINVAL;
-    }
-    
-    // if no video device is specified, try to get first matching device
-    get_udev_device(video_interface, "video4linux", &ret_error, &dev);
-    if (sd_bus_error_is_set(ret_error)) {
-        return -sd_bus_error_get_errno(ret_error);
-    }
-    
-    capture_frames(udev_device_get_devnode(dev), num_captures, &error);
-    if (error) {
-        sd_bus_error_set_errno(ret_error, error);
-        r = -error;
-        goto end;
-    }
-
-    printf("%d frames captured by %s.\n", num_captures, udev_device_get_sysname(dev));
-    
-    /* Reply with array response */
-    sd_bus_message_new_method_return(m, &reply);
-    sd_bus_message_append_array(reply, 'd', state.brightness_values, num_captures * sizeof(double));
-    r = sd_bus_send(NULL, reply, NULL);
-    sd_bus_message_unref(reply);
-    
-end:
-    udev_device_unref(dev);
+static int capture(struct udev_device *dev, double *pct, const int num_captures) {
+    state.num_captures = num_captures;
+    state.brightness = pct;
+    int r = recv_frames(udev_device_get_devnode(dev));
     free_all();
-    return r;
+    return -r;
 }
 
-static void capture_frames(const char *interface, int num_captures, int *err) {
-    state.num_captures = num_captures;
+static int recv_frames(const char *interface) {
     open_device(interface);
     if (!state.quit) {
         init();
@@ -112,23 +57,17 @@ static void capture_frames(const char *interface, int num_captures, int *err) {
         if (state.quit) {
             goto end;
         }
-
-        state.brightness_values = calloc(num_captures, sizeof(double));
-
         start_stream();
         if (state.quit) {
             goto end;
         }
-        for (int i = 0; i < num_captures && !state.quit; i++) {
+        for (int i = 0; i < state.num_captures && !state.quit; i++) {
             capture_frame(i);
         }
         stop_stream();
     }
-    
 end:
-    if (state.quit) {
-        *err = state.quit;
-    }
+    return state.quit;
 }
 
 static void open_device(const char *interface) {
@@ -232,12 +171,12 @@ static void init_mmap(void) {
             perror("Querying Buffer");
             return;
         }
-    
+        
         state.buffers[i].start = mmap(NULL /* start anywhere */,
-                                buf.length,
-                                PROT_READ | PROT_WRITE /* required */,
-                                MAP_SHARED /* recommended */,
-                                state.device_fd, buf.m.offset);
+                                      buf.length,
+                                      PROT_READ | PROT_WRITE /* required */,
+                                      MAP_SHARED /* recommended */,
+                                      state.device_fd, buf.m.offset);
         
         if (MAP_FAILED == state.buffers[i].start) {
             perror("mmap");
@@ -299,7 +238,7 @@ static void capture_frame(int i) {
         return;
     }
     
-    state.brightness_values[i] = compute_brightness(i, buf.bytesused);
+    state.brightness[i] = compute_brightness(i, buf.bytesused) / CAMERA_ILL_MAX;
     
     // query a buffer from camera if needed
     if (i < state.num_captures - 1) {
@@ -330,11 +269,6 @@ static void free_all(void) {
     if (state.device_fd != -1) {
         close(state.device_fd);
     }
-    if (state.brightness_values) {
-        free(state.brightness_values);
-    }
     /* reset state */
     memset(&state, 0, sizeof(struct state));
 }
-
-#endif

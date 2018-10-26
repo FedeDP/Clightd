@@ -1,6 +1,6 @@
 #ifdef IDLE_PRESENT
 
-#include "../inc/idle.h"
+#include <idle.h>
 #include <X11/extensions/scrnsaver.h>
 
 static time_t get_idle_time(const char *display, const char *xauthority);
@@ -47,7 +47,7 @@ int method_get_idle_time(sd_bus_message *m, void *userdata, sd_bus_error *ret_er
         return -ENXIO;
     }
     
-    printf("Idle time: %dms\n", idle_t);
+    printf("Idle time: %dms.\n", idle_t);
     return sd_bus_reply_method_return(m, "i", idle_t);
 }
 

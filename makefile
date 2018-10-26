@@ -22,6 +22,10 @@ SRCDIR = src/
 LIBS = -lm $(shell pkg-config --libs libudev)
 CFLAGS = $(shell pkg-config --cflags libudev) -D_GNU_SOURCE -std=c99
 
+FOLDERS = $(subst src,.,$(sort $(dir $(wildcard $(SRCDIR)*/))))
+SRCS = $(addsuffix *.c, $(FOLDERS))
+INCS = $(addprefix -I, $(FOLDERS))
+
 ifeq (,$(findstring $(MAKECMDGOALS),"clean install uninstall"))
 
 ifeq ("$(shell pkg-config --exists libelogind && echo yes)", "yes")
@@ -34,13 +38,6 @@ CFLAGS+=$(shell pkg-config --cflags libsystemd)
 else
 $(error systemd minimum required version 221.)
 endif
-endif
-
-ifneq ("$(DISABLE_FRAME_CAPTURES)","1")
-$(info Frames capturing support enabled.)
-else
-CFLAGS+=-DDISABLE_FRAME_CAPTURES
-$(info Frames capturing support disabled.)
 endif
 
 ifneq ("$(DISABLE_GAMMA)","1")
@@ -103,10 +100,10 @@ all: clightd clean
 debug: clightd-debug clean
 
 objects:
-	@cd $(SRCDIR); $(CC) -c *.c $(CFLAGS)
+	@cd $(SRCDIR); $(CC) -c $(SRCS) $(CFLAGS) $(INCS) -Ofast
 
 objects-debug:
-	@cd $(SRCDIR); $(CC) -c *.c -Wall $(CFLAGS) -Wshadow -Wtype-limits -Wstrict-overflow -fno-strict-aliasing -Wformat -Wformat-security -g
+	@cd $(SRCDIR); $(CC) -c *.c -Wall $(SRCS) $(CFLAGS) $(INCS) -Wshadow -Wstrict-overflow -Wtype-limits -fno-strict-aliasing -Wformat -Wformat-security -g
 
 clightd: objects
 	@cd $(SRCDIR); $(CC) -o ../$(BINNAME) *.o $(LIBS)
