@@ -1,4 +1,6 @@
 ## 3.0
+
+### ALS Support
 - [x] Als support
 - [x] Use ALS_SUBSYSTEM and CAMERA_SUBSYSTEM where needed (put them in their headers)
 - [x] Add a common interface for both camera and als (to be used by clight)
@@ -24,6 +26,28 @@
 - [x] Leave brightness_smooth_cb if no internal backlight is present
 - [x] Udev monitors must be unref'd!
 
+### New Api (org.clightd.clightd)
+- [ ] Change interface to org.clightd.clightd
+- [ ] Every feature will have its own object path, eg: /org/clightd/clightd/Backlight {Set,Get}
+- [ ] Sensor interface becomes: /org/clightd/clightd/Sensor org.clightd.clightd.Sensor {Capture, IsAvailable} + /org/clightd/clightd/Sensor/Als {Capture, IsAvailable} + /org/clightd/clightd/Sensor/Webcam {Capture, IsAvailable}
+- [ ] Other becomes eg: /org/clightd/clightd/Backlight org.clightd.clightd.Backlight {Set/Get}
+
+### New Idle interface (3.2/4.0?)
+- [ ] Clightd will emit a signal (with ClientX as destination) when the timeout is reached/left. On X it will be just like dimmer clight module does now. On wayland it will use idle protocol (possibly later)
+Something like:
+-> /org/clightd/backlight/Idle GetClient
+-> /org/clightd/backlight/Idle/Client1 SetTimeout
+-> /org/clightd/backlight/Idle/Client1 SetScreen
+-> /org/clightd/backlight/Idle/Client1 SetXauth (only on X)
+-> /org/clightd/backlight/Idle/Client1 Start
+here on X, a timerfd will be set; on Wayland, we will use idle protocol.
+-> /org/clightd/backlight/Idle/Client1 Stop
+here timerfd will be destroyed and Client1 removed (its object path too)
+
+### Doc
+- [ ] Update API reference
+- [ ] Update any org.clightd.backlight reference
+
 ## 3.1
 - [ ] add support for GetSensorData android app
 - [ ] it will come as bash scripts
@@ -37,13 +61,14 @@
 - [ ] devname = "Script" or devname = "GSD" (to be used by clight conf if user is willing to force a script)
 - [ ] force script timeout from clightd (eg popen("timeout 1 MYSCRIPT") and check if it returns 124 (timed out)
 
-
-## Ideas
+## 3.2
 - [ ] Add gamma (and dpms + idle) support on wayland (wlroots)
 https://github.com/swaywm/wlroots/blob/master/examples/gamma-control.c
 https://github.com/swaywm/wlroots/blob/master/examples/idle.c
-https://github.com/minus7/redshift/tree/wayland
+https://github.com/swaywm/sway/tree/master/swayidle
+- [ ] Is dpms supported? Couldn't it be just another case for new Idle implementation? Eg: Idle after 45s -> dim screen. Idle after 5mins -> screen off.
 
+## Ideas
 - [ ] follow ddcci kernel driver and in case, drop ddcutil and add the kernel driver as clightd opt-dep
 
 ## 3.X
