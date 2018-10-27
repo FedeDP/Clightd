@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <sensor.h>
 
+#define CAMERA_NAME             "Camera"
 #define CAMERA_ILL_MAX          255
 #define CAMERA_SUBSYSTEM        "video4linux"
 
@@ -32,7 +33,7 @@ struct state {
 
 static struct state state;
 
-SENSOR("webcam", CAMERA_SUBSYSTEM, NULL);
+SENSOR(CAMERA_NAME, CAMERA_SUBSYSTEM, NULL);
 
 /*
  * Frame capturing method

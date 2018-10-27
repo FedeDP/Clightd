@@ -5,7 +5,7 @@ Requires=polkit.service
 
 [Service]
 Type=dbus
-BusName=org.clightd.backlight
+BusName=org.clightd.clightd
 User=root
 ExecStart=/usr/lib/clightd/clightd
 Restart=on-failure

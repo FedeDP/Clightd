@@ -5,11 +5,13 @@
 
 #ifdef GAMMA_PRESENT
 
-#include <gamma.h>
+#include <modules.h>
 #include <polkit.h>
 #include <X11/extensions/Xrandr.h>
 #include <math.h>
 
+static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
+static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static unsigned short clamp(double x, double max);
 static unsigned short get_red(int temp);
 static unsigned short get_green(int temp);
@@ -19,8 +21,8 @@ static int set_gamma(int temp, Display *dpy);
 static int get_gamma(Display *dpy);
 
 typedef struct {
-    int fd;
     unsigned int target_temp;
+    unsigned int is_smooth;
     unsigned int smooth_step;
     unsigned int smooth_wait;
     unsigned int current_temp;
@@ -28,24 +30,48 @@ typedef struct {
 } smooth_change;
 
 static smooth_change sc;
+static const char object_path[] = "/org/clightd/clightd/Gamma";
+static const char bus_interface[] = "org.clightd.clightd.Gamma";
+static const sd_bus_vtable vtable[] = {
+    SD_BUS_VTABLE_START(0),
+    SD_BUS_METHOD("Set", "ssi(buu)", "b", method_setgamma, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("Get", "ss", "i", method_getgamma, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_VTABLE_END
+};
 
-void set_gamma_smooth_fd(int fd) {
-    sc.fd = fd;
+MODULE(GAMMA);
+
+static int init(void) {
+    int r = sd_bus_add_object_vtable(bus,
+                                     NULL,
+                                     object_path,
+                                     bus_interface,
+                                     vtable,
+                                     NULL);
+    if (r < 0) {
+        MODULE_ERR("Failed to issue method call: %s\n", strerror(-r));
+        return r;
+    }
+    return REGISTER_FD(timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK));
 }
 
-int gamma_smooth_cb(void) {
+static int callback(const int fd) {
     uint64_t t;
     // nonblocking mode!
-    read(sc.fd, &t, sizeof(uint64_t));
+    read(fd, &t, sizeof(uint64_t));
     
-    if (sc.target_temp < sc.current_temp) {
-        sc.current_temp = sc.current_temp - sc.smooth_step < sc.target_temp ? 
-                        sc.target_temp :
-                        sc.current_temp - sc.smooth_step;
+    if (sc.is_smooth) {
+        if (sc.target_temp < sc.current_temp) {
+            sc.current_temp = sc.current_temp - sc.smooth_step < sc.target_temp ? 
+            sc.target_temp :
+            sc.current_temp - sc.smooth_step;
+        } else {
+            sc.current_temp = sc.current_temp + sc.smooth_step > sc.target_temp ? 
+            sc.target_temp :
+            sc.current_temp + sc.smooth_step;
+        }
     } else {
-        sc.current_temp = sc.current_temp + sc.smooth_step > sc.target_temp ? 
-        sc.target_temp :
-        sc.current_temp + sc.smooth_step;
+        sc.current_temp = sc.target_temp;
     }
     
     struct itimerspec timerValue = {{0}};
@@ -56,10 +82,14 @@ int gamma_smooth_cb(void) {
         timerValue.it_value.tv_sec = 0;
         timerValue.it_value.tv_nsec = 1000 * 1000 * sc.smooth_wait; // ms
     }
-    return timerfd_settime(sc.fd, 0, &timerValue, NULL);
+    return timerfd_settime(fd, 0, &timerValue, NULL);
 }
 
-int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+static void destroy(void) {
+    
+}
+
+static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     int temp, error = 0;
     const char *display = NULL, *xauthority = NULL;
     
@@ -71,7 +101,7 @@ int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) 
     /* Read the parameters */
     int r = sd_bus_message_read(m, "ssi", &display, &xauthority, &temp);
     if (r < 0) {
-        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
+        MODULE_ERR("Failed to parse parameters: %s\n", strerror(-r));
         return r;
     }
     
@@ -90,29 +120,19 @@ int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) 
         
         Display *dpy = XOpenDisplay(display);
         if (dpy == NULL) {
-            perror("XopenDisplay");
+            MODULE_ERR("XopenDisplay");
             error = ENXIO;
             /* Drop xauthority cookie */
             unsetenv("XAUTHORITY");
         } else {
-            if (is_smooth && smooth_step && smooth_wait) {
-                sc.target_temp = temp;
-                sc.smooth_step = smooth_step;
-                sc.smooth_wait = smooth_wait;
-                sc.dpy = dpy;
-                sc.current_temp = get_gamma(sc.dpy);
-                
-                printf("Gamma value target set (smooth): %d.\n", temp);
-                
-                gamma_smooth_cb(); // xauthority cookie will be dropped in smooth cb
-            } else {
-                set_gamma(temp, dpy);
-                printf("Gamma value set: %d.\n", temp);
-            
-                XCloseDisplay(dpy);
-                /* Drop xauthority cookie */
-                unsetenv("XAUTHORITY");
-            }
+            sc.target_temp = temp;
+            sc.smooth_step = smooth_step;
+            sc.smooth_wait = smooth_wait;
+            sc.is_smooth = is_smooth;
+            sc.dpy = dpy;
+            sc.current_temp = get_gamma(sc.dpy);
+            MODULE_INFO("Temperature target value set (smooth %d): %d.\n", is_smooth, temp);
+            error = callback(GET_FD()); // xauthority cookie will be dropped here when smooth transition is finished
         }
     }
     if (error) {
@@ -127,14 +147,14 @@ int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) 
     return sd_bus_reply_method_return(m, "b", !error);
 }
 
-int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     int error = 0, temp;
     const char *display = NULL, *xauthority = NULL;
     
     /* Read the parameters */
     int r = sd_bus_message_read(m, "ss", &display, &xauthority);
     if (r < 0) {
-        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
+        MODULE_ERR("Failed to parse parameters: %s\n", strerror(-r));
         return r;
     }
     
@@ -143,7 +163,7 @@ int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) 
     
     Display *dpy = XOpenDisplay(display);
     if (dpy == NULL) {
-        perror("XopenDisplay");
+        MODULE_ERR("XopenDisplay");
         error = ENXIO;
     } else {
         temp = get_gamma(dpy);
@@ -162,7 +182,7 @@ int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) 
         return -error;
     }
     
-    printf("Current gamma value: %d.\n", temp);
+    MODULE_INFO("Current gamma value: %d.\n", temp);
     return sd_bus_reply_method_return(m, "i", temp);
 }
 

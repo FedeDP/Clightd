@@ -1,6 +1,6 @@
 #ifdef DPMS_PRESENT
 
-#include <dpms.h>
+#include <modules.h>
 #include <polkit.h>
 #include <X11/Xlib.h>
 #include <X11/extensions/dpms.h>
@@ -14,10 +14,49 @@ struct dpms_timeout {
     CARD16 off;
 };
 
+static int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
+static int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
+static int method_getdpms_timeouts(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
+static int method_setdpms_timeouts(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int get_dpms_state(const char *display, const char *xauthority);
 static int set_dpms_state(const char *display, const char *xauthority, int dpms_level);
 static int get_dpms_timeouts(const char *display, const char *xauthority, struct dpms_timeout *t);
 static int set_dpms_timeouts(const char *display, const char *xauthority, struct dpms_timeout *t);
+
+static const char object_path[] = "/org/clightd/clightd/Dpms";
+static const char bus_interface[] = "org.clightd.clightd.Dpms";
+static const sd_bus_vtable vtable[] = {
+    SD_BUS_VTABLE_START(0),
+    SD_BUS_METHOD("Get", "ss", "i", method_getdpms, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("Set", "ssi", "i", method_setdpms, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("GetTimeouts", "ss", "iii", method_getdpms_timeouts, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("SetTimeouts", "ssiii", "iii", method_setdpms_timeouts, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_VTABLE_END
+};
+
+MODULE(DPMS);
+
+static int init(void) {
+    int r = sd_bus_add_object_vtable(bus,
+                                     NULL,
+                                     object_path,
+                                     bus_interface,
+                                     vtable,
+                                     NULL);
+    if (r < 0) {
+        MODULE_ERR("Failed to issue method call: %s\n", strerror(-r));
+        return r;
+    }
+    return 0;
+}
+
+static int callback(const int fd) {
+    return 0;
+}
+
+static void destroy(void) {
+    
+}
 
 int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     const char *display = NULL, *xauthority = NULL;
@@ -25,7 +64,7 @@ int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     /* Read the parameters */
     int r = sd_bus_message_read(m, "ss", &display, &xauthority);
     if (r < 0) {
-        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
+        MODULE_ERR("Failed to parse parameters: %s\n", strerror(-r));
         return r;
     }
     
@@ -36,9 +75,9 @@ int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     }
     
     if (dpms_state == DPMS_DISABLED) {
-        printf("Dpms is currently disabled.\n");
+        MODULE_INFO("Dpms is currently disabled.\n");
     } else {
-        printf("Current dpms state: %d.\n", dpms_state);
+        MODULE_INFO("Current dpms state: %d.\n", dpms_state);
     }
     return sd_bus_reply_method_return(m, "i", dpms_state);
 }
@@ -56,7 +95,7 @@ int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     /* Read the parameters */
     int r = sd_bus_message_read(m, "ssi", &display, &xauthority, &level);
     if (r < 0) {
-        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
+        MODULE_ERR("Failed to parse parameters: %s\n", strerror(-r));
         return r;
     }
     
@@ -72,9 +111,9 @@ int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     }
     
     if (level != DPMS_DISABLED) {
-        printf("New dpms state: %d.\n", level);
+        MODULE_INFO("New dpms state: %d.\n", level);
     } else {
-        printf("Dpms disabled.\n");
+        MODULE_INFO("Dpms disabled.\n");
     }
     return sd_bus_reply_method_return(m, "i", level);
 }
@@ -85,7 +124,7 @@ int method_getdpms_timeouts(sd_bus_message *m, void *userdata, sd_bus_error *ret
     /* Read the parameters */
     int r = sd_bus_message_read(m, "ss", &display, &xauthority);
     if (r < 0) {
-        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
+        MODULE_ERR("Failed to parse parameters: %s\n", strerror(-r));
         return r;
     }
     
@@ -100,7 +139,7 @@ int method_getdpms_timeouts(sd_bus_message *m, void *userdata, sd_bus_error *ret
         return DPMS_DISABLED;
     }
     
-    printf("Current dpms timeouts:\tStandby: %ds\tSuspend: %ds\tOff:%ds.\n", t.standby, t.suspend, t.off);
+    MODULE_INFO("Current dpms timeouts:\tStandby: %ds\tSuspend: %ds\tOff:%ds.\n", t.standby, t.suspend, t.off);
     return sd_bus_reply_method_return(m, "iii", t.standby, t.suspend, t.off);
 }
 
@@ -117,7 +156,7 @@ int method_setdpms_timeouts(sd_bus_message *m, void *userdata, sd_bus_error *ret
     int standby, suspend, off;
     int r = sd_bus_message_read(m, "ssiii", &display, &xauthority, &standby, &suspend, &off);
     if (r < 0) {
-        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
+        MODULE_ERR("Failed to parse parameters: %s\n", strerror(-r));
         return r;
     }
     
@@ -133,7 +172,7 @@ int method_setdpms_timeouts(sd_bus_message *m, void *userdata, sd_bus_error *ret
         return err;
     }
     
-    printf("New dpms timeouts:\tStandby: %ds\tSuspend: %ds\tOff:%ds.\n", t.standby, t.suspend, t.off);
+    MODULE_INFO("New dpms timeouts:\tStandby: %ds\tSuspend: %ds\tOff:%ds.\n", t.standby, t.suspend, t.off);
     return sd_bus_reply_method_return(m, "iii", standby, suspend, off);
 }
 

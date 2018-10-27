@@ -1,4 +1,4 @@
-#include <backlight.h>
+#include <modules.h>
 #include <polkit.h>
 #include <udev.h>
 #include <privilege.h>
@@ -72,7 +72,6 @@ typedef struct {
 } device;
 
 typedef struct {
-    int fd;
     double target_pct;
     double smooth_step;
     unsigned int smooth_wait;
@@ -81,6 +80,8 @@ typedef struct {
     int all;
 } smooth_change;
 
+static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
+static int method_getbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static void reset_backlight_struct(double target_pct, int is_smooth, double smooth_step, unsigned int smooth_wait, int all);
 static void add_backlight_sn(const char *sn, int internal);
 static int read_brightness_params(sd_bus_message *m, const double *target_pct, const int *is_smooth, 
@@ -92,6 +93,66 @@ static int append_internal_backlight(sd_bus_message *reply, const char *path);
 static int append_external_backlight(sd_bus_message *reply, const char *sn);
 
 static smooth_change sc;
+static const char object_path[] = "/org/clightd/clightd/Backlight";
+static const char bus_interface[] = "org.clightd.clightd.Backlight";
+static const sd_bus_vtable vtable[] = {
+    SD_BUS_VTABLE_START(0),
+    SD_BUS_METHOD("Set", "d(bdu)s", "b", method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("Get", "s", "a(sd)", method_getbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_VTABLE_END
+};
+
+MODULE(BACKLIGHT);
+
+static int init(void) {
+    int r = sd_bus_add_object_vtable(bus,
+                                 NULL,
+                                 object_path,
+                                 bus_interface,
+                                 vtable,
+                                 NULL);
+    if (r < 0) {
+        MODULE_ERR("Failed to issue method call: %s\n", strerror(-r));
+        return r;
+    }
+    return REGISTER_FD(timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK));
+}
+
+static int callback(const int fd) {
+    uint64_t t;
+    // nonblocking mode!
+    read(fd, &t, sizeof(uint64_t));
+    
+    int reached_count = 0;
+    for (int i = 0; i < sc.num_dev; reached_count += sc.d[i].reached_target, i++) {
+        if (!sc.d[i].reached_target) {
+            int ret = set_internal_backlight(i);
+            // error: it was not an internal backlight interface
+            if (ret == -1) {
+                // try to use it as external backlight sn
+                set_external_backlight(i);
+            }
+        }
+    }
+    
+    struct itimerspec timerValue = {{0}};
+    if (reached_count != sc.num_dev) {
+        timerValue.it_value.tv_sec = 0;
+        timerValue.it_value.tv_nsec = 1000 * 1000 * sc.smooth_wait; // ms
+    } else {
+        /* We can now drop root access */
+        drop_priv();
+        
+        /* Free all resources */
+        reset_backlight_struct(0, 0, 0, 0, 0);
+    }
+    /* disarm the timer */
+    return timerfd_settime(fd, 0, &timerValue, NULL);
+}
+
+static void destroy(void) {
+    
+}
 
 static void reset_backlight_struct(double target_pct, int is_smooth, double smooth_step, unsigned int smooth_wait, int all) {
     if (sc.d) {
@@ -143,11 +204,11 @@ static int read_brightness_params(sd_bus_message *m, const double *target_pct, c
         return 0;
     }
 
-    fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
+    MODULE_ERR("Failed to parse parameters: %s\n", strerror(-r));
     return -r;
 }
 
-int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     if (!check_authorization(m)) {
         sd_bus_error_set_errno(ret_error, EPERM);
         return -EPERM;
@@ -171,48 +232,13 @@ int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_er
             DDCUTIL_LOOP({
                 add_backlight_sn(dinfo->sn, 0);
             });
-            int ok = brightness_smooth_cb();
+            MODULE_INFO("Target pct (smooth %d): %.2lf\n", is_smooth, target_pct);
+            int ok = callback(GET_FD());
             // Returns true if no errors happened
             return sd_bus_reply_method_return(m, "b", ok == 0);
         }
     }
     return r;
-}
-
-void set_brightness_smooth_fd(int fd) {
-    sc.fd = fd;
-}
-
-int brightness_smooth_cb(void) {
-    uint64_t t;
-    // nonblocking mode!
-    read(sc.fd, &t, sizeof(uint64_t));
-    
-    int reached_count = 0;
-    for (int i = 0; i < sc.num_dev; reached_count += sc.d[i].reached_target, i++) {
-        if (!sc.d[i].reached_target) {
-            int ret = set_internal_backlight(i);
-            // error: it was not an internal backlight interface
-            if (ret == -1) {
-                // try to use it as external backlight sn
-                set_external_backlight(i);
-            }
-        }
-    }
-    
-    struct itimerspec timerValue = {{0}};
-    if (reached_count != sc.num_dev) {
-        timerValue.it_value.tv_sec = 0;
-        timerValue.it_value.tv_nsec = 1000 * 1000 * sc.smooth_wait; // ms
-    } else {
-        /* We can now drop root access */
-        drop_priv();
-        
-        /* Free all resources */
-        reset_backlight_struct(0, 0, 0, 0, 0);
-    }
-    /* disarm the timer */
-    return timerfd_settime(sc.fd, 0, &timerValue, NULL);
 }
 
 static double next_backlight_level(int curr, int max, int idx) {
@@ -280,7 +306,7 @@ static int set_external_backlight(int idx) {
  * it founds, it will return a "(serialNumber, current backlight pct)" struct.
  * Note that for internal laptop screen, serialNumber = syspath (eg: intel_backlight)
  */
-int method_getbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+static int method_getbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     sd_bus_message *reply = NULL;
     const char *backlight_interface = NULL;
     
@@ -297,7 +323,7 @@ int method_getbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_er
         sd_bus_message_unref(reply);
         sd_bus_message_exit_container(m);
     } else {
-        fprintf(stderr, "Failed to parse parameters: %s\n", strerror(-r));
+        MODULE_ERR("Failed to parse parameters: %s\n", strerror(-r));
     }
     return r;
 }

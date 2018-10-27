@@ -27,26 +27,32 @@
 - [x] Udev monitors must be unref'd!
 
 ### New Api (org.clightd.clightd)
-- [ ] Change interface to org.clightd.clightd
-- [ ] Every feature will have its own object path, eg: /org/clightd/clightd/Backlight {Set,Get}
-- [ ] Sensor interface becomes: /org/clightd/clightd/Sensor org.clightd.clightd.Sensor {Capture, IsAvailable} + /org/clightd/clightd/Sensor/Als {Capture, IsAvailable} + /org/clightd/clightd/Sensor/Webcam {Capture, IsAvailable}
-- [ ] Other becomes eg: /org/clightd/clightd/Backlight org.clightd.clightd.Backlight {Set/Get}
+- [x] Change interface to org.clightd.clightd
+- [x] Every feature will have its own object path, eg: /org/clightd/clightd/Backlight {Set,Get}
+- [x] Sensor interface becomes: /org/clightd/clightd/Sensor org.clightd.clightd.Sensor {Capture, IsAvailable} + /org/clightd/clightd/Sensor/Als {Capture, IsAvailable} + /org/clightd/clightd/Sensor/Webcam {Capture, IsAvailable}
+- [x] Other becomes eg: /org/clightd/clightd/Backlight org.clightd.clightd.Backlight {Set/Get}
+- [x] Gamma and Backlight smooth should be equal (gamma checks if smooth is enabled and has 2 different behaviours)
+- [x] Add some more MODULE_INFO
+- [x] Valgrind check
+- [ ] Cleanup includes etc etc
+- [x] Fix build with no gamma/dpms/idle...
+- [ ] Unify all add_vtable calls under modules.c interface
 
-### New Idle interface (3.2/4.0?)
+### New Idle interface
 - [ ] Clightd will emit a signal (with ClientX as destination) when the timeout is reached/left. On X it will be just like dimmer clight module does now. On wayland it will use idle protocol (possibly later)
 Something like:
--> /org/clightd/backlight/Idle GetClient
--> /org/clightd/backlight/Idle/Client1 SetTimeout
--> /org/clightd/backlight/Idle/Client1 SetScreen
--> /org/clightd/backlight/Idle/Client1 SetXauth (only on X)
--> /org/clightd/backlight/Idle/Client1 Start
+-> /org/clightd/clightd/Idle GetClient
+-> /org/clightd/clightd/Idle/Client1 SetTimeout
+-> /org/clightd/clightd/Idle/Client1 SetScreen
+-> /org/clightd/clightd/Idle/Client1 SetXauth (only on X)
+-> /org/clightd/clightd/Idle/Client1 Start
 here on X, a timerfd will be set; on Wayland, we will use idle protocol.
--> /org/clightd/backlight/Idle/Client1 Stop
+-> /org/clightd/clightd/Idle/Client1 Stop
 here timerfd will be destroyed and Client1 removed (its object path too)
 
 ### Doc
 - [ ] Update API reference
-- [ ] Update any org.clightd.backlight reference
+- [x] Update any org.clightd.backlight reference
 
 ## 3.1
 - [ ] add support for GetSensorData android app
