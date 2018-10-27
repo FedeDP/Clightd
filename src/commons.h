@@ -8,28 +8,28 @@
 #include <libudev.h>
 #include <unistd.h>
 #include <sys/timerfd.h>
-#include <poll.h>
 #include <privilege.h>
 
 #define _ctor0_     __attribute__((constructor (101))) // Used for Modules registering
 #define _ctor1_     __attribute__((constructor (102))) // Used for Sensors registering
 
 /* List of modules indexes */
-enum modules { 
-    BUS, 
-    SIGNAL, 
+enum modules {
+    BUS,
+    SIGNAL,
     BACKLIGHT,
 #ifdef GAMMA_PRESENT
-    GAMMA, 
+    GAMMA,
 #endif
-    SENSOR, 
+    SENSOR,
 #ifdef DPMS_PRESENT
     DPMS,
 #endif
 #ifdef IDLE_PRESENT
-    IDLE, 
+    IDLE,
 #endif
-    MODULES_NUM };
+    MODULES_NUM
+};
 
 enum quit_codes { LEAVE_W_ERR = -1, SIGNAL_RCV = 1 };
 

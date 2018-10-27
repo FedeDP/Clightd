@@ -1,7 +1,6 @@
 #include <modules.h>
 #include <polkit.h>
 #include <udev.h>
-#include <privilege.h>
 
 #ifdef USE_DDC
 

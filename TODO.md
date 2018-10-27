@@ -34,7 +34,7 @@
 - [x] Gamma and Backlight smooth should be equal (gamma checks if smooth is enabled and has 2 different behaviours)
 - [x] Add some more MODULE_INFO
 - [x] Valgrind check
-- [ ] Cleanup includes etc etc
+- [x] Cleanup includes etc etc
 - [x] Fix build with no gamma/dpms/idle...
 - [ ] Unify all add_vtable calls under modules.c interface
 
