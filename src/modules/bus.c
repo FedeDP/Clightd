@@ -1,4 +1,5 @@
-#include <modules.h>
+#include <module/module_easy.h>
+#include <commons.h>
 
 static int get_version( sd_bus *b, const char *path, const char *interface, const char *property,
                         sd_bus_message *reply, void *userdata, sd_bus_error *error);
@@ -11,47 +12,50 @@ static const sd_bus_vtable vtable[] = {
     SD_BUS_VTABLE_END
 };
 
-sd_bus *bus;
+MODULE("BUS");
 
-MODULE(BUS);
+static void module_pre_start(void) {
+    
+}
 
-static int init(void) {
-    int r = sd_bus_default_system(&bus);
-    if (r < 0) {
-        MODULE_ERR("Failed to connect to system bus: %s\n", strerror(-r));
-    } else {
-        /* Install the object */
-        r = sd_bus_add_object_vtable(bus,
+static bool check(void) {
+    return true;
+}
+
+static bool evaluate(void) {
+    return true;
+}
+
+static void init(void) {
+    int r = sd_bus_add_object_vtable(bus,
                                  NULL,
                                  object_path,
                                  bus_interface,
                                  vtable,
                                  NULL);
-        if (r < 0) {
-            MODULE_ERR("Failed to issue method call: %s\n", strerror(-r));
-        }
+    if (r < 0) {
+        m_log("Failed to issue method call: %s\n", strerror(-r));
+    } else {
+        /* Process initial messages */
+        receive(NULL, NULL);
+        m_register_fd(sd_bus_get_fd(bus), true, NULL);
     }
-    /* Process initial messages */
-    callback(GET_FD());
-    return REGISTER_FD(sd_bus_get_fd(bus));
 }
 
-static int callback(const int fd) {
-    int r;
-    do {
-        r = sd_bus_process(bus, NULL);
-        if (r < 0) {
-            MODULE_ERR("Failed to process bus: %s\n", strerror(-r));
-            return LEAVE_W_ERR;
-        }
-    } while (r > 0);
-    return 0;
+static void receive(const msg_t *msg, const void *userdata) {
+    if (!msg || !msg->is_pubsub) {
+        int r;
+        do {
+            r = sd_bus_process(bus, NULL);
+            if (r < 0) {
+                m_log("Failed to process bus: %s\n", strerror(-r));
+            }
+        } while (r > 0);
+    }
 }
 
 static void destroy(void) {
-    if (bus) {
-        sd_bus_flush_close_unref(bus);
-    }
+
 }
 
 static int get_version( sd_bus *b, const char *path, const char *interface, const char *property,

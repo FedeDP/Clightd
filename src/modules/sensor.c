@@ -1,12 +1,12 @@
 #include <sensor.h>
-#include <modules.h>
+#include <module/module_easy.h>
 #include <polkit.h>
 
 static enum sensors get_sensor_type(const char *str);
 static int is_sensor_available(sensor_t *sensor, const char *interface, 
                                 struct udev_device **device);
 static int sensor_get_monitor(const enum sensors s);
-static void sensor_receive_device(const enum sensors s, struct udev_device **dev);
+static void sensor_receive_device(const sensor_t *sensor, struct udev_device **dev);
 static int method_issensoravailable(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 
@@ -21,9 +21,21 @@ static const sd_bus_vtable vtable[] = {
     SD_BUS_VTABLE_END
 };
 
-MODULE(SENSOR);
+MODULE("SENSOR");
 
-static int init(void) {
+static void module_pre_start(void) {
+    
+}
+
+static bool check(void) {
+    return true;
+}
+
+static bool evaluate(void) {
+    return true;
+}
+
+static void init(void) {
     int r = sd_bus_add_object_vtable(bus,
                                      NULL,
                                      object_path,
@@ -38,26 +50,25 @@ static int init(void) {
                                      bus_interface,
                                      vtable,
                                      NULL);
-        r += REGISTER_FD(sensor_get_monitor(i));
+        r += m_register_fd(sensor_get_monitor(i), false, &sensors[i]);
     }
     if (r < 0) {
-        MODULE_ERR("Failed to issue method call: %s\n", strerror(-r));
+        m_log("Failed to issue method call: %s\n", strerror(-r));
     }
-    return r;
 }
 
-static int callback(const int fd) {
-    for (int i = ALS; i < SENSOR_NUM; i++) {
+static void receive(const msg_t *msg, const void *userdata) {
+    if (!msg->is_pubsub) {
+        sensor_t *s = (sensor_t *)msg->fd_msg->userptr;
         struct udev_device *dev = NULL;
-        sensor_receive_device(i, &dev);
+        sensor_receive_device(s, &dev);
         if (dev) {
-            sd_bus_emit_signal(bus, sensors[i].obj_path, bus_interface, "Changed", "ss", udev_device_get_devnode(dev), udev_device_get_action(dev));
+            sd_bus_emit_signal(bus, s->obj_path, bus_interface, "Changed", "ss", udev_device_get_devnode(dev), udev_device_get_action(dev));
             /* Changed is emitted on Sensor object too */
             sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "ss", udev_device_get_devnode(dev), udev_device_get_action(dev));
             udev_device_unref(dev);
         }
     }
-    return 0;
 }
 
 static void destroy(void) {
@@ -68,9 +79,9 @@ void sensor_register_new(const sensor_t *sensor) {
     const enum sensors s = get_sensor_type(sensor->name);
     if (s < SENSOR_NUM) {
         sensors[s] = *sensor;
-        MODULE_INFO("Registered %s sensor.\n", sensor->name);
+        printf("Registered %s sensor.\n", sensor->name);
     } else {
-        MODULE_ERR("Sensor not recognized. Not registering.\n");
+        printf("Sensor not recognized. Not registering.\n");
     }
 }
 
@@ -78,15 +89,18 @@ static int sensor_get_monitor(const enum sensors s) {
     return init_udev_monitor(sensors[s].subsystem, &sensors[s].mon_handler);
 }
 
-static void sensor_receive_device(const enum sensors s, struct udev_device **dev) {
-    struct udev_device *d = NULL;
-    receive_udev_device(&d, sensors[s].mon_handler);
-    if (d && (!sensors[s].udev_name || 
-        !strcmp(udev_device_get_sysattr_value(d, "name"), sensors[s].udev_name))) {
+static void sensor_receive_device(const sensor_t *sensor, struct udev_device **dev) {
+    *dev = NULL;
+    if (sensor) {
+        struct udev_device *d = NULL;
+        receive_udev_device(&d, sensor->mon_handler);
+        if (d && (!sensor->udev_name || 
+            !strcmp(udev_device_get_sysattr_value(d, "name"), sensor->udev_name))) {
 
-        *dev = d;
-    } else {
-        *dev = NULL;
+            *dev = d;
+        } else if (d) {
+            udev_device_unref(d);
+        }
     }
 }
 
@@ -131,7 +145,7 @@ static int method_issensoravailable(sd_bus_message *m, void *userdata, sd_bus_er
     const char *interface = NULL;
     int r = sd_bus_message_read(m, "s", &interface);
     if (r < 0) {
-        MODULE_ERR("Failed to parse parameters: %s\n", strerror(-r));
+        m_log("Failed to parse parameters: %s\n", strerror(-r));
         return r;
     }
 
@@ -163,7 +177,7 @@ static int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error 
     const int num_captures;
     int r = sd_bus_message_read(m, "si", &interface, &num_captures);
     if (r < 0) {
-        MODULE_ERR("Failed to parse parameters: %s\n", strerror(-r));
+        m_log("Failed to parse parameters: %s\n", strerror(-r));
         return r;
     }
     
@@ -210,7 +224,7 @@ static int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error 
         r = sd_bus_send(NULL, reply, NULL);
         sd_bus_message_unref(reply);
         
-        MODULE_INFO("%d frames captured by %s.\n", num_captures, udev_device_get_devnode(dev));
+        m_log("%d frames captured by %s.\n", num_captures, udev_device_get_devnode(dev));
     }
     
     /* Properly free dev if needed */

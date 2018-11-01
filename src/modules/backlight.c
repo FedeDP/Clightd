@@ -1,4 +1,4 @@
-#include <modules.h>
+#include <module/module_easy.h>
 #include <polkit.h>
 #include <udev.h>
 
@@ -92,6 +92,7 @@ static int append_internal_backlight(sd_bus_message *reply, const char *path);
 static int append_external_backlight(sd_bus_message *reply, const char *sn);
 
 static smooth_change sc;
+static int smooth_fd;
 static const char object_path[] = "/org/clightd/clightd/Backlight";
 static const char bus_interface[] = "org.clightd.clightd.Backlight";
 static const sd_bus_vtable vtable[] = {
@@ -101,9 +102,21 @@ static const sd_bus_vtable vtable[] = {
     SD_BUS_VTABLE_END
 };
 
-MODULE(BACKLIGHT);
+MODULE("BACKLIGHT");
 
-static int init(void) {
+static void module_pre_start(void) {
+    
+}
+
+static bool check(void) {
+    return true;
+}
+
+static bool evaluate(void) {
+    return true;
+}
+
+static void init(void) {
     int r = sd_bus_add_object_vtable(bus,
                                  NULL,
                                  object_path,
@@ -111,46 +124,53 @@ static int init(void) {
                                  vtable,
                                  NULL);
     if (r < 0) {
-        MODULE_ERR("Failed to issue method call: %s\n", strerror(-r));
-        return r;
+        m_log("Failed to issue method call: %s\n", strerror(-r));
+    } else {
+        smooth_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+        m_register_fd(smooth_fd, true, NULL);
     }
-    return REGISTER_FD(timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK));
 }
 
-static int callback(const int fd) {
+static void receive(const msg_t *msg, const void *userdata) {
     uint64_t t;
     // nonblocking mode!
-    read(fd, &t, sizeof(uint64_t));
+    if (!msg || !msg->is_pubsub) {
+        read(smooth_fd, &t, sizeof(uint64_t));
     
-    int reached_count = 0;
-    for (int i = 0; i < sc.num_dev; reached_count += sc.d[i].reached_target, i++) {
-        if (!sc.d[i].reached_target) {
-            int ret = set_internal_backlight(i);
-            // error: it was not an internal backlight interface
-            if (ret == -1) {
-                // try to use it as external backlight sn
-                set_external_backlight(i);
+        int reached_count = 0;
+        for (int i = 0; i < sc.num_dev; reached_count += sc.d[i].reached_target, i++) {
+            if (!sc.d[i].reached_target) {
+                int ret = set_internal_backlight(i);
+                // error: it was not an internal backlight interface
+                if (ret == -1) {
+                    // try to use it as external backlight sn
+                    set_external_backlight(i);
+                }
             }
         }
-    }
     
-    struct itimerspec timerValue = {{0}};
-    if (reached_count != sc.num_dev) {
-        timerValue.it_value.tv_sec = 0;
-        timerValue.it_value.tv_nsec = 1000 * 1000 * sc.smooth_wait; // ms
-    } else {
-        /* We can now drop root access */
-        drop_priv();
+        struct itimerspec timerValue = {{0}};
+        if (reached_count != sc.num_dev) {
+            timerValue.it_value.tv_sec = 0;
+            timerValue.it_value.tv_nsec = 1000 * 1000 * sc.smooth_wait; // ms
+        } else {
+            /* We can now drop root access */
+            drop_priv();
         
-        /* Free all resources */
-        reset_backlight_struct(0, 0, 0, 0, 0);
+            /* Free all resources */
+            reset_backlight_struct(0, 0, 0, 0, 0);
+            
+            m_log("Reached target backlight: %lf.\n", sc.target_pct);
+        }
+        int ret = timerfd_settime(smooth_fd, 0, &timerValue, NULL);
+        if (userdata) {
+            *(int *)userdata = ret;
+        }
     }
-    /* disarm the timer */
-    return timerfd_settime(fd, 0, &timerValue, NULL);
 }
 
 static void destroy(void) {
-    
+
 }
 
 static void reset_backlight_struct(double target_pct, int is_smooth, double smooth_step, unsigned int smooth_wait, int all) {
@@ -203,7 +223,7 @@ static int read_brightness_params(sd_bus_message *m, const double *target_pct, c
         return 0;
     }
 
-    MODULE_ERR("Failed to parse parameters: %s\n", strerror(-r));
+    m_log("Failed to parse parameters: %s\n", strerror(-r));
     return -r;
 }
 
@@ -231,8 +251,9 @@ static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error 
             DDCUTIL_LOOP({
                 add_backlight_sn(dinfo->sn, 0);
             });
-            MODULE_INFO("Target pct (smooth %d): %.2lf\n", is_smooth, target_pct);
-            int ok = callback(GET_FD());
+            m_log("Target pct (smooth %d): %.2lf\n", is_smooth, target_pct);
+            int ok;
+            receive(NULL, &ok);
             // Returns true if no errors happened
             return sd_bus_reply_method_return(m, "b", ok == 0);
         }
@@ -322,7 +343,7 @@ static int method_getbrightness(sd_bus_message *m, void *userdata, sd_bus_error 
         sd_bus_message_unref(reply);
         sd_bus_message_exit_container(m);
     } else {
-        MODULE_ERR("Failed to parse parameters: %s\n", strerror(-r));
+        m_log("Failed to parse parameters: %s\n", strerror(-r));
     }
     return r;
 }

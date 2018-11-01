@@ -21,27 +21,27 @@
  *
  * END_COMMON_COPYRIGHT_HEADER */
 
-#include <modules.h>
+#include <commons.h>
 
 static const char bus_interface[] = "org.clightd.clightd";
 
-int main(void) {
+/* Every module needs these; let's init them before any module */
+void modules_pre_start(void) {
     udev = udev_new();
-    int r = init_modules();
-    if (!r) {
-        r = sd_bus_request_name(bus, bus_interface, 0);
-        if (r < 0) {
-            fprintf(stderr, "Failed to acquire service name: %s\n", strerror(-r));
-        } else {
-            /* Drop root privileges */
-            drop_priv();
-            r = loop_modules();
-            sd_bus_release_name(bus, bus_interface);
-        }
+    sd_bus_default_system(&bus);
+} 
+
+int main(void) {
+    int r = sd_bus_request_name(bus, bus_interface, 0);
+    if (r < 0) {
+        fprintf(stderr, "Failed to acquire service name: %s\n", strerror(-r));
     } else {
-        fprintf(stderr, "Failed to init all modules.\n");
+        /* Drop root privileges */
+        drop_priv();
+        r = modules_loop();
+        sd_bus_release_name(bus, bus_interface);
     }
-    destroy_modules();
+    sd_bus_flush_close_unref(bus);
     udev_unref(udev);
-    return r;
+    return r < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }

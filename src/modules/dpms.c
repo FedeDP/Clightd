@@ -1,6 +1,7 @@
 #ifdef DPMS_PRESENT
 
-#include <modules.h>
+#include <module/module_easy.h>
+#include <commons.h>
 #include <polkit.h>
 #include <X11/Xlib.h>
 #include <X11/extensions/dpms.h>
@@ -34,9 +35,21 @@ static const sd_bus_vtable vtable[] = {
     SD_BUS_VTABLE_END
 };
 
-MODULE(DPMS);
+MODULE("DPMS");
 
-static int init(void) {
+static void module_pre_start(void) {
+    
+}
+
+static bool check(void) {
+    return true;
+}
+
+static bool evaluate(void) {
+    return true;
+}
+
+static void init(void) {
     int r = sd_bus_add_object_vtable(bus,
                                      NULL,
                                      object_path,
@@ -44,14 +57,12 @@ static int init(void) {
                                      vtable,
                                      NULL);
     if (r < 0) {
-        MODULE_ERR("Failed to issue method call: %s\n", strerror(-r));
-        return r;
+        m_log("Failed to issue method call: %s\n", strerror(-r));
     }
-    return 0;
 }
 
-static int callback(const int fd) {
-    return 0;
+static void receive(const msg_t *msg, const void *userdata) {
+
 }
 
 static void destroy(void) {
@@ -64,7 +75,7 @@ int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     /* Read the parameters */
     int r = sd_bus_message_read(m, "ss", &display, &xauthority);
     if (r < 0) {
-        MODULE_ERR("Failed to parse parameters: %s\n", strerror(-r));
+        m_log("Failed to parse parameters: %s\n", strerror(-r));
         return r;
     }
     
@@ -75,9 +86,9 @@ int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     }
     
     if (dpms_state == DPMS_DISABLED) {
-        MODULE_INFO("Dpms is currently disabled.\n");
+        m_log("Dpms is currently disabled.\n");
     } else {
-        MODULE_INFO("Current dpms state: %d.\n", dpms_state);
+        m_log("Current dpms state: %d.\n", dpms_state);
     }
     return sd_bus_reply_method_return(m, "i", dpms_state);
 }
@@ -95,7 +106,7 @@ int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     /* Read the parameters */
     int r = sd_bus_message_read(m, "ssi", &display, &xauthority, &level);
     if (r < 0) {
-        MODULE_ERR("Failed to parse parameters: %s\n", strerror(-r));
+        m_log("Failed to parse parameters: %s\n", strerror(-r));
         return r;
     }
     
@@ -111,9 +122,9 @@ int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     }
     
     if (level != DPMS_DISABLED) {
-        MODULE_INFO("New dpms state: %d.\n", level);
+        m_log("New dpms state: %d.\n", level);
     } else {
-        MODULE_INFO("Dpms disabled.\n");
+        m_log("Dpms disabled.\n");
     }
     return sd_bus_reply_method_return(m, "i", level);
 }
@@ -124,7 +135,7 @@ int method_getdpms_timeouts(sd_bus_message *m, void *userdata, sd_bus_error *ret
     /* Read the parameters */
     int r = sd_bus_message_read(m, "ss", &display, &xauthority);
     if (r < 0) {
-        MODULE_ERR("Failed to parse parameters: %s\n", strerror(-r));
+        m_log("Failed to parse parameters: %s\n", strerror(-r));
         return r;
     }
     
@@ -139,7 +150,7 @@ int method_getdpms_timeouts(sd_bus_message *m, void *userdata, sd_bus_error *ret
         return DPMS_DISABLED;
     }
     
-    MODULE_INFO("Current dpms timeouts:\tStandby: %ds\tSuspend: %ds\tOff:%ds.\n", t.standby, t.suspend, t.off);
+    m_log("Current dpms timeouts:\tStandby: %ds\tSuspend: %ds\tOff:%ds.\n", t.standby, t.suspend, t.off);
     return sd_bus_reply_method_return(m, "iii", t.standby, t.suspend, t.off);
 }
 
@@ -156,7 +167,7 @@ int method_setdpms_timeouts(sd_bus_message *m, void *userdata, sd_bus_error *ret
     int standby, suspend, off;
     int r = sd_bus_message_read(m, "ssiii", &display, &xauthority, &standby, &suspend, &off);
     if (r < 0) {
-        MODULE_ERR("Failed to parse parameters: %s\n", strerror(-r));
+        m_log("Failed to parse parameters: %s\n", strerror(-r));
         return r;
     }
     
@@ -172,7 +183,7 @@ int method_setdpms_timeouts(sd_bus_message *m, void *userdata, sd_bus_error *ret
         return err;
     }
     
-    MODULE_INFO("New dpms timeouts:\tStandby: %ds\tSuspend: %ds\tOff:%ds.\n", t.standby, t.suspend, t.off);
+    m_log("New dpms timeouts:\tStandby: %ds\tSuspend: %ds\tOff:%ds.\n", t.standby, t.suspend, t.off);
     return sd_bus_reply_method_return(m, "iii", standby, suspend, off);
 }
 

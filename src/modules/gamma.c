@@ -5,7 +5,8 @@
 
 #ifdef GAMMA_PRESENT
 
-#include <modules.h>
+#include <module/module_easy.h>
+#include <commons.h>
 #include <polkit.h>
 #include <X11/extensions/Xrandr.h>
 #include <math.h>
@@ -30,6 +31,7 @@ typedef struct {
 } smooth_change;
 
 static smooth_change sc;
+static int smooth_fd;
 static const char object_path[] = "/org/clightd/clightd/Gamma";
 static const char bus_interface[] = "org.clightd.clightd.Gamma";
 static const sd_bus_vtable vtable[] = {
@@ -39,9 +41,21 @@ static const sd_bus_vtable vtable[] = {
     SD_BUS_VTABLE_END
 };
 
-MODULE(GAMMA);
+MODULE("GAMMA");
 
-static int init(void) {
+static void module_pre_start(void) {
+    
+}
+
+static bool check(void) {
+    return true;
+}
+
+static bool evaluate(void) {
+    return true;
+}
+
+static void init(void) {
     int r = sd_bus_add_object_vtable(bus,
                                      NULL,
                                      object_path,
@@ -49,40 +63,47 @@ static int init(void) {
                                      vtable,
                                      NULL);
     if (r < 0) {
-        MODULE_ERR("Failed to issue method call: %s\n", strerror(-r));
-        return r;
+        m_log("Failed to issue method call: %s\n", strerror(-r));
+    } else {
+        smooth_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+        m_register_fd(smooth_fd, true, NULL);
     }
-    return REGISTER_FD(timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK));
 }
 
-static int callback(const int fd) {
-    uint64_t t;
-    // nonblocking mode!
-    read(fd, &t, sizeof(uint64_t));
+static void receive(const msg_t *msg, const void *userdata) {
+    if (!msg || !msg->is_pubsub) {
+        uint64_t t;
+        // nonblocking mode!
+        read(smooth_fd, &t, sizeof(uint64_t));
     
-    if (sc.is_smooth) {
-        if (sc.target_temp < sc.current_temp) {
-            sc.current_temp = sc.current_temp - sc.smooth_step < sc.target_temp ? 
-            sc.target_temp :
-            sc.current_temp - sc.smooth_step;
+        if (sc.is_smooth) {
+            if (sc.target_temp < sc.current_temp) {
+                sc.current_temp = sc.current_temp - sc.smooth_step < sc.target_temp ? 
+                sc.target_temp :
+                sc.current_temp - sc.smooth_step;
+            } else {
+                sc.current_temp = sc.current_temp + sc.smooth_step > sc.target_temp ? 
+                sc.target_temp :
+                sc.current_temp + sc.smooth_step;
+            }
         } else {
-            sc.current_temp = sc.current_temp + sc.smooth_step > sc.target_temp ? 
-            sc.target_temp :
-            sc.current_temp + sc.smooth_step;
+            sc.current_temp = sc.target_temp;
         }
-    } else {
-        sc.current_temp = sc.target_temp;
-    }
     
-    struct itimerspec timerValue = {{0}};
-    if (set_gamma(sc.current_temp, sc.dpy) == sc.target_temp) {
-        XCloseDisplay(sc.dpy);
-        unsetenv("XAUTHORITY");
-    } else {
-        timerValue.it_value.tv_sec = 0;
-        timerValue.it_value.tv_nsec = 1000 * 1000 * sc.smooth_wait; // ms
+        struct itimerspec timerValue = {{0}};
+        if (set_gamma(sc.current_temp, sc.dpy) == sc.target_temp) {
+            XCloseDisplay(sc.dpy);
+            unsetenv("XAUTHORITY");
+            m_log("Reached target temp: %d.\n", sc.target_temp);
+        } else {
+            timerValue.it_value.tv_sec = 0;
+            timerValue.it_value.tv_nsec = 1000 * 1000 * sc.smooth_wait; // ms
+        }
+        int ret = timerfd_settime(smooth_fd, 0, &timerValue, NULL);
+        if (userdata) {
+            *(int *)userdata = ret;
+        }
     }
-    return timerfd_settime(fd, 0, &timerValue, NULL);
 }
 
 static void destroy(void) {
@@ -101,7 +122,7 @@ static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
     /* Read the parameters */
     int r = sd_bus_message_read(m, "ssi", &display, &xauthority, &temp);
     if (r < 0) {
-        MODULE_ERR("Failed to parse parameters: %s\n", strerror(-r));
+        m_log("Failed to parse parameters: %s\n", strerror(-r));
         return r;
     }
     
@@ -120,7 +141,7 @@ static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
         
         Display *dpy = XOpenDisplay(display);
         if (dpy == NULL) {
-            MODULE_ERR("XopenDisplay");
+            m_log("XopenDisplay");
             error = ENXIO;
             /* Drop xauthority cookie */
             unsetenv("XAUTHORITY");
@@ -131,8 +152,8 @@ static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
             sc.is_smooth = is_smooth;
             sc.dpy = dpy;
             sc.current_temp = get_gamma(sc.dpy);
-            MODULE_INFO("Temperature target value set (smooth %d): %d.\n", is_smooth, temp);
-            error = callback(GET_FD()); // xauthority cookie will be dropped here when smooth transition is finished
+            m_log("Temperature target value set (smooth %d): %d.\n", is_smooth, temp);
+            receive(NULL, &error); // xauthority cookie will be dropped here when smooth transition is finished
         }
     }
     if (error) {
@@ -154,7 +175,7 @@ static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
     /* Read the parameters */
     int r = sd_bus_message_read(m, "ss", &display, &xauthority);
     if (r < 0) {
-        MODULE_ERR("Failed to parse parameters: %s\n", strerror(-r));
+        m_log("Failed to parse parameters: %s\n", strerror(-r));
         return r;
     }
     
@@ -163,7 +184,7 @@ static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
     
     Display *dpy = XOpenDisplay(display);
     if (dpy == NULL) {
-        MODULE_ERR("XopenDisplay");
+        m_log("XopenDisplay");
         error = ENXIO;
     } else {
         temp = get_gamma(dpy);
@@ -182,7 +203,7 @@ static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
         return -error;
     }
     
-    MODULE_INFO("Current gamma value: %d.\n", temp);
+    m_log("Current gamma value: %d.\n", temp);
     return sd_bus_reply_method_return(m, "i", temp);
 }
 
@@ -217,7 +238,7 @@ static unsigned short get_green(int temp) {
         a = 325.4494125711974;
         b = 0.07943456536662342;
         c = -28.0852963507957;
-        new_temp = ((double)temp / 100) - 50;        
+        new_temp = ((double)temp / 100) - 50;
     }
     return clamp(a + b * new_temp + c * log(new_temp), 255);
 }

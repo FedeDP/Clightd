@@ -1,5 +1,7 @@
 #include <udev.h>
 
+#define _ctor_     __attribute__((constructor (101))) // Used for Sensors registering
+
 #define _SENSORS \
     X(ALS, 0) \
     X(CAMERA, 1) \
@@ -22,7 +24,7 @@ typedef struct _sensor {
 
 #define SENSOR(type, subsystem, udev_name) \
     static int capture(struct udev_device *dev, double *pct, const int num_captures); \
-    static void _ctor1_ register_sensor(void) { \
+    static void _ctor_ register_sensor(void) { \
         const sensor_t self = { type, subsystem, udev_name, -1, capture }; \
         sensor_register_new(&self); \
     }

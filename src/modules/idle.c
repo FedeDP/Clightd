@@ -1,6 +1,7 @@
 #ifdef IDLE_PRESENT
 
-#include <modules.h>
+#include <commons.h>
+#include <module/module_easy.h>
 #include <X11/extensions/scrnsaver.h>
 
 static int method_get_idle_time(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
@@ -14,9 +15,21 @@ static const sd_bus_vtable vtable[] = {
     SD_BUS_VTABLE_END
 };
 
-MODULE(IDLE);
+MODULE("IDLE");
 
-static int init(void) {
+static void module_pre_start(void) {
+    
+}
+
+static bool check(void) {
+    return true;
+}
+
+static bool evaluate(void) {
+    return true;
+}
+
+static void init(void) {
     int r = sd_bus_add_object_vtable(bus,
                                      NULL,
                                      object_path,
@@ -24,14 +37,12 @@ static int init(void) {
                                      vtable,
                                      NULL);
     if (r < 0) {
-        MODULE_ERR("Failed to issue method call: %s\n", strerror(-r));
-        return r;
+        m_log("Failed to issue method call: %s\n", strerror(-r));
     }
-    return 0;
 }
 
-static int callback(const int fd) {
-    return 0;
+static void receive(const msg_t *msg, const void *userdata) {
+    
 }
 
 static void destroy(void) {
@@ -70,7 +81,7 @@ int method_get_idle_time(sd_bus_message *m, void *userdata, sd_bus_error *ret_er
     /* Read the parameters */
     int r = sd_bus_message_read(m, "ss", &display, &xauthority);
     if (r < 0) {
-        MODULE_ERR("Failed to parse parameters: %s\n", strerror(-r));
+        m_log("Failed to parse parameters: %s\n", strerror(-r));
         return r;
     }
     
@@ -80,7 +91,7 @@ int method_get_idle_time(sd_bus_message *m, void *userdata, sd_bus_error *ret_er
         return -ENXIO;
     }
     
-    MODULE_INFO("Idle time: %dms.\n", idle_t);
+    m_log("Idle time: %dms.\n", idle_t);
     return sd_bus_reply_method_return(m, "i", idle_t);
 }
 
