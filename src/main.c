@@ -28,7 +28,6 @@ static const char bus_interface[] = "org.clightd.clightd";
 /* Every module needs these; let's init them before any module */
 void modules_pre_start(void) {
     udev = udev_new();
-    sd_bus_default_system(&bus);
 } 
 
 int main(void) {
@@ -41,7 +40,6 @@ int main(void) {
         r = modules_loop();
         sd_bus_release_name(bus, bus_interface);
     }
-    sd_bus_flush_close_unref(bus);
     udev_unref(udev);
     return r < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }

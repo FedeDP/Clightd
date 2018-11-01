@@ -15,7 +15,7 @@ static const sd_bus_vtable vtable[] = {
 MODULE("BUS");
 
 static void module_pre_start(void) {
-    
+    sd_bus_default_system(&bus);
 }
 
 static bool check(void) {
@@ -38,7 +38,7 @@ static void init(void) {
     } else {
         /* Process initial messages */
         receive(NULL, NULL);
-        m_register_fd(sd_bus_get_fd(bus), true, NULL);
+        m_register_fd(sd_bus_get_fd(bus), false, NULL);
     }
 }
 
@@ -55,7 +55,7 @@ static void receive(const msg_t *msg, const void *userdata) {
 }
 
 static void destroy(void) {
-
+    sd_bus_flush_close_unref(bus);
 }
 
 static int get_version( sd_bus *b, const char *path, const char *interface, const char *property,

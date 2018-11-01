@@ -38,7 +38,7 @@
 - [x] Fix build with no gamma/dpms/idle...
 - [x] Switch to libmodule
 - [x] Sensor ctor should have priority 101, not 100 + modules_quit return err type (Wait for 3.0.0 release of libmodule)
-- [ ] fix "Failed to stop module." error when leaving (BUS module... does not fail if bus fd is not registered)
+- [x] fix "Failed to stop module." error when leaving
 
 ### New Idle interface
 - [ ] Clightd will emit a signal (with ClientX as destination) when the timeout is reached/left. On X it will be just like dimmer clight module does now. On wayland it will use idle protocol (possibly later)
