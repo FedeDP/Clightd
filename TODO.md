@@ -41,16 +41,11 @@
 - [x] fix "Failed to stop module." error when leaving
 
 ### New Idle interface
-- [ ] Clightd will emit a signal (with ClientX as destination) when the timeout is reached/left. On X it will be just like dimmer clight module does now. On wayland it will use idle protocol (possibly later)
-Something like:
--> /org/clightd/clightd/Idle GetClient
--> /org/clightd/clightd/Idle/Client1 SetTimeout
--> /org/clightd/clightd/Idle/Client1 SetScreen
--> /org/clightd/clightd/Idle/Client1 SetXauth (only on X)
--> /org/clightd/clightd/Idle/Client1 Start
-here on X, a timerfd will be set; on Wayland, we will use idle protocol.
--> /org/clightd/clightd/Idle/Client1 Stop
-here timerfd will be destroyed and Client1 removed (its object path too)
+- [x] Clightd will emit a signal (with ClientX as destination) when the timeout is reached/left. On X it will be just like dimmer clight module does now. On wayland it will use idle protocol (possibly later)
+- [x] It will support multiple clients
+- [ ] is SD_BUS_VTABLE_UNPRIVILEGED needed for Idle.Client methods/properties?
+- [x] method_rm_client should remove vtable too!
+- [x] Valgrind check!
 
 ### Doc
 - [ ] Update API reference
