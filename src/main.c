@@ -35,8 +35,6 @@ int main(void) {
     if (r < 0) {
         fprintf(stderr, "Failed to acquire service name: %s\n", strerror(-r));
     } else {
-        /* Drop root privileges */
-        drop_priv();
         r = modules_loop();
         sd_bus_release_name(bus, bus_interface);
     }

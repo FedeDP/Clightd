@@ -9,7 +9,6 @@
 #include <unistd.h>
 #include <sys/timerfd.h>
 #include <module/modules_easy.h>
-#include <privilege.h>
 
 enum quit_codes { LEAVE_W_ERR = -1, SIGNAL_RCV = 1 };
 

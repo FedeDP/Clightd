@@ -154,13 +154,10 @@ static void receive(const msg_t *msg, const void *userdata) {
             timerValue.it_value.tv_sec = 0;
             timerValue.it_value.tv_nsec = 1000 * 1000 * sc.smooth_wait; // ms
         } else {
-            /* We can now drop root access */
-            drop_priv();
+            m_log("Reached target backlight: %.2lf.\n", sc.target_pct);
         
             /* Free all resources */
             reset_backlight_struct(0, 0, 0, 0, 0);
-            
-            m_log("Reached target backlight: %lf.\n", sc.target_pct);
         }
         int ret = timerfd_settime(smooth_fd, 0, &timerValue, NULL);
         if (userdata) {
@@ -243,9 +240,6 @@ static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error 
         r = sd_bus_message_read(m, "s", &backlight_interface);
     
         if (r >= 0) {
-            /* We need root access here */
-            gain_priv();
-            
             reset_backlight_struct(target_pct, is_smooth, smooth_step, smooth_wait, 1);
             add_backlight_sn(backlight_interface, 1);
             DDCUTIL_LOOP({

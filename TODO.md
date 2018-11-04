@@ -22,7 +22,6 @@
 - [x] Properly return value between 0 and 1.0 in CaptureWebcam
 - [x] Updated api Doc
 - [x] Fix udev monitors interface
-- [x] Drop root privileges and gain them when needed
 - [x] Leave brightness_smooth_cb if no internal backlight is present
 - [x] Udev monitors must be unref'd!
 
@@ -43,10 +42,10 @@
 ### New Idle interface
 - [x] Clightd will emit a signal (with ClientX as destination) when the timeout is reached/left. On X it will be just like dimmer clight module does now. On wayland it will use idle protocol (possibly later)
 - [x] It will support multiple clients
-- [ ] is SD_BUS_VTABLE_UNPRIVILEGED needed for Idle.Client methods/properties?
 - [x] callback when changing idle client timeout: it should get current elapsed time and reset its current timer based on that (as clight does)
 - [x] method_rm_client should remove vtable too!
 - [x] Valgrind check!
+- [ ] Validate for Idle Client properties setters
 
 ### Doc
 - [ ] Update API reference
