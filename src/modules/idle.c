@@ -17,10 +17,10 @@ typedef struct {
     char *display;
     unsigned int timeout;
     unsigned int id;            // Client's id
-    int fd;                     // Client's fd'
+    int fd;                     // Client's timer fd
     char *sender;               // BusName who requested this client
     char path[256];             // Client's object path
-    sd_bus_slot *slot;
+    sd_bus_slot *slot;          // vtable's slot
 } idle_client_t;
 
 static time_t get_idle_time(const char *display, const char *xauthority);
@@ -31,6 +31,8 @@ static int method_get_client(sd_bus_message *m, void *userdata, sd_bus_error *re
 static int method_rm_client(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_start_client(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_stop_client(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
+static int set_timeout(sd_bus *b, const char *path, const char *interface, const char *property, 
+                     sd_bus_message *value, void *userdata, sd_bus_error *error);
 
 static uint64_t num_clients;
 static idle_client_t *clients;
@@ -52,7 +54,7 @@ static const sd_bus_vtable vtable_clients[] = {
     SD_BUS_METHOD("Stop", NULL, NULL, method_stop_client, SD_BUS_VTABLE_UNPRIVILEGED | SD_BUS_VTABLE_METHOD_NO_REPLY),
     SD_BUS_WRITABLE_PROPERTY("Display", "s", NULL, NULL, offsetof(idle_client_t, display), SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_WRITABLE_PROPERTY("Xauthority", "s", NULL, NULL, offsetof(idle_client_t, xauthority), SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_WRITABLE_PROPERTY("Timeout", "u", NULL, NULL, offsetof(idle_client_t, timeout), SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_WRITABLE_PROPERTY("Timeout", "u", NULL, set_timeout, offsetof(idle_client_t, timeout), SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_SIGNAL("Idle", "b", 0),
     SD_BUS_VTABLE_END
 };
@@ -111,7 +113,7 @@ static void receive(const msg_t *msg, const void *userdata) {
             int length = read(msg->fd_msg->fd, buffer, BUF_LEN);
             if (length > 0) {
                 m_log("Leaving idle state.\n");
-                inotify_rm_watch(inot_fd, inot_wd);
+                inotify_rm_watch(msg->fd_msg->fd, inot_wd);
                 inot_wd = -1;
                 for (int i = 0; i < num_clients; i++) {
                     c = &clients[i];
@@ -244,11 +246,15 @@ static int method_rm_client(sd_bus_message *m, void *userdata, sd_bus_error *ret
     
     idle_client_t *c = validate_client(obj_path, m, ret_error);
     if (c) {
-        m_log("Freed client %d\n", c->id);
-        m_deregister_fd(c->fd);
-        destroy_client(c);
-        memset(c, 0, sizeof(idle_client_t));
-        return sd_bus_reply_method_return(m, NULL);
+        /* You can only remove stopped clients */ 
+        if (!c->running) {
+            m_log("Freed client %d\n", c->id);
+            m_deregister_fd(c->fd);
+            destroy_client(c);
+            memset(c, 0, sizeof(idle_client_t));
+            return sd_bus_reply_method_return(m, NULL);
+        }
+        sd_bus_error_set_errno(ret_error, EINVAL);
     }
     return -EINVAL;
 }
@@ -256,6 +262,7 @@ static int method_rm_client(sd_bus_message *m, void *userdata, sd_bus_error *ret
 static int method_start_client(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     idle_client_t *c = validate_client(sd_bus_message_get_path(m), m, ret_error);
     if (c) {
+        /* You can only start not-started clients, that must have Display, Xauthority and Timeout setted */
         if (c->timeout > 0 && c->display && c->xauthority && !c->running) {
             struct itimerspec timerValue = {{0}};
             timerValue.it_value.tv_sec = c->timeout;
@@ -272,16 +279,54 @@ static int method_start_client(sd_bus_message *m, void *userdata, sd_bus_error *
 static int method_stop_client(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     idle_client_t *c = validate_client(sd_bus_message_get_path(m), m, ret_error);
     if (c) {
+        /* You can only stop running clients */
         if (c->running) {
-            struct itimerspec timerValue = {{0}};
-            timerfd_settime(c->fd, 0, &timerValue, NULL);
+            /* Do not reset timerfd is client is in idle state */
+            if (!c->is_idle) {
+                struct itimerspec timerValue = {{0}};
+                timerfd_settime(c->fd, 0, &timerValue, NULL);
+            }
+            /* Reset client state */
             c->running = false;
+            c->is_idle = false;
             m_log("Stopping Client %d\n", c->id);
             return sd_bus_reply_method_return(m, NULL);
         }
         sd_bus_error_set_errno(ret_error, EINVAL);
     }
     return -EINVAL;
+}
+
+static int set_timeout(sd_bus *b, const char *path, const char *interface, const char *property, 
+                       sd_bus_message *value, void *userdata, sd_bus_error *error) {
+
+    struct itimerspec timerValue = {{0}};
+    int old_timer  = *(int *)userdata;
+    
+    int r = sd_bus_message_read(value, "u", userdata);
+    if (r < 0) {
+        m_log("Failed to set timeout.\n");
+        return r;
+    }
+    
+    /* TODO: validate here? */
+    idle_client_t *c = (idle_client_t *)(userdata - offsetof(idle_client_t, timeout));
+    if (c->running && !c->is_idle) {
+        int new_timer = *(int *)userdata;
+        timerfd_gettime(c->fd, &timerValue);
+        int old_elapsed = old_timer - timerValue.it_value.tv_sec;
+        int new_timeout = new_timer - old_elapsed;
+        if (new_timeout <= 0) {
+            timerValue.it_value.tv_nsec = 1;
+            timerValue.it_value.tv_sec = 0;
+            m_log("Starting now.\n");
+        } else {
+            timerValue.it_value.tv_sec = new_timeout;
+            m_log("Next timer: %d\n", new_timeout);
+        }
+        r = timerfd_settime(c->fd, 0, &timerValue, NULL);
+    }
+    return r;
 }
 
 #endif
