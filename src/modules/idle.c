@@ -285,6 +285,19 @@ static int method_stop_client(sd_bus_message *m, void *userdata, sd_bus_error *r
             if (!c->is_idle) {
                 struct itimerspec timerValue = {{0}};
                 timerfd_settime(c->fd, 0, &timerValue, NULL);
+            } else {
+                /* 
+                 * If this was the only client awaiting on inotify,
+                 * remove inotify inotify_add_watcher
+                 */
+                int num = 0;
+                for (int i = 0; i < num_clients && num < 2; i++) {
+                    num += clients[i].is_idle;
+                }
+                if (num == 1) {
+                    inotify_rm_watch(inot_fd, inot_wd);
+                    inot_wd = -1;
+                }
             }
             /* Reset client state */
             c->running = false;
