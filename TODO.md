@@ -46,6 +46,7 @@
 - [x] method_rm_client should remove vtable too!
 - [x] Valgrind check!
 - [ ] Validate for Idle Client properties setters
+- [ ] Rename "Xauthority" prop to more generic "AuthCookie"
 
 ### Doc
 - [ ] Update API reference

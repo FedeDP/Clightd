@@ -202,7 +202,7 @@ static idle_client_t *validate_client(const char *path, sd_bus_message *m, sd_bu
     if (sscanf(path, "/org/clightd/clightd/Idle/Client%d", &id) == 1) {
         idle_client_t *c = find_client(id);
         // FIXME: decomment before release!
-        if (c && c->in_use /*&& !strcmp(c->sender, sd_bus_message_get_sender(m))*/) {
+        if (c && c->in_use && !strcmp(c->sender, sd_bus_message_get_sender(m))) {
             return c;
         }
     }
