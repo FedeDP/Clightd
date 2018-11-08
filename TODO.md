@@ -45,8 +45,8 @@
 - [x] callback when changing idle client timeout: it should get current elapsed time and reset its current timer based on that (as clight does)
 - [x] method_rm_client should remove vtable too!
 - [x] Valgrind check!
-- [ ] Validate for Idle Client properties setters
-- [ ] Rename "Xauthority" prop to more generic "AuthCookie"
+- [x] Validate for Idle Client properties setters
+- [x] Rename "Xauthority" prop to more generic "AuthCookie"
 
 ### Doc
 - [ ] Update API reference
