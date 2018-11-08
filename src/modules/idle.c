@@ -23,7 +23,7 @@ typedef struct {
     sd_bus_slot *slot;          // vtable's slot
 } idle_client_t;
 
-static time_t get_idle_time(const char *display, const char *authcookie);
+static time_t get_idle_time(const idle_client_t *c);
 static int find_available_client(idle_client_t **c);
 static idle_client_t *find_client(const int id);
 static void destroy_client(idle_client_t *c);
@@ -97,7 +97,7 @@ static void receive(const msg_t *msg, const void *userdata) {
             uint64_t t;
             read(msg->fd_msg->fd, &t, sizeof(uint64_t));
             
-            int idle_t = lround((double)get_idle_time(c->display, c->authcookie) / 1000);
+            int idle_t = lround((double)get_idle_time(c) / 1000);
             c->is_idle = idle_t >= c->timeout;
             struct itimerspec timerValue = {{0}};
             if (c->is_idle) {
@@ -142,17 +142,17 @@ static void destroy(void) {
     free(clients);
 }
 
-static time_t get_idle_time(const char *display, const char *authcookie) {
+static time_t get_idle_time(const idle_client_t *c) {
     time_t idle_time;
     static XScreenSaverInfo *mit_info;
     Display *dpy;
     int screen;
     
     /* set xauthority cookie */
-    setenv("XAUTHORITY", authcookie, 1);
+    setenv("XAUTHORITY", c->authcookie, 1);
     
     mit_info = XScreenSaverAllocInfo();
-    if (!(dpy = XOpenDisplay(display))) {
+    if (!(dpy = XOpenDisplay(c->display))) {
         idle_time = -ENXIO;
     } else {
         screen = DefaultScreen(dpy);
