@@ -113,6 +113,8 @@ static void destroy(void) {
 static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     int temp, error = 0;
     const char *display = NULL, *xauthority = NULL;
+    const int is_smooth;
+    const unsigned int smooth_step, smooth_wait;
     
     if (!check_authorization(m)) {
         sd_bus_error_set_errno(ret_error, EPERM);
@@ -120,19 +122,13 @@ static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
     }
     
     /* Read the parameters */
-    int r = sd_bus_message_read(m, "ssi", &display, &xauthority, &temp);
+    int r = sd_bus_message_read(m, "ssi(buu)", &display, &xauthority, &temp, 
+                                &is_smooth, &smooth_step, &smooth_wait);
     if (r < 0) {
         m_log("Failed to parse parameters: %s\n", strerror(-r));
         return r;
     }
-    
-    const int is_smooth;
-    const unsigned int smooth_step, smooth_wait;
-    
-    sd_bus_message_enter_container(m, SD_BUS_TYPE_STRUCT, "buu");
-    sd_bus_message_read(m, "buu", &is_smooth, &smooth_step, &smooth_wait);
-    sd_bus_message_exit_container(m);
-    
+
     if (temp < 1000 || temp > 10000) {
         error = EINVAL;
     } else {

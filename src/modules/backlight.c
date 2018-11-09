@@ -83,8 +83,6 @@ static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error 
 static int method_getbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static void reset_backlight_struct(double target_pct, int is_smooth, double smooth_step, unsigned int smooth_wait, int all);
 static void add_backlight_sn(const char *sn, int internal);
-static int read_brightness_params(sd_bus_message *m, const double *target_pct, const int *is_smooth, 
-                                  const double *smooth_step, const unsigned int *smooth_wait);
 static int set_internal_backlight(int idx);
 static int set_external_backlight(int idx);
 static void append_backlight(sd_bus_message *reply, const char *name, const double pct);
@@ -209,21 +207,6 @@ static void add_backlight_sn(const char *sn, int internal) {
     }
 }
 
-static int read_brightness_params(sd_bus_message *m, const double *target_pct, const int *is_smooth, 
-                                  const double *smooth_step, const unsigned int *smooth_wait) {
-    // read d(bdu) params
-    int r;
-    if ((r = sd_bus_message_read(m, "d", target_pct)) >= 0 && 
-        (r = sd_bus_message_enter_container(m, SD_BUS_TYPE_STRUCT, "bdu")) >= 0 && 
-        (r = sd_bus_message_read(m, "bdu", is_smooth, smooth_step, smooth_wait)) >= 0 && 
-        (r = sd_bus_message_exit_container(m)) >= 0) {
-        return 0;
-    }
-
-    m_log("Failed to parse parameters: %s\n", strerror(-r));
-    return -r;
-}
-
 static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     if (!check_authorization(m)) {
         sd_bus_error_set_errno(ret_error, EPERM);
@@ -235,23 +218,21 @@ static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error 
     const int is_smooth;
     const unsigned int smooth_wait;
     
-    int r = read_brightness_params(m, &target_pct, &is_smooth, &smooth_step, &smooth_wait);
-    if (!r) {
-        r = sd_bus_message_read(m, "s", &backlight_interface);
-    
-        if (r >= 0) {
-            reset_backlight_struct(target_pct, is_smooth, smooth_step, smooth_wait, 1);
-            add_backlight_sn(backlight_interface, 1);
-            DDCUTIL_LOOP({
-                add_backlight_sn(dinfo->sn, 0);
-            });
-            m_log("Target pct (smooth %d): %.2lf\n", is_smooth, target_pct);
-            int ok = 0;
-            receive(NULL, &ok);
-            // Returns true if no errors happened
-            return sd_bus_reply_method_return(m, "b", ok == 0);
-        }
+    int r = sd_bus_message_read(m, "d(bdu)s", &target_pct, &is_smooth, &smooth_step, 
+                                &smooth_wait, &backlight_interface);
+    if (r >= 0) {
+        reset_backlight_struct(target_pct, is_smooth, smooth_step, smooth_wait, 1);
+        add_backlight_sn(backlight_interface, 1);
+        DDCUTIL_LOOP({
+            add_backlight_sn(dinfo->sn, 0);
+        });
+        m_log("Target pct (smooth %d): %.2lf\n", is_smooth, target_pct);
+        int ok = 0;
+        receive(NULL, &ok);
+        // Returns true if no errors happened
+        return sd_bus_reply_method_return(m, "b", ok == 0);
     }
+    m_log("Failed to parse parameters: %s\n", strerror(-r));
     return r;
 }
 
