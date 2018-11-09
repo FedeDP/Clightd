@@ -70,7 +70,9 @@
 https://github.com/swaywm/wlroots/blob/master/examples/gamma-control.c
 https://github.com/swaywm/wlroots/blob/master/examples/idle.c
 https://github.com/swaywm/sway/tree/master/swayidle
-- [ ] Is dpms supported? Couldn't it be just another case for new Idle implementation? Eg: Idle after 45s -> dim screen. Idle after 5mins -> screen off.
+- [ ] Couldn't DPMS be just another case for new Idle implementation? Eg: Idle after 45s -> dim screen. Idle after 5mins -> screen off
+- [ ] Eventually drop dpms {Set/Get}Timeouts
+- [ ] Port gamma and backlight to same "client"-like interface of idle
 
 ## Ideas
 - [ ] follow ddcci kernel driver and in case, drop ddcutil and add the kernel driver as clightd opt-dep
