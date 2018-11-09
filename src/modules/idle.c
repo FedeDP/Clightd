@@ -25,7 +25,7 @@ typedef struct {
 
 static time_t get_idle_time(const idle_client_t *c);
 static int find_available_client(idle_client_t **c);
-static idle_client_t *find_client(const int id);
+static idle_client_t *find_client(const unsigned int id);
 static void destroy_client(idle_client_t *c);
 static int method_get_client(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_rm_client(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
@@ -144,21 +144,18 @@ static void destroy(void) {
 
 static time_t get_idle_time(const idle_client_t *c) {
     time_t idle_time;
-    static XScreenSaverInfo *mit_info;
     Display *dpy;
-    int screen;
     
     /* set xauthority cookie */
     setenv("XAUTHORITY", c->authcookie, 1);
     
-    mit_info = XScreenSaverAllocInfo();
     if (!(dpy = XOpenDisplay(c->display))) {
         idle_time = -ENXIO;
     } else {
-        screen = DefaultScreen(dpy);
-        XScreenSaverQueryInfo(dpy, RootWindow(dpy,screen), mit_info);
-        idle_time = mit_info->idle;
-        XFree(mit_info);
+        XScreenSaverInfo mit_info;
+        int screen = DefaultScreen(dpy);
+        XScreenSaverQueryInfo(dpy, RootWindow(dpy, screen), &mit_info);
+        idle_time = mit_info.idle;
         XCloseDisplay(dpy);
     }
     /* Drop xauthority cookie */
@@ -170,7 +167,7 @@ static int find_available_client(idle_client_t **c) {
     for (int i = 0; i < num_clients; i++) {
         if (!clients[i].in_use) {
             *c = &clients[i];
-            m_log("Returning unused client %d\n", (*c)->id);
+            m_log("Returning unused client %u\n", (*c)->id);
             return i;
         }
     }
@@ -179,13 +176,13 @@ static int find_available_client(idle_client_t **c) {
         clients = tmp;
         *c = &clients[num_clients++];
         memset(*c, 0, sizeof(idle_client_t));
-        m_log("Creating client %d\n", (*c)->id);
+        m_log("Creating client %u\n", (*c)->id);
         return num_clients - 1;
     }
     return -1;
 }
 
-static idle_client_t *find_client(const int id) {
+static idle_client_t *find_client(const unsigned int id) {
     for (int i = 0; i < num_clients; i++) {
         if (clients[i].id == id) {
             return &clients[i];
@@ -196,13 +193,15 @@ static idle_client_t *find_client(const int id) {
 
 static void destroy_client(idle_client_t *c) {
     free(c->sender);
+    free(c->authcookie);
+    free(c->display);
     c->slot = sd_bus_slot_unref(c->slot);
-    m_log("Freeing client %d\n", c->id);
+    m_log("Freeing client %u\n", c->id);
 }
 
 static idle_client_t *validate_client(const char *path, sd_bus_message *m, sd_bus_error *ret_error) {
-    int id;
-    if (sscanf(path, "/org/clightd/clightd/Idle/Client%d", &id) == 1) {
+    unsigned int id;
+    if (sscanf(path, "/org/clightd/clightd/Idle/Client%u", &id) == 1) {
         idle_client_t *c = find_client(id);
         if (c && c->in_use && !strcmp(c->sender, sd_bus_message_get_sender(m))) {
             return c;
@@ -222,7 +221,7 @@ static int method_get_client(sd_bus_message *m, void *userdata, sd_bus_error *re
         c->fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
         m_register_fd(c->fd, true, c);
         c->sender = strdup(sd_bus_message_get_sender(m));
-        snprintf(c->path, sizeof(c->path) - 1, "%s/Client%d", object_path, c->id);
+        snprintf(c->path, sizeof(c->path) - 1, "%s/Client%u", object_path, c->id);
         sd_bus_add_object_vtable(bus,
                                 &c->slot,
                                 c->path,
@@ -268,7 +267,7 @@ static int method_start_client(sd_bus_message *m, void *userdata, sd_bus_error *
             timerValue.it_value.tv_sec = c->timeout;
             timerfd_settime(c->fd, 0, &timerValue, NULL);
             c->running = true;
-            m_log("Starting Client %d\n", c->id);
+            m_log("Starting Client %u\n", c->id);
             return sd_bus_reply_method_return(m, NULL);
         }
         sd_bus_error_set_errno(ret_error, EINVAL);
@@ -302,7 +301,7 @@ static int method_stop_client(sd_bus_message *m, void *userdata, sd_bus_error *r
             /* Reset client state */
             c->running = false;
             c->is_idle = false;
-            m_log("Stopping Client %d\n", c->id);
+            m_log("Stopping Client %u\n", c->id);
             return sd_bus_reply_method_return(m, NULL);
         }
         sd_bus_error_set_errno(ret_error, EINVAL);
@@ -353,9 +352,13 @@ static int set_prop(sd_bus *b, const char *path, const char *interface, const ch
         return -EINVAL;
     }
     
-    int r = sd_bus_message_read(value, "s", userdata);
+    const char *val = NULL;
+    int r = sd_bus_message_read(value, "s", &val);
     if (r < 0) {
         m_log("Failed to set property %s.\n", property);
+    } else {
+        char **prop = (char **)userdata;
+        *prop = strdup(val);
     }
     return r;
 }

@@ -246,7 +246,7 @@ static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error 
                 add_backlight_sn(dinfo->sn, 0);
             });
             m_log("Target pct (smooth %d): %.2lf\n", is_smooth, target_pct);
-            int ok;
+            int ok = 0;
             receive(NULL, &ok);
             // Returns true if no errors happened
             return sd_bus_reply_method_return(m, "b", ok == 0);
