@@ -208,7 +208,7 @@ static idle_client_t *validate_client(const char *path, sd_bus_message *m, sd_bu
         }
     }
     m_log("Failed to validate client.\n");
-    sd_bus_error_set_errno(ret_error, EINVAL);
+    sd_bus_error_set_errno(ret_error, EPERM);
     return NULL;
 }
 
@@ -255,7 +255,7 @@ static int method_rm_client(sd_bus_message *m, void *userdata, sd_bus_error *ret
         }
         sd_bus_error_set_errno(ret_error, EINVAL);
     }
-    return -EINVAL;
+    return -sd_bus_error_get_errno(ret_error);
 }
 
 static int method_start_client(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
@@ -272,7 +272,7 @@ static int method_start_client(sd_bus_message *m, void *userdata, sd_bus_error *
         }
         sd_bus_error_set_errno(ret_error, EINVAL);
     }
-    return -EINVAL;
+    return -sd_bus_error_get_errno(ret_error);
 }
 
 static int method_stop_client(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
@@ -306,7 +306,7 @@ static int method_stop_client(sd_bus_message *m, void *userdata, sd_bus_error *r
         }
         sd_bus_error_set_errno(ret_error, EINVAL);
     }
-    return -EINVAL;
+    return -sd_bus_error_get_errno(ret_error);
 }
 
 static int set_timeout(sd_bus *b, const char *path, const char *interface, const char *property, 
@@ -314,7 +314,7 @@ static int set_timeout(sd_bus *b, const char *path, const char *interface, const
 
     idle_client_t *c = validate_client(path, value, error);
     if (!c) {
-        return -EINVAL;
+        return -sd_bus_error_get_errno(error);
     }
     
     int old_timer  = *(int *)userdata;
@@ -349,7 +349,7 @@ static int set_prop(sd_bus *b, const char *path, const char *interface, const ch
     
     idle_client_t *c = validate_client(path, value, error);
     if (!c) {
-        return -EINVAL;
+        return -sd_bus_error_get_errno(error);
     }
     
     const char *val = NULL;
