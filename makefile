@@ -1,12 +1,12 @@
 BINDIR = /usr/lib/clightd
 BINNAME = clightd
 BUSCONFDIR = /etc/dbus-1/system.d/
-BUSCONFNAME = org.clightd.backlight.conf
+BUSCONFNAME = org.clightd.clightd.conf
 BUSSERVICEDIR = /usr/share/dbus-1/system-services/
-BUSSERVICENAME = org.clightd.backlight.service
+BUSSERVICENAME = org.clightd.clightd.service
 SYSTEMDSERVICE = clightd.service
 SYSTEMDDIR = /usr/lib/systemd/system
-POLKITPOLICYNAME = org.clightd.backlight.policy
+POLKITPOLICYNAME = org.clightd.clightd.policy
 POLKITPOLICYDIR = /usr/share/polkit-1/actions
 MODULESLOADDDC = i2c_clightd.conf
 MODULESLOADDIR = /usr/lib/modules-load.d
@@ -19,10 +19,12 @@ INSTALL_PROGRAM = $(INSTALL) -m755
 INSTALL_DATA = $(INSTALL) -m644
 INSTALL_DIR = $(INSTALL) -d
 SRCDIR = src/
-LIBS = -lm $(shell pkg-config --libs libudev)
-CFLAGS = $(shell pkg-config --cflags libudev) -D_GNU_SOURCE -std=c99
+LIBS = -lm $(shell pkg-config --libs libudev libmodule)
+CFLAGS = $(shell pkg-config --cflags libudev libmodule) -D_GNU_SOURCE -std=c99
 
-FOLDERS = $(subst src,.,$(sort $(dir $(wildcard $(SRCDIR)*/))))
+# Recursive wildcard
+rwildcard=$(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2) $(filter $(subst *,%,$2),$d))
+FOLDERS = $(subst src,.,$(sort $(dir $(call rwildcard, , *.c))))
 SRCS = $(addsuffix *.c, $(FOLDERS))
 INCS = $(addprefix -I, $(FOLDERS))
 

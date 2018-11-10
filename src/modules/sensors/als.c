@@ -1,10 +1,11 @@
 #include <sensor.h>
 
+#define ALS_NAME        "Als"
 #define ALS_ILL_MAX     4096
 #define ALS_SUBSYSTEM   "iio"
 #define ALS_SYSNAME     "acpi-als"
 
-SENSOR("als", ALS_SUBSYSTEM, "acpi-als");
+SENSOR(ALS_NAME, ALS_SUBSYSTEM, ALS_SYSNAME);
 
 static int capture(struct udev_device *dev, double *pct, const int num_captures) {
     for (int i = 0; i < num_captures; i++) {

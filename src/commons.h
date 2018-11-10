@@ -1,3 +1,5 @@
+#pragma once
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -6,6 +8,17 @@
 #include <libudev.h>
 #include <unistd.h>
 #include <sys/timerfd.h>
-#include <privilege.h>
+#include <module/modules_easy.h>
 
-extern sd_bus *bus;
+enum quit_codes { LEAVE_W_ERR = -1, SIGNAL_RCV = 1 };
+
+typedef struct module {
+    const int idx;
+    const char *name;
+    int (*init)(void);                    // module init function
+    void (*destroy)(void);                // module destroy function
+    int (*poll_cb)(const int fd);        // module poll callback
+} module_t;
+
+sd_bus *bus;
+struct udev *udev;
