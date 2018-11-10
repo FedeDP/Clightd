@@ -10,8 +10,6 @@
 #include <sys/timerfd.h>
 #include <module/modules_easy.h>
 
-enum quit_codes { LEAVE_W_ERR = -1, SIGNAL_RCV = 1 };
-
 typedef struct module {
     const int idx;
     const char *name;

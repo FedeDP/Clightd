@@ -35,7 +35,7 @@ static void receive(const msg_t *msg, const void *userdata) {
             m_log("An error occurred while getting signalfd data.\n");
         }
         m_log("Received signal %d. Leaving.\n", fdsi.ssi_signo);
-        modules_quit(SIGNAL_RCV);
+        modules_quit(0);
     }
 }
 
