@@ -1,5 +1,5 @@
 #include <sensor.h>
-#include <module/module_easy.h>
+#include <module_easy.h>
 #include <polkit.h>
 
 static enum sensors get_sensor_type(const char *str);

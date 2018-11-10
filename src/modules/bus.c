@@ -1,4 +1,4 @@
-#include <module/module_easy.h>
+#include <module_easy.h>
 #include <commons.h>
 
 static int get_version( sd_bus *b, const char *path, const char *interface, const char *property,

@@ -1,6 +1,6 @@
 #ifdef DPMS_PRESENT
 
-#include <module/module_easy.h>
+#include <module_easy.h>
 #include <commons.h>
 #include <polkit.h>
 #include <X11/Xlib.h>

@@ -8,7 +8,7 @@
 #include <libudev.h>
 #include <unistd.h>
 #include <sys/timerfd.h>
-#include <module/modules_easy.h>
+#include <modules_easy.h>
 
 typedef struct module {
     const int idx;
