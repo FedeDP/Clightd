@@ -2,7 +2,6 @@ sudo: required
 
 notifications:
   email:
-    recipients: nierro92@gmail.com
     on_success: change
     on_failure: always
 
