@@ -52,6 +52,17 @@
 - [ ] Update API reference
 - [x] Update any org.clightd.backlight reference
 
+### Fix
+- [x] After suspend, clightd gets restarted, invalidating Clight Idle client. Why does it get stopped/restarted? (Fixed in upcoming libmodule 3.1.0)
+
+### Generic
+- [ ] Port to cmake(?)
+- [ ] If libmodule 3.1.0 is released before clightd 3.0, port idle client api to use libmodule newly exposed MAP api (and require >= 3.1.0)
+- [ ] Port gamma too to same api as idle?
+- [ ] Drop dpms timeouts support? (use idle client with a longer timeout and then switch off screen when timeout is reached? Set/Get should remain though, and must be "wlroots" friendly)
+
+**Release!!!**
+
 ## 3.1
 - [ ] add support for GetSensorData android app
 - [ ] it will come as bash scripts
