@@ -2,7 +2,7 @@
 
 #include <commons.h>
 #include <sys/inotify.h>
-#include <module_easy.h>
+#include <module/module_easy.h>
 #include <X11/extensions/scrnsaver.h>
 #include <linux/limits.h>
 #include <math.h>

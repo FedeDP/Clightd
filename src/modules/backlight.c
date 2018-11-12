@@ -1,4 +1,4 @@
-#include <module_easy.h>
+#include <module/module_easy.h>
 #include <polkit.h>
 #include <udev.h>
 
