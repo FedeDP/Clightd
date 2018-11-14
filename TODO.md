@@ -49,7 +49,7 @@
 - [x] Rename "Xauthority" prop to more generic "AuthCookie"
 
 ### Doc
-- [ ] Update API reference
+- [x] Update API reference
 - [x] Update any org.clightd.backlight reference
 
 ### Fix
@@ -58,8 +58,6 @@
 ### Generic
 - [ ] Port to cmake(?)
 - [ ] If libmodule 3.1.0 is released before clightd 3.0, port idle client api to use libmodule newly exposed MAP api (and require >= 3.1.0)
-- [ ] Port gamma too to same api as idle?
-- [ ] Drop dpms timeouts support? (use idle client with a longer timeout and then switch off screen when timeout is reached? Set/Get should remain though, and must be "wlroots" friendly)
 
 **Release!!!**
 
