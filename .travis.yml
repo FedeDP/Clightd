@@ -22,13 +22,16 @@ arch:
         - libxrandr
         - libxext
         - libxss
+        - libmodule
+        - ddcutil
     script:
         - "echo $CC"
         - make debug
         - make DISABLE_GAMMA=1 debug
         - make DISABLE_DPMS=1 debug
         - make DISABLE_IDLE=1 debug
-        - make DISABLE_GAMMA=1 DISABLE_DPMS=1 DISABLE_IDLE=1 debug
+  	- make DISABLE_DDC=1 debug
+        - make DISABLE_GAMMA=1 DISABLE_DPMS=1 DISABLE_IDLE=1 DISABLE_DDC=1 debug
 
 script:
     - "curl -s https://raw.githubusercontent.com/mikkeloscar/arch-travis/master/arch-travis.sh | bash"

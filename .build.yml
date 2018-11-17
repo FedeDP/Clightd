@@ -1,0 +1,22 @@
+image: archlinux
+packages:
+  - systemd
+  - linux-api-headers
+  - libx11
+  - libxrandr
+  - libxext
+  - libxss
+  - ddcutil
+  - libmodule
+sources:
+  - https://github.com/FedeDP/Clightd
+tasks:
+  - clightd: |
+      cd Clightd
+      make debug
+      make DISABLE_GAMMA=1 debug
+      make DISABLE_DPMS=1 debug
+      make DISABLE_IDLE=1 debug
+      make DISABLE_DDC=1 debug
+      make DISABLE_GAMMA=1 DISABLE_DPMS=1 DISABLE_IDLE=1 DISABLE_DDC=1 debug
+
