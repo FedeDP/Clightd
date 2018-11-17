@@ -191,6 +191,7 @@ static idle_client_t *find_available_client(void) {
         c = calloc(1, sizeof(idle_client_t));
         if (c) {
             c->id = map_length(clients);
+            m_log("Creating client %u\n", c->id);
         }
     }
     return c;
@@ -218,7 +219,6 @@ static int method_get_client(sd_bus_message *m, void *userdata, sd_bus_error *re
     idle_client_t *c = find_available_client();
     if (c) {
         c->in_use = true;
-        m_log("Creating client %u\n", c->id);
         c->fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
         m_register_fd(c->fd, true, c);
         c->sender = strdup(sd_bus_message_get_sender(m));
@@ -280,12 +280,11 @@ static int method_start_client(sd_bus_message *m, void *userdata, sd_bus_error *
 }
 
 static map_ret_code check_client_inot(void *userdata, void *client) {
-    static int num_idles = 0;
+    int *num_idles = (int *)userdata;
     idle_client_t *c = (idle_client_t *)client;
     
-    num_idles += c->is_idle;
-    if (num_idles > 1) {
-        num_idles = 0;
+    *num_idles += c->is_idle;
+    if (*num_idles > 1) {
         return MAP_ERR;
     }
     return MAP_OK;
@@ -305,7 +304,8 @@ static int method_stop_client(sd_bus_message *m, void *userdata, sd_bus_error *r
                  * If this was the only client awaiting on inotify,
                  * remove inotify inotify_add_watcher
                  */
-                if (map_iterate(clients, check_client_inot, NULL) == MAP_OK) {
+                int num_idles = 0;
+                if (map_iterate(clients, check_client_inot, &num_idles) == MAP_OK) {
                     m_log("Removing inotify watch as only client using it was stopped.\n");
                     inotify_rm_watch(inot_fd, inot_wd);
                     inot_wd = -1;
