@@ -3,6 +3,7 @@
 #include <commons.h>
 #include <sys/inotify.h>
 #include <module/module_easy.h>
+#include <module/map.h>
 #include <X11/extensions/scrnsaver.h>
 #include <linux/limits.h>
 #include <math.h>
@@ -23,9 +24,11 @@ typedef struct {
     sd_bus_slot *slot;          // vtable's slot
 } idle_client_t;
 
+static map_ret_code destroy_clients(void *userdata, void *client);
+static map_ret_code leave_idle(void *userdata, void *client);
 static time_t get_idle_time(const idle_client_t *c);
-static int find_available_client(idle_client_t **c);
-static idle_client_t *find_client(const unsigned int id);
+static map_ret_code find_free_client(void *out, void *client);
+static idle_client_t *find_available_client(void);
 static void destroy_client(idle_client_t *c);
 static int method_get_client(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_rm_client(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
@@ -36,8 +39,7 @@ static int set_timeout(sd_bus *b, const char *path, const char *interface, const
 static int set_prop(sd_bus *b, const char *path, const char *interface, const char *property, 
                     sd_bus_message *value, void *userdata, sd_bus_error *error);
 
-static uint64_t num_clients;
-static idle_client_t *clients;
+static map_t *clients;
 static int inot_fd;
 static int inot_wd;
 static const char object_path[] = "/org/clightd/clightd/Idle";
@@ -76,6 +78,7 @@ static bool evaluate(void) {
 }
 
 static void init(void) {
+    clients = map_new();
     int r = sd_bus_add_object_vtable(bus,
                                      NULL,
                                      object_path,
@@ -117,29 +120,36 @@ static void receive(const msg_t *msg, const void *userdata) {
                 m_log("Leaving idle state.\n");
                 inotify_rm_watch(msg->fd_msg->fd, inot_wd);
                 inot_wd = -1;
-                for (int i = 0; i < num_clients; i++) {
-                    c = &clients[i];
-                    if (c->is_idle) {
-                        sd_bus_emit_signal(bus, c->path, clients_interface, "Idle", "b", false);
-                        c->is_idle = false;
-                        struct itimerspec timerValue = {{0}};
-                        timerValue.it_value.tv_sec = c->timeout;
-                        timerfd_settime(c->fd, 0, &timerValue, NULL);
-                    }
-                }
+                map_iterate(clients, leave_idle, NULL);
             }
         }
     }
 }
 
 static void destroy(void) {
-    for (int i = 0; i < num_clients; i++) {
-        idle_client_t *c = &clients[i];
-        if (c->in_use) {
-            destroy_client(c);
-        }
+    map_iterate(clients, destroy_clients, NULL);
+    map_free(clients);
+}
+
+static map_ret_code leave_idle(void *userdata, void *client) {
+    idle_client_t *c = (idle_client_t *)client;
+    if (c->is_idle) {
+        sd_bus_emit_signal(bus, c->path, clients_interface, "Idle", "b", false);
+        c->is_idle = false;
+        struct itimerspec timerValue = {{0}};
+        timerValue.it_value.tv_sec = c->timeout;
+        timerfd_settime(c->fd, 0, &timerValue, NULL);
     }
-    free(clients);
+    return MAP_OK;
+}
+
+static map_ret_code destroy_clients(void *userdata, void *client) {
+    idle_client_t *c = (idle_client_t *)client;
+    if (c->in_use) {
+        destroy_client(c);
+    }
+    free(c);
+    return MAP_OK;
 }
 
 static time_t get_idle_time(const idle_client_t *c) {
@@ -163,32 +173,27 @@ static time_t get_idle_time(const idle_client_t *c) {
     return idle_time;
 }
 
-static int find_available_client(idle_client_t **c) {
-    for (int i = 0; i < num_clients; i++) {
-        if (!clients[i].in_use) {
-            *c = &clients[i];
-            m_log("Returning unused client %u\n", (*c)->id);
-            return i;
-        }
+static map_ret_code find_free_client(void *out, void *client) {
+    idle_client_t *c = (idle_client_t *)client;
+    idle_client_t **o = (idle_client_t **)out;
+    
+    if (!c->in_use) {
+        *o = c;
+        m_log("Returning unused client %u\n", c->id);
+        return MAP_ERR; // break iteration
     }
-    idle_client_t *tmp = realloc(clients, (num_clients + 1) * sizeof(idle_client_t));
-    if (tmp) {
-        clients = tmp;
-        *c = &clients[num_clients++];
-        memset(*c, 0, sizeof(idle_client_t));
-        m_log("Creating client %u\n", (*c)->id);
-        return num_clients - 1;
-    }
-    return -1;
+    return MAP_OK;
 }
 
-static idle_client_t *find_client(const unsigned int id) {
-    for (int i = 0; i < num_clients; i++) {
-        if (clients[i].id == id) {
-            return &clients[i];
+static idle_client_t *find_available_client(void) {
+    idle_client_t *c = NULL;
+    if (map_iterate(clients, find_free_client, &c) != MAP_ERR) {
+        c = calloc(1, sizeof(idle_client_t));
+        if (c) {
+            c->id = map_length(clients);
         }
     }
-    return NULL;
+    return c;
 }
 
 static void destroy_client(idle_client_t *c) {
@@ -200,12 +205,9 @@ static void destroy_client(idle_client_t *c) {
 }
 
 static idle_client_t *validate_client(const char *path, sd_bus_message *m, sd_bus_error *ret_error) {
-    unsigned int id;
-    if (sscanf(path, "/org/clightd/clightd/Idle/Client%u", &id) == 1) {
-        idle_client_t *c = find_client(id);
-        if (c && c->in_use && !strcmp(c->sender, sd_bus_message_get_sender(m))) {
-            return c;
-        }
+    idle_client_t *c = map_get(clients, path);
+    if (c && c->in_use && !strcmp(c->sender, sd_bus_message_get_sender(m))) {
+        return c;
     }
     m_log("Failed to validate client.\n");
     sd_bus_error_set_errno(ret_error, EPERM);
@@ -213,15 +215,15 @@ static idle_client_t *validate_client(const char *path, sd_bus_message *m, sd_bu
 }
 
 static int method_get_client(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    idle_client_t *c = NULL;
-    const int id = find_available_client(&c);
-    if (id != -1) {
+    idle_client_t *c = find_available_client();
+    if (c) {
         c->in_use = true;
-        c->id = id;
+        m_log("Creating client %u\n", c->id);
         c->fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
         m_register_fd(c->fd, true, c);
         c->sender = strdup(sd_bus_message_get_sender(m));
         snprintf(c->path, sizeof(c->path) - 1, "%s/Client%u", object_path, c->id);
+        map_put(clients, c->path, c, true); // store client in hashmap
         sd_bus_add_object_vtable(bus,
                                 &c->slot,
                                 c->path,
@@ -250,7 +252,9 @@ static int method_rm_client(sd_bus_message *m, void *userdata, sd_bus_error *ret
         if (!c->running) {
             m_deregister_fd(c->fd);
             destroy_client(c);
+            int id = c->id;
             memset(c, 0, sizeof(idle_client_t));
+            c->id = id; // avoid zeroing client id
             return sd_bus_reply_method_return(m, NULL);
         }
         sd_bus_error_set_errno(ret_error, EINVAL);
@@ -275,6 +279,18 @@ static int method_start_client(sd_bus_message *m, void *userdata, sd_bus_error *
     return -sd_bus_error_get_errno(ret_error);
 }
 
+static map_ret_code check_client_inot(void *userdata, void *client) {
+    static int num_idles = 0;
+    idle_client_t *c = (idle_client_t *)client;
+    
+    num_idles += c->is_idle;
+    if (num_idles > 1) {
+        num_idles = 0;
+        return MAP_ERR;
+    }
+    return MAP_OK;
+}
+
 static int method_stop_client(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     idle_client_t *c = validate_client(sd_bus_message_get_path(m), m, ret_error);
     if (c) {
@@ -289,11 +305,8 @@ static int method_stop_client(sd_bus_message *m, void *userdata, sd_bus_error *r
                  * If this was the only client awaiting on inotify,
                  * remove inotify inotify_add_watcher
                  */
-                int num = 0;
-                for (int i = 0; i < num_clients && num < 2; i++) {
-                    num += clients[i].is_idle;
-                }
-                if (num == 1) {
+                if (map_iterate(clients, check_client_inot, NULL) == MAP_OK) {
+                    m_log("Removing inotify watch as only client using it was stopped.\n");
                     inotify_rm_watch(inot_fd, inot_wd);
                     inot_wd = -1;
                 }
@@ -346,7 +359,6 @@ static int set_timeout(sd_bus *b, const char *path, const char *interface, const
 
 static int set_prop(sd_bus *b, const char *path, const char *interface, const char *property, 
                        sd_bus_message *value, void *userdata, sd_bus_error *error) {
-    
     idle_client_t *c = validate_client(path, value, error);
     if (!c) {
         return -sd_bus_error_get_errno(error);

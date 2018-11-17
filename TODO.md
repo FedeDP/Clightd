@@ -57,7 +57,7 @@
 
 ### Generic
 - [ ] Port to cmake(?)
-- [ ] If libmodule 3.1.0 is released before clightd 3.0, port idle client api to use libmodule newly exposed MAP api (and require >= 3.1.0)
+- [x] Port idle client api to use libmodule newly exposed MAP api (and require >= 3.1.0)
 
 **Release!!!**
 
