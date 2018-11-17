@@ -180,14 +180,15 @@ static map_ret_code find_free_client(void *out, void *client) {
     if (!c->in_use) {
         *o = c;
         m_log("Returning unused client %u\n", c->id);
-        return MAP_ERR; // break iteration
+        return MAP_FULL; // break iteration
     }
     return MAP_OK;
 }
 
 static idle_client_t *find_available_client(void) {
     idle_client_t *c = NULL;
-    if (map_iterate(clients, find_free_client, &c) != MAP_ERR) {
+    if (map_iterate(clients, find_free_client, &c) != MAP_FULL) {
+        /* no unused clients found. */
         c = calloc(1, sizeof(idle_client_t));
         if (c) {
             c->id = map_length(clients);
@@ -285,7 +286,7 @@ static map_ret_code check_client_inot(void *userdata, void *client) {
     
     *num_idles += c->is_idle;
     if (*num_idles > 1) {
-        return MAP_ERR;
+        return MAP_FULL;
     }
     return MAP_OK;
 }
@@ -306,6 +307,7 @@ static int method_stop_client(sd_bus_message *m, void *userdata, sd_bus_error *r
                  */
                 int num_idles = 0;
                 if (map_iterate(clients, check_client_inot, &num_idles) == MAP_OK) {
+                    /* this is the only idle client */
                     m_log("Removing inotify watch as only client using it was stopped.\n");
                     inotify_rm_watch(inot_fd, inot_wd);
                     inot_wd = -1;
