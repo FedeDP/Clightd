@@ -59,6 +59,8 @@
 - [ ] Port to cmake(?)
 - [x] Port idle client api to use libmodule newly exposed MAP api (and require >= 3.1.0)
 - [ ] Port CI to sr.ht builds?
+- [ ] Add an email trigger to sr.ht builds
+- [ ] drop travis
 
 **Release!!!**
 
