@@ -53,13 +53,14 @@
 - [x] Update any org.clightd.backlight reference
 
 ### Fix
-- [x] After suspend, clightd gets restarted, invalidating Clight Idle client. Why does it get stopped/restarted? (Fixed in upcoming libmodule 3.1.0)
+- [x] After suspend, clightd gets restarted, invalidating Clight Idle client. Why does it get stopped/restarted? (Fixed in libmodule 3.1.0)
+- [ ] Above issue is sometimes still present; but clightd does not get restarted now. It just hangs there with "connection timed out" at each call.
 
 ### Generic
 - [ ] Port to cmake(?)
 - [x] Port idle client api to use libmodule newly exposed MAP api (and require >= 3.1.0)
 - [ ] Port CI to sr.ht builds?
-- [ ] Add an email trigger to sr.ht builds
+- [x] Add an email trigger to sr.ht builds
 - [ ] drop travis
 
 **Release!!!**
