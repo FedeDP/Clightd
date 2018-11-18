@@ -19,15 +19,24 @@ pkgver() {
     printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
 }
 
+prepare() {
+    cd "${srcdir}/${_gitname}"
+    mkdir -p build
+}
+
 build() {
-    cd $srcdir/$_gitname
-    mkdir build
+    cd "${srcdir}/${_gitname}/build"
     cd build
-    ccmake ..
+    cmake
+        -G "Unix Makefiles" \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_INSTALL_LIBDIR=lib \
+        -DCMAKE_BUILD_TYPE="Release" \
+        ..
     make
 }
 
 package() {
-    cd $srcdir/$_gitname/build
+    cd "${srcdir}/${_gitname}/build"
     make DESTDIR="$pkgdir" install
 }
