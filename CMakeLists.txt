@@ -61,6 +61,7 @@ macro(optional_dep name modules description)
             target_include_directories(${PROJECT_NAME}
                                        PRIVATE
                                        ${${name}_LIBS_INCLUDE_DIRS})
+            set(WITH_${name} 1)
         else()
             message(STATUS "${name} support disabled: Not found")
         endif()
@@ -104,8 +105,10 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/org.clightd.clightd.service
         DESTINATION /usr/share/dbus-1/system-services)
 install(FILES ${SCRIPT_DIR}/org.clightd.clightd.policy
         DESTINATION /usr/share/polkit-1/actions)
-install(FILES ${SCRIPT_DIR}/i2c_clightd.conf
-        DESTINATION "${MODULE_LOAD_DIR}")
+if (WITH_DDC)
+    install(FILES ${SCRIPT_DIR}/i2c_clightd.conf
+            DESTINATION "${MODULE_LOAD_DIR}")
+endif()
 install(FILES ${SCRIPT_DIR}/org.clightd.clightd.conf
         DESTINATION /etc/dbus-1/system.d/)
 install(FILES COPYING
