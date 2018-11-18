@@ -21,7 +21,6 @@ tasks:
       (cd build-no-idle && cmake -DCMAKE_BUILD_TYPE=Debug -DDISABLE_IDLE=1 ..)
       (cd build-no-ddc && cmake -DCMAKE_BUILD_TYPE=Debug -DDISABLE_DDC=1 ..)
       (cd build-no-extras && cmake -DCMAKE_BUILD_TYPE=Debug -DDISABLE_GAMMA=1 -DDISABLE_DPMS=1 -DDISABLE_IDLE=1 -DDISABLE_DDC=1 ..)
-      make
   - build: |
       cd Clightd
       (cd build && make)
