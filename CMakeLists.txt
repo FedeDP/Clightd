@@ -17,8 +17,10 @@ target_include_directories(${PROJECT_NAME} PRIVATE
                            "${CMAKE_CURRENT_SOURCE_DIR}/src/modules"
 )
 target_compile_definitions(${PROJECT_NAME} PRIVATE
+    -D_GNU_SOURCE
     -DVERSION="${PROJECT_VERSION}"
 )
+set_property(TARGET ${PROJECT_NAME} PROPERTY C_STANDARD 99)
 
 # Required dependencies
 pkg_check_modules(REQ_LIBS REQUIRED libudev libmodule)
@@ -85,11 +87,11 @@ set_target_properties(
 
 # Installation of targets (must be before file configuration to work)
 install(TARGETS ${PROJECT_NAME}
-        RUNTIME DESTINATION "${CMAKE_INSTALL_LIBDIR}/clightd")
+        RUNTIME DESTINATION "${CMAKE_INSTALL_LIBDIR}/${PROJECT_NAME}")
 
 # Configure files with install paths
 set(SCRIPT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Scripts")
-set(DAEMON_DIR "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/clightd")
+set(DAEMON_DIR "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/${PROJECT_NAME}")
 
 configure_file(${SCRIPT_DIR}/clightd.service clightd.service @ONLY)
 configure_file(${SCRIPT_DIR}/org.clightd.clightd.service
