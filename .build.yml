@@ -8,17 +8,31 @@ packages:
   - libxss
   - ddcutil
   - libmodule
+  - cmake
 sources:
   - https://github.com/FedeDP/Clightd
 tasks:
   - build: |
       cd Clightd
-      make debug
-      make DISABLE_GAMMA=1 debug
-      make DISABLE_DPMS=1 debug
-      make DISABLE_IDLE=1 debug
-      make DISABLE_DDC=1 debug
-      make DISABLE_GAMMA=1 DISABLE_DPMS=1 DISABLE_IDLE=1 DISABLE_DDC=1 debug
+      mkdir build
+      cd build
+      cmake -DCMAKE_BUILD_TYPE=Debug ..
+      make
+      rm -rf *
+      cmake -DCMAKE_BUILD_TYPE=Debug -DDISABLE_GAMMA=1 ..
+      make
+      rm -rf *
+      cmake -DCMAKE_BUILD_TYPE=Debug -DDISABLE_DPMS=1 ..
+      make
+      rm -rf *
+      cmake -DCMAKE_BUILD_TYPE=Debug -DDISABLE_IDLE=1 ..
+      make
+      rm -rf *
+      cmake -DCMAKE_BUILD_TYPE=Debug -DDISABLE_DDC=1 ..
+      make
+      rm -rf *
+      cmake -DCMAKE_BUILD_TYPE=Debug -DDISABLE_GAMMA=1 -DDISABLE_DPMS=1 -DDISABLE_IDLE=1 -DDISABLE_DDC=1 ..
+      make
 triggers:
   - action: email
     condition: failure
