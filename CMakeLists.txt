@@ -91,7 +91,7 @@ install(TARGETS ${PROJECT_NAME}
 
 # Configure files with install paths
 set(SCRIPT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Scripts")
-set(DAEMON_DIR "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/${PROJECT_NAME}")
+set(DAEMON_DIR "${CMAKE_INSTALL_FULL_LIBDIR}/${PROJECT_NAME}")
 
 configure_file(${SCRIPT_DIR}/clightd.service clightd.service @ONLY)
 configure_file(${SCRIPT_DIR}/org.clightd.clightd.service
@@ -114,4 +114,4 @@ endif()
 install(FILES ${SCRIPT_DIR}/org.clightd.clightd.conf
         DESTINATION /etc/dbus-1/system.d/)
 install(FILES COPYING
-        DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/licenses/clightd")
+        DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/licenses/${PROJECT_NAME}")
