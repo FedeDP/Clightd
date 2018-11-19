@@ -97,14 +97,15 @@ configure_file(${SCRIPT_DIR}/clightd.service clightd.service @ONLY)
 configure_file(${SCRIPT_DIR}/org.clightd.clightd.service
                org.clightd.clightd.service
                @ONLY)
-# Installation of files
 
+# Installation of files
 pkg_get_variable(MODULE_LOAD_DIR systemd modulesloaddir)
+pkg_get_variable(SYSTEM_BUS_DIR dbus-1 system_bus_services_dir)
 
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/clightd.service
         DESTINATION /usr/lib/systemd/system)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/org.clightd.clightd.service
-        DESTINATION /usr/share/dbus-1/system-services)
+        DESTINATION ${SYSTEM_BUS_DIR})
 install(FILES ${SCRIPT_DIR}/org.clightd.clightd.policy
         DESTINATION /usr/share/polkit-1/actions)
 if (WITH_DDC)
