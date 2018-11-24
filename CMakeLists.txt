@@ -23,7 +23,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 set_property(TARGET ${PROJECT_NAME} PROPERTY C_STANDARD 99)
 
 # Required dependencies
-pkg_check_modules(REQ_LIBS REQUIRED libudev libmodule)
+pkg_check_modules(REQ_LIBS REQUIRED libudev libmodule>=3.1.0)
 pkg_search_module(LOGIN_LIBS REQUIRED libelogind libsystemd>=221)
 target_link_libraries(${PROJECT_NAME}
                       m
@@ -73,7 +73,7 @@ endmacro()
 optional_dep(GAMMA "x11;xrandr" "Gamma")
 optional_dep(DPMS "x11;xext" "DPMS")
 optional_dep(IDLE "x11;xscrnsaver" "IDLE")
-optional_dep(DDC "ddcutil" "DDC")
+optional_dep(DDC "ddcutil>=0.9.0" "DDC")
 
 # Convert ld flag list from list to space separated string.
 string(REPLACE ";" " " COMBINED_LDFLAGS "${COMBINED_LDFLAGS}")
