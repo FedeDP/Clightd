@@ -115,4 +115,4 @@ endif()
 install(FILES ${SCRIPT_DIR}/org.clightd.clightd.conf
         DESTINATION /etc/dbus-1/system.d/)
 install(FILES COPYING
-        DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/licenses/${PROJECT_NAME}")
+        DESTINATION "${CMAKE_INSTALL_DOCDIR}")
