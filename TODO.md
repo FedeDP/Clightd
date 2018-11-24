@@ -60,7 +60,7 @@
 - [x] Add a Raise/Lower backlight methods to raise/lower x% of current value
 
 ### Generic
-- [ ] Port to cmake(?)
+- [x] Port to cmake(?)
 - [x] Port idle client api to use libmodule newly exposed MAP api (and require >= 3.1.0)
 - [x] Port CI to sr.ht builds?
 - [x] Add an email trigger to sr.ht builds

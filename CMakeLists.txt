@@ -81,7 +81,6 @@ string(REPLACE ";" " " COMBINED_LDFLAGS "${COMBINED_LDFLAGS}")
 # Set the LDFLAGS target property
 set_target_properties(
     ${PROJECT_NAME} PROPERTIES
-    VERSION ${PROJECT_VERSION}
     LINK_FLAGS "${COMBINED_LDFLAGS}"
 )
 
@@ -92,6 +91,14 @@ install(TARGETS ${PROJECT_NAME}
 # Configure files with install paths
 set(SCRIPT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Scripts")
 set(DAEMON_DIR "${CMAKE_INSTALL_FULL_LIBDIR}/${PROJECT_NAME}")
+
+# Use polkitd.service on ubuntu 16.04 (or wherever it is called polkitd instead of polkit)
+find_file(POLKITD lib/systemd/system/polkitd.service)
+if(POLKITD)
+    set(POLKIT_NAME "polkitd")
+else()
+    set(POLKIT_NAME "polkit")
+endif()
 
 configure_file(${SCRIPT_DIR}/clightd.service clightd.service @ONLY)
 configure_file(${SCRIPT_DIR}/org.clightd.clightd.service
@@ -108,7 +115,7 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/org.clightd.clightd.service
         DESTINATION ${SYSTEM_BUS_DIR})
 install(FILES ${SCRIPT_DIR}/org.clightd.clightd.policy
         DESTINATION /usr/share/polkit-1/actions)
-if (WITH_DDC)
+if(WITH_DDC)
     install(FILES ${SCRIPT_DIR}/i2c_clightd.conf
             DESTINATION "${MODULE_LOAD_DIR}")
 endif()

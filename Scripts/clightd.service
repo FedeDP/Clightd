@@ -1,7 +1,6 @@
 [Unit]
 Description=Bus service to manage various screen related properties (gamma, dpms, backlight)
-# Use polkitd.service here on ubuntu 16.04
-Requires=polkit.service
+Requires=@POLKIT_NAME@.service
 
 [Service]
 Type=dbus
