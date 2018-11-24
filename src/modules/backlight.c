@@ -2,7 +2,7 @@
 #include <polkit.h>
 #include <udev.h>
 
-#ifdef USE_DDC
+#ifdef DDC_PRESENT
 
 #include <ddcutil_c_api.h>
 
@@ -107,7 +107,7 @@ static const sd_bus_vtable vtable[] = {
 MODULE("BACKLIGHT");
 
 static void module_pre_start(void) {
-    
+
 }
 
 static bool check(void) {
@@ -138,7 +138,7 @@ static void receive(const msg_t *msg, const void *userdata) {
     // nonblocking mode!
     if (!msg || !msg->is_pubsub) {
         read(smooth_fd, &t, sizeof(uint64_t));
-    
+
         int reached_count = 0;
         for (int i = 0; i < sc.num_dev; reached_count += sc.d[i].reached_target, i++) {
             if (!sc.d[i].reached_target) {
@@ -150,14 +150,13 @@ static void receive(const msg_t *msg, const void *userdata) {
                 }
             }
         }
-    
+
         struct itimerspec timerValue = {{0}};
         if (reached_count != sc.num_dev) {
             timerValue.it_value.tv_sec = 0;
             timerValue.it_value.tv_nsec = 1000 * 1000 * sc.smooth_wait; // ms
         } else {
             m_log("Reached target backlight: %s%.2lf.\n", sc.verse > 0 ? "+" : (sc.verse < 0 ? "-" : ""), sc.target_pct);
-        
             /* Free all resources */
             reset_backlight_struct(0, 0, 0, 0, 0);
         }
@@ -189,7 +188,7 @@ static void reset_backlight_struct(double target_pct, int is_smooth, double smoo
 
 static void add_backlight_sn(const char *sn, int internal) {
     int ok = !internal;
-    
+
     /* Properly check internal interface exists before adding it */
     if (internal) {
         struct udev_device *dev = NULL;
@@ -199,7 +198,7 @@ static void add_backlight_sn(const char *sn, int internal) {
             udev_device_unref(dev);
         }
     }
-    
+
     if (ok) {
         sc.d = realloc(sc.d, sizeof(device) * ++sc.num_dev);
         sc.d[sc.num_dev - 1].reached_target = 0;
@@ -216,13 +215,13 @@ static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error 
         sd_bus_error_set_errno(ret_error, EPERM);
         return -EPERM;
     }
-    
+
     const char *backlight_interface = NULL;
     const double target_pct, smooth_step;
     const int is_smooth;
     const unsigned int smooth_wait;
-    
-    int r = sd_bus_message_read(m, "d(bdu)s", &target_pct, &is_smooth, &smooth_step, 
+
+    int r = sd_bus_message_read(m, "d(bdu)s", &target_pct, &is_smooth, &smooth_step,
                                 &smooth_wait, &backlight_interface);
     if (r >= 0) {
         int verse = 0;
@@ -269,17 +268,17 @@ static double next_backlight_level(int curr, int max, int idx) {
     } else {
         curr_pct = target_pct;
     }
-    
+
     if (idx >= 0 && curr_pct == target_pct) {
         sc.d[idx].reached_target = 1;
     }
-    
+
     return curr_pct;
 }
 
 static int set_internal_backlight(int idx) {
     int r = -1;
-    
+
     struct udev_device *dev = NULL;
     get_udev_device(sc.d[idx].sn, "backlight", NULL, NULL, &dev);
     if (dev) {
@@ -299,7 +298,7 @@ static int set_internal_backlight(int idx) {
 
 static int set_external_backlight(int idx) {
     int ret = -1;
-    
+
     DDCUTIL_FUNC(sc.d[idx].sn, {
         const uint16_t max = VALREC_MAX_VAL(valrec);
         const uint16_t curr = VALREC_CUR_VAL(valrec);
@@ -321,15 +320,15 @@ static int set_external_backlight(int idx) {
 static int method_getbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     sd_bus_message *reply = NULL;
     const char *backlight_interface = NULL;
-    
+
     int r = sd_bus_message_read(m, "s", &backlight_interface);
     if (r >= 0) {
         sd_bus_message_new_method_return(m, &reply);
         sd_bus_message_open_container(reply, SD_BUS_TYPE_ARRAY, "(sd)");
-        
+
         append_internal_backlight(reply, backlight_interface);
         append_external_backlight(reply, NULL);
-        
+
         sd_bus_message_close_container(reply);
         r = sd_bus_send(NULL, reply, NULL);
         sd_bus_message_unref(reply);
@@ -350,16 +349,16 @@ static int append_internal_backlight(sd_bus_message *reply, const char *path) {
     int ret = -1;
     struct udev_device *dev = NULL;
     get_udev_device(path, "backlight", NULL, NULL, &dev);
-    
+
     if (dev) {
         int val = atoi(udev_device_get_sysattr_value(dev, "brightness"));
         int max = atoi(udev_device_get_sysattr_value(dev, "max_brightness"));
-    
+
         double pct = (double)val / max;
         append_backlight(reply, udev_device_get_sysname(dev), pct);
         udev_device_unref(dev);
         ret = 0;
-    } 
+    }
     return ret;
 }
 

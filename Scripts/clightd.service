@@ -7,7 +7,7 @@ Requires=polkit.service
 Type=dbus
 BusName=org.clightd.clightd
 User=root
-ExecStart=/usr/lib/clightd/clightd
+ExecStart=@DAEMON_DIR@/clightd
 Restart=on-failure
 RestartSec=5
 
