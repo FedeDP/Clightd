@@ -26,8 +26,7 @@ prepare() {
 
 build() {
     cd "${srcdir}/${_gitname}/build"
-    cd build
-    cmake
+    cmake \
         -G "Unix Makefiles" \
         -DCMAKE_INSTALL_PREFIX=/usr \
         -DCMAKE_INSTALL_LIBDIR=lib \
