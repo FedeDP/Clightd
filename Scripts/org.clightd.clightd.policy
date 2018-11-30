@@ -11,7 +11,15 @@
         </defaults>
     </action>
     
-    <action id="org.clightd.clightd.Raise">
+    <action id="org.clightd.clightd.SetAll">
+        <defaults>
+            <allow_any>no</allow_any>
+            <allow_inactive>no</allow_inactive>
+            <allow_active>yes</allow_active>
+        </defaults>
+    </action>
+    
+    <action id="org.clightd.clightd.RaiseAll">
         <defaults>
             <allow_any>no</allow_any>
             <allow_inactive>no</allow_inactive>

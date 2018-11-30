@@ -58,6 +58,7 @@
 
 ### API improvements
 - [x] Add a Raise/Lower backlight methods to raise/lower x% of current value
+- [x] Rename Backlight.Set{Get,Raise,Lower} to Set{Get,Raise,Lower}All
 
 ### Generic
 - [x] Port to cmake(?)

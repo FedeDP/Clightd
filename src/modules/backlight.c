@@ -79,10 +79,10 @@ typedef struct {
     double verse;
 } smooth_change;
 
-static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
-static int method_getbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
-static int method_raisebrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
-static int method_lowerbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
+static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
+static int method_getallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
+static int method_raiseallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
+static int method_lowerallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static void reset_backlight_struct(double target_pct, int is_smooth, double smooth_step, unsigned int smooth_wait, int verse);
 static void add_backlight_sn(const char *sn, int internal);
 static int set_internal_backlight(int idx);
@@ -97,10 +97,10 @@ static const char object_path[] = "/org/clightd/clightd/Backlight";
 static const char bus_interface[] = "org.clightd.clightd.Backlight";
 static const sd_bus_vtable vtable[] = {
     SD_BUS_VTABLE_START(0),
-    SD_BUS_METHOD("Set", "d(bdu)s", "b", method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("Get", "s", "a(sd)", method_getbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("Raise", "d(bdu)s", "b", method_raisebrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("Lower", "d(bdu)s", "b", method_lowerbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("SetAll", "d(bdu)s", "b", method_setallbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("GetAll", "s", "a(sd)", method_getallbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("RaiseAll", "d(bdu)s", "b", method_raiseallbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("LowerAll", "d(bdu)s", "b", method_lowerallbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_VTABLE_END
 };
 
@@ -210,7 +210,7 @@ static void add_backlight_sn(const char *sn, int internal) {
     }
 }
 
-static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     if (!check_authorization(m)) {
         sd_bus_error_set_errno(ret_error, EPERM);
         return -EPERM;
@@ -317,7 +317,7 @@ static int set_external_backlight(int idx) {
  * it founds, it will return a "(serialNumber, current backlight pct)" struct.
  * Note that for internal laptop screen, serialNumber = syspath (eg: intel_backlight)
  */
-static int method_getbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+static int method_getallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     sd_bus_message *reply = NULL;
     const char *backlight_interface = NULL;
 
@@ -375,12 +375,12 @@ static int append_external_backlight(sd_bus_message *reply, const char *sn) {
     return 0;
 }
 
-static int method_raisebrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+static int method_raiseallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     int verse = 1;
-    return method_setbrightness(m, &verse, ret_error);
+    return method_setallbrightness(m, &verse, ret_error);
 }
 
-static int method_lowerbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+static int method_lowerallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     int verse = -1;
-    return method_setbrightness(m, &verse, ret_error);
+    return method_setallbrightness(m, &verse, ret_error);
 }
