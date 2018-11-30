@@ -70,6 +70,9 @@
 **Release!!!**
 
 ## 3.1
+- [ ] Add Backlight.Set{Get,Raise,Lower function, per-interface/serial
+
+## 3.2
 - [ ] add support for GetSensorData android app
 - [ ] it will come as bash scripts
 - [ ] add a new Sensor with type "SCRIPT"
@@ -82,7 +85,7 @@
 - [ ] devname = "Script" or devname = "GSD" (to be used by clight conf if user is willing to force a script)
 - [ ] force script timeout from clightd (eg popen("timeout 1 MYSCRIPT") and check if it returns 124 (timed out)
 
-## 3.2
+## 3.3
 - [ ] Add gamma (and dpms + idle) support on wayland (wlroots)
 https://github.com/swaywm/wlroots/blob/master/examples/gamma-control.c
 https://github.com/swaywm/wlroots/blob/master/examples/idle.c
