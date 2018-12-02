@@ -9,7 +9,8 @@ Clightd is a bus interface that lets you easily set screen brightness, gamma tem
 *For any other info, please feel free to open an issue.*  
 
 ## Arch AUR packages
-Clightd is available on AUR: https://aur.archlinux.org/packages/clightd-git/ .
+Clightd is available on AUR as both stable or devel package: https://aur.archlinux.org/packages/?K=clightd .  
+Note that devel package may break in some weird ways during development. Use it at your own risk.
 
 ## License
 This software is distributed with GPL license, see [COPYING](https://github.com/FedeDP/Clightd/blob/master/COPYING) file for more informations.
