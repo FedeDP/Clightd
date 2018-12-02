@@ -43,30 +43,26 @@ list(APPEND COMBINED_LDFLAGS ${LOGIN_LIBS_LDFLAGS})
 # There are a number of issues when using pkg-config with cmake (as compared to
 # using the native dependency handling in CMake).
 macro(optional_dep name modules description)
-    option(DISABLE_${name}
-           "Disable support for ${description} (defaults to use if found)"
+    option(ENABLE_${name}
+           "Enable support for ${description} (defaults to use if found)"
            OFF)
-    if(${DISABLE_${name}})
-        message(STATUS "${name} support disabled: User choice")
+    if(${ENABLE_${name}})
+        pkg_check_modules(${name}_LIBS REQUIRED ${modules})
+        message(STATUS "${name} support enabled")
+        target_compile_definitions(${PROJECT_NAME} PRIVATE ${name}_PRESENT)
+        # We can't use target_link_libraries, it will not proper handle
+        # non-standard library paths, since pkg-config returns -Lpath -llib
+        # instead of -l/path/lib.
+        list(APPEND COMBINED_LDFLAGS ${${name}_LIBS_LDFLAGS})
+        # The actual libraries need to be listed at the end of the link command,
+        # so this is also needed.
+        target_link_libraries(${PROJECT_NAME} ${${name}_LIBS_LIBRARIES})
+        target_include_directories(${PROJECT_NAME}
+                                   PRIVATE
+                                   ${${name}_LIBS_INCLUDE_DIRS})
+        set(WITH_${name} 1)
     else()
-        pkg_check_modules(${name}_LIBS ${modules})
-        if(${${name}_LIBS_FOUND})
-            message(STATUS "${name} support enabled")
-            target_compile_definitions(${PROJECT_NAME} PRIVATE ${name}_PRESENT)
-            # We can't use target_link_libraries, it will not proper handle
-            # non-standard library paths, since pkg-config returns -Lpath -llib
-            # instead of -l/path/lib.
-            list(APPEND COMBINED_LDFLAGS ${${name}_LIBS_LDFLAGS})
-            # The actual libraries need to be listed at the end of the link command,
-            # so this is also needed.
-            target_link_libraries(${PROJECT_NAME} ${${name}_LIBS_LIBRARIES})
-            target_include_directories(${PROJECT_NAME}
-                                       PRIVATE
-                                       ${${name}_LIBS_INCLUDE_DIRS})
-            set(WITH_${name} 1)
-        else()
-            message(STATUS "${name} support disabled: Not found")
-        endif()
+        message(STATUS "${name} support disabled")
     endif()
 endmacro()
 
