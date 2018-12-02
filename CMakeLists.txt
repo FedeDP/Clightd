@@ -106,7 +106,6 @@ configure_file(${SCRIPT_DIR}/org.clightd.clightd.service
                @ONLY)
 
 # Installation of files
-pkg_get_variable(MODULE_LOAD_DIR systemd modulesloaddir)
 pkg_get_variable(SYSTEM_BUS_DIR dbus-1 system_bus_services_dir)
 
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/clightd.service
@@ -116,8 +115,12 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/org.clightd.clightd.service
 install(FILES ${SCRIPT_DIR}/org.clightd.clightd.policy
         DESTINATION /usr/share/polkit-1/actions)
 if(WITH_DDC)
-    install(FILES ${SCRIPT_DIR}/i2c_clightd.conf
-            DESTINATION "${MODULE_LOAD_DIR}")
+    pkg_get_variable(MODULE_LOAD_DIR systemd modulesloaddir)
+    if(${SYSTEMD_LIBS_FOUND})
+        message(found)
+        install(FILES ${SCRIPT_DIR}/i2c_clightd.conf
+                DESTINATION "${MODULE_LOAD_DIR}")
+    endif()
 endif()
 install(FILES ${SCRIPT_DIR}/org.clightd.clightd.conf
         DESTINATION /etc/dbus-1/system.d/)
