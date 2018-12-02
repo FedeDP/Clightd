@@ -1,4 +1,5 @@
 ## 3.1
+- [x] Properly sanity-checks for backlight smooth transitioning
 - [ ] Add Backlight.Set{Get,Raise,Lower function, per-interface/serial
 
 ## 3.2

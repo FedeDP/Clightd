@@ -179,7 +179,7 @@ static void reset_backlight_struct(double target_pct, int is_smooth, double smoo
         free(sc.d);
         sc.d = NULL;
     }
-    sc.smooth_step = is_smooth ? smooth_step : 0;
+    sc.smooth_step = is_smooth ? smooth_step : 0.0;
     sc.smooth_wait = is_smooth ? smooth_wait : 0;
     sc.target_pct = target_pct;
     sc.num_dev = 0;
@@ -217,13 +217,27 @@ static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_err
     }
 
     const char *backlight_interface = NULL;
-    const double target_pct, smooth_step;
+    double target_pct, smooth_step;
     const int is_smooth;
     const unsigned int smooth_wait;
 
     int r = sd_bus_message_read(m, "d(bdu)s", &target_pct, &is_smooth, &smooth_step,
                                 &smooth_wait, &backlight_interface);
     if (r >= 0) {
+        /** Sanity checks **/
+        if (target_pct > 1.0) {
+            target_pct = 1.0;
+        } else if (target_pct < 0.0) {
+            target_pct = 0.0;
+        }
+        
+        if (smooth_step > 1.0) {
+            smooth_step = 1.0;
+        } else if (smooth_step <= 0.0) {
+            smooth_step = 0.0; // disable smoothing
+        }
+        /** End of sanity checks **/
+        
         int verse = 0;
         if (userdata) {
             verse = *((int *)userdata);
