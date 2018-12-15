@@ -112,8 +112,7 @@ install(FILES ${SCRIPT_DIR}/org.clightd.clightd.policy
         DESTINATION /usr/share/polkit-1/actions)
 if(WITH_DDC)
     pkg_get_variable(MODULE_LOAD_DIR systemd modulesloaddir)
-    if(${SYSTEMD_LIBS_FOUND})
-        message(found)
+    if(MODULE_LOAD_DIR)
         install(FILES ${SCRIPT_DIR}/i2c_clightd.conf
                 DESTINATION "${MODULE_LOAD_DIR}")
     endif()
