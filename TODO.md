@@ -1,5 +1,6 @@
 ## 3.1
 - [x] Properly sanity-checks for backlight smooth transitioning
+- [x] Properly invert cmakelists optional_dep logic: optional deps are disabled by default, and if they get enabled but they cannot be found, fail instead of silently disabling them.
 - [ ] Add Backlight.Set{Get,Raise,Lower function, per-interface/serial
 
 ## 3.2
