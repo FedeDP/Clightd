@@ -13,7 +13,7 @@
 typedef struct {
     bool in_use;                // Whether the client has already been requested by someone
     bool is_idle;               // Whether the client is in idle state
-    bool running_clients;               // Whether "Start" method has been called on Client
+    bool running;               // Whether "Start" method has been called on Client
     char *authcookie;
     char *display;
     unsigned int timeout;
@@ -250,7 +250,7 @@ static int method_rm_client(sd_bus_message *m, void *userdata, sd_bus_error *ret
     idle_client_t *c = validate_client(obj_path, m, ret_error);
     if (c) {
         /* You can only remove stopped clients */ 
-        if (!c->running_clients) {
+        if (!c->running) {
             m_deregister_fd(c->fd);
             destroy_client(c);
             int id = c->id;
@@ -267,11 +267,11 @@ static int method_start_client(sd_bus_message *m, void *userdata, sd_bus_error *
     idle_client_t *c = validate_client(sd_bus_message_get_path(m), m, ret_error);
     if (c) {
         /* You can only start not-started clients, that must have Display, AuthCookie and Timeout setted */
-        if (c->timeout > 0 && c->display && c->authcookie && !c->running_clients) {
+        if (c->timeout > 0 && c->display && c->authcookie && !c->running) {
             struct itimerspec timerValue = {{0}};
             timerValue.it_value.tv_sec = c->timeout;
             timerfd_settime(c->fd, 0, &timerValue, NULL);
-            c->running_clients = true;
+            c->running = true;
             m_log("Starting Client %u\n", c->id);
             return sd_bus_reply_method_return(m, NULL);
         }
@@ -295,7 +295,7 @@ static int method_stop_client(sd_bus_message *m, void *userdata, sd_bus_error *r
     idle_client_t *c = validate_client(sd_bus_message_get_path(m), m, ret_error);
     if (c) {
         /* You can only stop running clients */
-        if (c->running_clients) {
+        if (c->running) {
             /* Do not reset timerfd is client is in idle state */
             if (!c->is_idle) {
                 struct itimerspec timerValue = {{0}};
@@ -314,7 +314,7 @@ static int method_stop_client(sd_bus_message *m, void *userdata, sd_bus_error *r
                 }
             }
             /* Reset client state */
-            c->running_clients = false;
+            c->running = false;
             c->is_idle = false;
             m_log("Stopping Client %u\n", c->id);
             return sd_bus_reply_method_return(m, NULL);
@@ -339,7 +339,7 @@ static int set_timeout(sd_bus *b, const char *path, const char *interface, const
         return r;
     }
 
-    if (c->running_clients && !c->is_idle) {
+    if (c->running && !c->is_idle) {
         struct itimerspec timerValue = {{0}};
 
         int new_timer = *(int *)userdata;
