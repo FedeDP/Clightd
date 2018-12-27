@@ -68,7 +68,7 @@ end: \
 
 typedef struct {
     char *sn;
-    int reached_target;
+    bool reached_target;
 } device;
 
 typedef struct {
@@ -80,7 +80,7 @@ typedef struct {
     double verse;
 } smooth_client;
 
-static map_ret_code destroy_clients(void *userdata, void *client);
+static map_ret_code destroy_client(void *userdata, void *client);
 static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_getallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_raiseallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
@@ -89,8 +89,8 @@ static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error 
 static int method_getbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_raisebrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_lowerbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
-static void rm_backlight_struct(smooth_client *sc);
-static smooth_client *create_backlight_struct(double target_pct, int is_smooth, double smooth_step, unsigned int smooth_wait, int verse);
+static void reset_backlight_struct(smooth_client *sc, double target_pct, int is_smooth, double smooth_step, 
+                                             unsigned int smooth_wait, int verse);
 static int add_backlight_sn(double target_pct, int is_smooth, double smooth_step, 
                             unsigned int smooth_wait, int verse, const char *sn, bool internal);
 static double next_backlight_level(smooth_client *sc, int curr, int max);
@@ -165,24 +165,19 @@ static void receive(const msg_t *msg, const void *userdata) {
             timerfd_settime(sc->smooth_fd, 0, &timerValue, NULL);
         } else {
             m_log("Reached target backlight: %s%.2lf.\n", sc->verse > 0 ? "+" : (sc->verse < 0 ? "-" : ""), sc->target_pct);
-            rm_backlight_struct(sc);
+            destroy_client(NULL, sc);
         }
     }
 }
 
 static void destroy(void) {
-    map_iterate(running_clients, destroy_clients, NULL);
+    map_iterate(running_clients, destroy_client, NULL);
     map_free(running_clients);
 }
 
-static map_ret_code destroy_clients(void *userdata, void *client) {
+static map_ret_code destroy_client(void *userdata, void *client) {
     smooth_client *sc = (smooth_client *)client;
-    free(sc->d.sn);
-    free(sc);
-    return MAP_OK;
-}
-
-static void rm_backlight_struct(smooth_client *sc) {
+    
     /* Deregister this sc from running map */
     map_remove(running_clients, sc->d.sn);
     
@@ -190,22 +185,26 @@ static void rm_backlight_struct(smooth_client *sc) {
     m_deregister_fd(sc->smooth_fd); // this will automatically close it!
     free(sc->d.sn);
     free(sc);
+    return MAP_OK;
 }
 
-static smooth_client *create_backlight_struct(double target_pct, int is_smooth, double smooth_step, unsigned int smooth_wait, int verse) {
-    smooth_client *sc = malloc(sizeof(smooth_client));
+static void reset_backlight_struct(smooth_client *sc, double target_pct, int is_smooth, double smooth_step, 
+                                             unsigned int smooth_wait, int verse) {
     sc->smooth_step = is_smooth ? smooth_step : 0.0;
     sc->smooth_wait = is_smooth ? smooth_wait : 0;
     sc->target_pct = target_pct;
     sc->verse = verse;
-    sc->smooth_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
-    m_register_fd(sc->smooth_fd, true, sc);
+    
+    /* Only if not already there */
+    if (sc->smooth_fd == 0) {
+        sc->smooth_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+        m_register_fd(sc->smooth_fd, true, sc);
+    }
     
     struct itimerspec timerValue = {{0}};
     timerValue.it_value.tv_sec = 0;
     timerValue.it_value.tv_nsec = 1; // immediately
     timerfd_settime(sc->smooth_fd, 0, &timerValue, NULL);
-    return sc;
 }
 
 static int add_backlight_sn(double target_pct, int is_smooth, double smooth_step, 
@@ -225,9 +224,10 @@ static int add_backlight_sn(double target_pct, int is_smooth, double smooth_step
     }
 
     if (ok) {
-        smooth_client *sc = create_backlight_struct(target_pct, is_smooth, smooth_step, smooth_wait, verse);
+        smooth_client *sc = calloc(1, sizeof(smooth_client));
+        reset_backlight_struct(sc, target_pct, is_smooth, smooth_step, smooth_wait, verse);
         sc->d.sn = strdup(sn);
-        sc->d.reached_target = 0;
+        sc->d.reached_target = false;
         map_put(running_clients, sc->d.sn, sc, false);
     }
     
@@ -270,19 +270,15 @@ static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_err
             verse = *((int *)userdata);
         }
 
-        if (map_length(running_clients) == 0) {
-            add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, backlight_interface, true);
-            DDCUTIL_LOOP({
-                add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, dinfo->sn, false);
-            });
-            m_log("Target pct (smooth %d): %s%.2lf\n", is_smooth, target_pct, verse > 0 ? "+" : (verse < 0 ? "-" : ""));
-            // Returns true if no errors happened; false if another client is already changing backlight
-            r = sd_bus_reply_method_return(m, "b", true);
-        } else {
-            // required serial is already being changed by some other client
-            sd_bus_error_set_errno(ret_error, EEXIST);
-            r = -EEXIST;
-        }
+        /* stop previously running clients and remove them from map */
+        map_iterate(running_clients, destroy_client, NULL);
+        add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, backlight_interface, true);
+        DDCUTIL_LOOP({
+            add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, dinfo->sn, false);
+        });
+        m_log("Target pct (smooth %d): %s%.2lf\n", is_smooth, target_pct, verse > 0 ? "+" : (verse < 0 ? "-" : ""));
+        // Returns true if no errors happened; false if another client is already changing backlight
+        r = sd_bus_reply_method_return(m, "b", true);
     }
     return r;
 }
@@ -314,7 +310,7 @@ static double next_backlight_level(smooth_client *sc, int curr, int max) {
     }
 
     if (curr_pct == target_pct || curr_pct == -1.0f) {
-        sc->d.reached_target = 1;
+        sc->d.reached_target = true;
     }
 
     return curr_pct;
@@ -461,16 +457,15 @@ static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error 
                 verse = *((int *)userdata);
             }
             
-            if (!map_has_key(running_clients, serial)) {
+            smooth_client *sc = map_get(running_clients, serial);
+            if (!sc) {
                 // we do not know if this is an internal backlight, skip check (passing 0 as last param)
                 add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, serial, 0);
-                // Returns true if no errors happened;
-                r = sd_bus_reply_method_return(m, "b", true);
             } else {
-                // required serial is already being changed by some other client
-                sd_bus_error_set_errno(ret_error, EEXIST);
-                r = -EEXIST;
+                reset_backlight_struct(sc, target_pct, is_smooth, smooth_step, smooth_wait, verse);
             }
+            // Returns true if no errors happened;
+            r = sd_bus_reply_method_return(m, "b", true);
         } else {
             sd_bus_error_set_errno(ret_error, EINVAL);
             r = -EINVAL;

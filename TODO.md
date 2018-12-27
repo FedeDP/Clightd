@@ -6,6 +6,7 @@
 - [x] Backlight.Set{Get,Raise,Lower} cannot be called with a NULL or empty serial
 - [x] Keep a list of all running backlight clients
 - [x] Actually manage duplicates!
+- [x] Avoid returning EEXIST error for duplicates: revert to previous behaviour, ie update smooth change struct and go on smoothing.
 
 - [x] Update API doc
 - [ ] Release
