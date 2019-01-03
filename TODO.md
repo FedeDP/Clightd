@@ -1,16 +1,3 @@
-## 3.1
-- [x] Properly sanity-checks for backlight smooth transitioning
-- [x] Properly invert cmakelists optional_dep logic: optional deps are disabled by default, and if they get enabled but they cannot be found, fail instead of silently disabling them.
-
-- [x] Add Backlight.Set{Get,Raise,Lower function, per-interface/serial
-- [x] Backlight.Set{Get,Raise,Lower} cannot be called with a NULL or empty serial
-- [x] Keep a list of all running backlight clients
-- [x] Actually manage duplicates!
-- [x] Avoid returning EEXIST error for duplicates: revert to previous behaviour, ie update smooth change struct and go on smoothing.
-
-- [x] Update API doc
-- [ ] Release
-
 ## 3.2
 - [ ] add support for GetSensorData android app
 - [ ] it will come as bash scripts
@@ -31,7 +18,6 @@ https://github.com/swaywm/wlroots/blob/master/examples/idle.c
 https://github.com/swaywm/sway/tree/master/swayidle
 - [ ] Couldn't DPMS be just another case for new Idle implementation? Eg: Idle after 45s -> dim screen. Idle after 5mins -> screen off
 - [ ] Eventually drop dpms {Set/Get}Timeouts
-- [ ] Port gamma and backlight to same "client"-like interface of idle
 
 ## Ideas
 - [ ] follow ddcci kernel driver and in case, drop ddcutil and add the kernel driver as clightd opt-dep
