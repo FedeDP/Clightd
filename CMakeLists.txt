@@ -106,8 +106,14 @@ configure_file(${SCRIPT_DIR}/org.clightd.clightd.service
 pkg_get_variable(SYSTEM_BUS_DIR dbus-1 system_bus_services_dir)
 pkg_get_variable(POLKIT_ACTION_DIR polkit-gobject-1 actiondir)
 
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/clightd.service
-        DESTINATION /usr/lib/systemd/system)
+pkg_check_modules(SYSTEMD libsystemd)
+if(SYSTEMD_FOUND)
+    set(SYSTEMD_SERVICE_DIR ${CMAKE_INSTALL_LIBDIR}/systemd/system CACHE PATH
+        "Systemd services directory")
+
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/clightd.service
+        DESTINATION ${SYSTEMD_SERVICE_DIR})
+endif()
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/org.clightd.clightd.service
         DESTINATION ${SYSTEM_BUS_DIR})
 install(FILES ${SCRIPT_DIR}/org.clightd.clightd.policy
