@@ -3,7 +3,7 @@
  * clightd: C bus interface for linux to change screen brightness and capture frames from webcam device.
  * https://github.com/FedeDP/Clight/tree/master/clightd
  *
- * Copyright (C) 2018  Federico Di Pierro <nierro92@gmail.com>
+ * Copyright (C) 2019  Federico Di Pierro <nierro92@gmail.com>
  *
  * This file is part of clightd.
  * clightd is free software: you can redistribute it and/or modify
