@@ -23,8 +23,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 set_property(TARGET ${PROJECT_NAME} PROPERTY C_STANDARD 99)
 
 # Required dependencies
-pkg_check_modules(REQ_LIBS REQUIRED libudev libmodule>=3.1.0)
-pkg_check_modules(POLKIT REQUIRED polkit-gobject-1)
+pkg_check_modules(REQ_LIBS REQUIRED libudev libmodule>=3.1.0 polkit-gobject-1)
 pkg_search_module(LOGIN_LIBS REQUIRED libelogind libsystemd>=221)
 target_link_libraries(${PROJECT_NAME}
                       m
@@ -89,15 +88,6 @@ install(TARGETS ${PROJECT_NAME}
 set(SCRIPT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Scripts")
 set(DAEMON_DIR "${CMAKE_INSTALL_FULL_LIBDIR}/${PROJECT_NAME}")
 
-# Use polkitd.service on ubuntu 16.04 (or wherever it is called polkitd instead of polkit)	
- find_file(POLKITD lib/systemd/system/polkitd.service)	
- if(POLKITD)	
-     set(POLKIT_NAME "polkitd")	
- else()	
-     set(POLKIT_NAME "polkit")	
- endif()
-
-configure_file(${SCRIPT_DIR}/clightd.service clightd.service @ONLY)
 configure_file(${SCRIPT_DIR}/org.clightd.clightd.service
                org.clightd.clightd.service
                @ONLY)
@@ -106,14 +96,27 @@ configure_file(${SCRIPT_DIR}/org.clightd.clightd.service
 pkg_get_variable(SYSTEM_BUS_DIR dbus-1 system_bus_services_dir)
 pkg_get_variable(POLKIT_ACTION_DIR polkit-gobject-1 actiondir)
 
+# Only install systemd service in systemd environment
 pkg_check_modules(SYSTEMD libsystemd)
 if(SYSTEMD_FOUND)
+    # Use polkitd.service on ubuntu 16.04 (or wherever it is called polkitd instead of polkit)
+    find_file(POLKITD lib/systemd/system/polkitd.service)
+    if(POLKITD)
+        set(POLKIT_NAME "polkitd")
+    else()
+        set(POLKIT_NAME "polkit")
+    endif()
+    # Properly configure clightd systemd service to use correct dep on polkit.service
+    configure_file(${SCRIPT_DIR}/clightd.service clightd.service @ONLY)
+    
+    # This can be overridden bt cmdline
     set(SYSTEMD_SERVICE_DIR ${CMAKE_INSTALL_LIBDIR}/systemd/system CACHE PATH
         "Systemd services directory")
 
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/clightd.service
         DESTINATION ${SYSTEMD_SERVICE_DIR})
 endif()
+
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/org.clightd.clightd.service
         DESTINATION ${SYSTEM_BUS_DIR})
 install(FILES ${SCRIPT_DIR}/org.clightd.clightd.policy

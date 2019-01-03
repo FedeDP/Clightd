@@ -9,6 +9,7 @@ packages:
   - ddcutil
   - libmodule
   - cmake
+  - polkit
 sources:
   - https://github.com/FedeDP/Clightd
 tasks:
