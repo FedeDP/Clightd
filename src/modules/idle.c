@@ -224,7 +224,11 @@ static int method_get_client(sd_bus_message *m, void *userdata, sd_bus_error *re
         m_register_fd(c->fd, true, c);
         c->sender = strdup(sd_bus_message_get_sender(m));
         snprintf(c->path, sizeof(c->path) - 1, "%s/Client%u", object_path, c->id);
+#if MODULE_VERSION_MAJ == 3
         map_put(clients, c->path, c, true); // store client in hashmap
+#else
+        map_put(clients, c->path, c, true, false);
+#endif
         sd_bus_add_object_vtable(bus,
                                 &c->slot,
                                 c->path,

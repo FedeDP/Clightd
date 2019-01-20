@@ -228,7 +228,11 @@ static int add_backlight_sn(double target_pct, int is_smooth, double smooth_step
         reset_backlight_struct(sc, target_pct, is_smooth, smooth_step, smooth_wait, verse);
         sc->d.sn = strdup(sn);
         sc->d.reached_target = false;
+#if MODULE_VERSION_MAJ == 3
         map_put(running_clients, sc->d.sn, sc, false);
+#else
+        map_put(running_clients, sc->d.sn, sc, false, false);
+#endif
     }
     
     if (dev) {
@@ -276,7 +280,7 @@ static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_err
         DDCUTIL_LOOP({
             add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, dinfo->sn, false);
         });
-        m_log("Target pct (smooth %d): %s%.2lf\n", is_smooth, target_pct, verse > 0 ? "+" : (verse < 0 ? "-" : ""));
+        m_log("Target pct (smooth %d): %s%.2lf\n", is_smooth, verse > 0 ? "+" : (verse < 0 ? "-" : ""), target_pct);
         // Returns true if no errors happened; false if another client is already changing backlight
         r = sd_bus_reply_method_return(m, "b", true);
     }
