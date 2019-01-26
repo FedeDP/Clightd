@@ -1,6 +1,3 @@
-## 3.2
-- [x] Port to libmodule 4.0.0
-
 ## 3.3
 - [ ] add support for GetSensorData android app
 - [ ] it will come as bash scripts
