@@ -80,7 +80,7 @@ typedef struct {
     double verse;
 } smooth_client;
 
-static map_ret_code destroy_client(void *userdata, void *client);
+static int dtor_client(void *client);
 static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_getallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_raiseallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
@@ -132,6 +132,7 @@ static bool evaluate(void) {
 
 static void init(void) {
     running_clients = map_new();
+    map_set_dtor(running_clients, dtor_client);
     int r = sd_bus_add_object_vtable(bus,
                                  NULL,
                                  object_path,
@@ -165,22 +166,17 @@ static void receive(const msg_t *msg, const void *userdata) {
             timerfd_settime(sc->smooth_fd, 0, &timerValue, NULL);
         } else {
             m_log("Reached target backlight: %s%.2lf.\n", sc->verse > 0 ? "+" : (sc->verse < 0 ? "-" : ""), sc->target_pct);
-            destroy_client(NULL, sc);
+            map_remove(running_clients, sc->d.sn);
         }
     }
 }
 
 static void destroy(void) {
-    map_iterate(running_clients, destroy_client, NULL);
     map_free(running_clients);
 }
 
-static map_ret_code destroy_client(void *userdata, void *client) {
+static int dtor_client(void *client) {
     smooth_client *sc = (smooth_client *)client;
-    
-    /* Deregister this sc from running map */
-    map_remove(running_clients, sc->d.sn);
-    
     /* Free all resources */
     m_deregister_fd(sc->smooth_fd); // this will automatically close it!
     free(sc->d.sn);
@@ -228,11 +224,7 @@ static int add_backlight_sn(double target_pct, int is_smooth, double smooth_step
         reset_backlight_struct(sc, target_pct, is_smooth, smooth_step, smooth_wait, verse);
         sc->d.sn = strdup(sn);
         sc->d.reached_target = false;
-#if MODULE_VERSION_MAJ == 3
-        map_put(running_clients, sc->d.sn, sc, false);
-#else
-        map_put(running_clients, sc->d.sn, sc, false, false);
-#endif
+        map_put(running_clients, sc->d.sn, sc, false, true);
     }
     
     if (dev) {
@@ -274,8 +266,9 @@ static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_err
             verse = *((int *)userdata);
         }
 
-        /* stop previously running clients and remove them from map */
-        map_iterate(running_clients, destroy_client, NULL);
+        /* Clear map */
+        map_clear(running_clients);
+        map_set_dtor(running_clients, dtor_client);
         add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, backlight_interface, true);
         DDCUTIL_LOOP({
             add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, dinfo->sn, false);

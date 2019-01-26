@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 
-project(clightd VERSION 3.1 LANGUAGES C)
+project(clightd VERSION 3.2 LANGUAGES C)
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
@@ -23,7 +23,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 set_property(TARGET ${PROJECT_NAME} PROPERTY C_STANDARD 99)
 
 # Required dependencies
-pkg_check_modules(REQ_LIBS REQUIRED libudev libmodule>=3.1.0 polkit-gobject-1)
+pkg_check_modules(REQ_LIBS REQUIRED libudev libmodule>=4.0.0 polkit-gobject-1)
 pkg_search_module(LOGIN_LIBS REQUIRED libelogind libsystemd>=221)
 target_link_libraries(${PROJECT_NAME}
                       m

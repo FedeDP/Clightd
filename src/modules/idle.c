@@ -24,7 +24,7 @@ typedef struct {
     sd_bus_slot *slot;          // vtable's slot
 } idle_client_t;
 
-static map_ret_code destroy_clients(void *userdata, void *client);
+static map_ret_code dtor_client(void *client);
 static map_ret_code leave_idle(void *userdata, void *client);
 static time_t get_idle_time(const idle_client_t *c);
 static map_ret_code find_free_client(void *out, void *client);
@@ -79,6 +79,7 @@ static bool evaluate(void) {
 
 static void init(void) {
     clients = map_new();
+    map_set_dtor(clients, dtor_client);
     int r = sd_bus_add_object_vtable(bus,
                                      NULL,
                                      object_path,
@@ -127,7 +128,6 @@ static void receive(const msg_t *msg, const void *userdata) {
 }
 
 static void destroy(void) {
-    map_iterate(clients, destroy_clients, NULL);
     map_free(clients);
 }
 
@@ -143,7 +143,7 @@ static map_ret_code leave_idle(void *userdata, void *client) {
     return MAP_OK;
 }
 
-static map_ret_code destroy_clients(void *userdata, void *client) {
+static map_ret_code dtor_client(void *client) {
     idle_client_t *c = (idle_client_t *)client;
     if (c->in_use) {
         destroy_client(c);
@@ -224,11 +224,7 @@ static int method_get_client(sd_bus_message *m, void *userdata, sd_bus_error *re
         m_register_fd(c->fd, true, c);
         c->sender = strdup(sd_bus_message_get_sender(m));
         snprintf(c->path, sizeof(c->path) - 1, "%s/Client%u", object_path, c->id);
-#if MODULE_VERSION_MAJ == 3
-        map_put(clients, c->path, c, true); // store client in hashmap
-#else
-        map_put(clients, c->path, c, true, false);
-#endif
+        map_put(clients, c->path, c, true, true);
         sd_bus_add_object_vtable(bus,
                                 &c->slot,
                                 c->path,

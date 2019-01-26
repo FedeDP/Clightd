@@ -1,5 +1,5 @@
 ## 3.2
-- [x] Port to libmodule 4.0.0 (do not require it though)
+- [x] Port to libmodule 4.0.0
 
 ## 3.3
 - [ ] add support for GetSensorData android app
