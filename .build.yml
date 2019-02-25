@@ -16,12 +16,12 @@ tasks:
   - prepare: |
       cd Clightd
       mkdir build build-no-gamma build-no-dpms build-no-idle build-no-ddc build-no-extras
-      (cd build && cmake -DCMAKE_BUILD_TYPE=Debug ..)
-      (cd build-no-gamma && cmake -DCMAKE_BUILD_TYPE=Debug -DDISABLE_GAMMA=1 ..)
-      (cd build-no-dpms && cmake -DCMAKE_BUILD_TYPE=Debug -DDISABLE_DPMS=1 ..)
-      (cd build-no-idle && cmake -DCMAKE_BUILD_TYPE=Debug -DDISABLE_IDLE=1 ..)
-      (cd build-no-ddc && cmake -DCMAKE_BUILD_TYPE=Debug -DDISABLE_DDC=1 ..)
-      (cd build-no-extras && cmake -DCMAKE_BUILD_TYPE=Debug -DDISABLE_GAMMA=1 -DDISABLE_DPMS=1 -DDISABLE_IDLE=1 -DDISABLE_DDC=1 ..)
+      (cd build && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_GAMMA=1 -DENABLE_DPMS=1 -DENABLE_DDC=1 -DENABLE_IDLE=1 ..)
+      (cd build-no-gamma && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_DPMS=1 -DENABLE_DDC=1 -DENABLE_IDLE=1 ..)
+      (cd build-no-dpms && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_GAMMA=1 -DENABLE_DDC=1 -DENABLE_IDLE=1 ..)
+      (cd build-no-idle && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_GAMMA=1 -DENABLE_DPMS=1 -DENABLE_DDC=1 ..)
+      (cd build-no-ddc && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_GAMMA=1 -DENABLE_DPMS=1 -DENABLE_IDLE=1 ..)
+      (cd build-no-extras && cmake -DCMAKE_BUILD_TYPE=Debug ..)
   - build: |
       cd Clightd
       (cd build && make)
