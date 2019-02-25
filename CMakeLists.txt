@@ -23,7 +23,8 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 set_property(TARGET ${PROJECT_NAME} PROPERTY C_STANDARD 99)
 
 # Required dependencies
-pkg_check_modules(REQ_LIBS REQUIRED libudev libmodule>=4.0.0 polkit-gobject-1)
+pkg_check_modules(REQ_LIBS REQUIRED libudev libmodule>=4.0.0)
+pkg_check_modules(POLKIT REQUIRED polkit-gobject-1)
 pkg_search_module(LOGIN_LIBS REQUIRED libelogind libsystemd>=221)
 target_link_libraries(${PROJECT_NAME}
                       m
