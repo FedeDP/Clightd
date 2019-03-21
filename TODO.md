@@ -1,5 +1,6 @@
 ## 3.5
 - [ ] https://github.com/FedeDP/Clight/issues/59
+- [ ] Drop privileges and only gain them when really needed (check repo history, there already was an attempt)
 
 ## 3.6/4.0
 - [ ] Add gamma (and dpms + idle) support on wayland (wlroots)
