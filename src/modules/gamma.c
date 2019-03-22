@@ -96,8 +96,8 @@ static void receive(const msg_t *msg, const void *userdata) {
             unsetenv("XAUTHORITY");
             m_log("Reached target temp: %d.\n", sc.target_temp);
         } else {
-            timerValue.it_value.tv_sec = 0;
-            timerValue.it_value.tv_nsec = 1000 * 1000 * sc.smooth_wait; // ms
+            timerValue.it_value.tv_sec = sc.smooth_wait / 1000; // in ms
+            timerValue.it_value.tv_nsec = 1000 * 1000 * (sc.smooth_wait % 1000); // ms
         }
         int ret = timerfd_settime(smooth_fd, 0, &timerValue, NULL);
         if (userdata) {
