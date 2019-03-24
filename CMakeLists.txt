@@ -154,7 +154,7 @@ set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Backlight-related bus API.")
 #
 set(CPACK_RPM_PACKAGE_LICENSE "GPL")
 set(CPACK_RPM_PACKAGE_URL "https://github.com/FedeDP/Clightd")
-set(CPACK_RPM_PACKAGE_GROUP "System Environment/Libraries")
+set(CPACK_RPM_PACKAGE_GROUP "System Environment/Daemons")
 set(CPACK_RPM_PACKAGE_DESCRIPTION ${CPACK_PACKAGE_DESCRIPTION})
 set(CPACK_RPM_PACKAGE_REQUIRES "libudev1 libmodule>= 4.0.0 ddcutil>=0.9.0 libsystemd0 libxrandr2 libxext6 libxss1")
 set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
@@ -163,7 +163,7 @@ set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
 #  DEB Specific configuration
 #
 set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/FedeDP/Clightd")
-set(CPACK_DEBIAN_PACKAGE_SECTION "libs")
+set(CPACK_DEBIAN_PACKAGE_SECTION "admin")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libudev1 libmodule>= 4.0.0 ddcutil>=0.9.0 libsystemd0 libxrandr2 libxext6 libxss1")
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 
