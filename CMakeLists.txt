@@ -131,3 +131,40 @@ if(WITH_DDC)
 endif()
 install(FILES ${SCRIPT_DIR}/org.clightd.clightd.conf
         DESTINATION /etc/dbus-1/system.d/)
+        
+#
+# Packaging support
+#
+SET(CPACK_SET_DESTDIR "on")
+set(CPACK_PACKAGE_NAME ${PROJECT_NAME})
+set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
+set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
+set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
+
+#
+#  Metadata common to all packaging systems
+#
+set(CPACK_PACKAGE_CONTACT "Federico Di Pierro <nierro92@gmail.com>")
+set(CPACK_PACKAGE_DESCRIPTION "Clightd offers a bus interface that lets you easily set screen brightness, gamma temperature and get ambient brightness through webcam frames capture or ALS devices.")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Backlight-related bus API.")
+
+#
+#  RPM Specific configuration
+#
+set(CPACK_RPM_PACKAGE_LICENSE "GPL")
+set(CPACK_RPM_PACKAGE_URL "https://github.com/FedeDP/Clightd")
+set(CPACK_RPM_PACKAGE_GROUP "System Environment/Libraries")
+set(CPACK_RPM_PACKAGE_DESCRIPTION ${CPACK_PACKAGE_DESCRIPTION})
+set(CPACK_RPM_PACKAGE_REQUIRES "libudev1 libmodule>= 4.0.0 ddcutil>=0.9.0 libsystemd0 libxrandr2 libxext6 libxss1")
+set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
+
+#
+#  DEB Specific configuration
+#
+set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/FedeDP/Clightd")
+set(CPACK_DEBIAN_PACKAGE_SECTION "libs")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libudev1 libmodule>= 4.0.0 ddcutil>=0.9.0 libsystemd0 libxrandr2 libxext6 libxss1")
+set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+
+include(CPack)
