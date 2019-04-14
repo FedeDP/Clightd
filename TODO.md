@@ -1,14 +1,25 @@
 ## 3.5
-- [ ] https://github.com/FedeDP/Clight/issues/59
-- [ ] Drop privileges and only gain them when really needed (check repo history, there already was an attempt)
+- [ ] Fix #24
+- [x] Support greyscale pixelformat for CAMERA sensor
+- [x] Fix issues with timerfd_settime for long timeouts
+- [x] Add Cpack support to cmake
+- [x] Reduce camera.c logging
+- [x] Add issue template
+- [x] Improve camera.c code
+- [x] Update to new ddcutil 0.9.5 interface. Require it.
 
-## 3.6/4.0
-- [ ] Add gamma (and dpms + idle) support on wayland (wlroots)
+## 3.6
+- [ ] Drop privileges and only gain them when really needed (check repo history, there already was an attempt)
+- [ ] IDLE support on wayland (wlroots)
+- [ ] Drop DPMS Set/getTimeouts, and only use get/set + add support for dpms on wlroots? (wlr_output_enable(false) on wlroots)
+
+For reference:  
+https://github.com/swaywm/wlroots/blob/master/examples/idle.c  
+https://github.com/swaywm/sway/tree/master/swayidle  
+
+## 3.7/4.0
+- [ ] Add gamma support on wayland (wlroots)
 https://github.com/swaywm/wlroots/blob/master/examples/gamma-control.c
-https://github.com/swaywm/wlroots/blob/master/examples/idle.c
-https://github.com/swaywm/sway/tree/master/swayidle
-- [ ] Couldn't DPMS be just another case for new Idle implementation? Eg: Idle after 45s -> dim screen. Idle after 5mins -> screen off
-- [ ] Eventually drop dpms {Set/Get}Timeouts
 
 ## 3.X
 - [ ] Keep it up to date with possible ddcutil/libmodule api changes

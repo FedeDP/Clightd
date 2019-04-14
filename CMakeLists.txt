@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 
-project(clightd VERSION 3.4 LANGUAGES C)
+project(clightd VERSION 3.5 LANGUAGES C)
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
@@ -70,7 +70,7 @@ endmacro()
 optional_dep(GAMMA "x11;xrandr" "Gamma")
 optional_dep(DPMS "x11;xext" "DPMS")
 optional_dep(IDLE "x11;xscrnsaver" "IDLE")
-optional_dep(DDC "ddcutil>=0.9.0" "DDC")
+optional_dep(DDC "ddcutil>=0.9.5" "DDC")
 
 # Convert ld flag list from list to space separated string.
 string(REPLACE ";" " " COMBINED_LDFLAGS "${COMBINED_LDFLAGS}")
@@ -156,7 +156,7 @@ set(CPACK_RPM_PACKAGE_LICENSE "GPL")
 set(CPACK_RPM_PACKAGE_URL "https://github.com/FedeDP/Clightd")
 set(CPACK_RPM_PACKAGE_GROUP "System Environment/Daemons")
 set(CPACK_RPM_PACKAGE_DESCRIPTION ${CPACK_PACKAGE_DESCRIPTION})
-set(CPACK_RPM_PACKAGE_REQUIRES "libudev1 libmodule>= 4.0.0 ddcutil>=0.9.0 libsystemd0 libxrandr2 libxext6 libxss1")
+set(CPACK_RPM_PACKAGE_REQUIRES "libudev1 libmodule>=4.0.0 ddcutil>=0.9.5 libsystemd0 libxrandr2 libxext6 libxss1")
 set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
 
 #
@@ -164,7 +164,7 @@ set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
 #
 set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/FedeDP/Clightd")
 set(CPACK_DEBIAN_PACKAGE_SECTION "admin")
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "libudev1 libmodule>= 4.0.0 ddcutil>=0.9.0 libsystemd0 libxrandr2 libxext6 libxss1")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libudev1 libmodule>=4.0.0 ddcutil>=0.9.5 libsystemd0 libxrandr2 libxext6 libxss1")
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 
 include(CPack)

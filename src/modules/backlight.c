@@ -38,7 +38,7 @@
     if (ddca_create_mfg_model_sn_display_identifier(NULL, NULL, sn, &pdid)) { \
         goto end; \
     } \
-    if (ddca_create_display_ref(pdid, &dref)) { \
+    if (ddca_get_display_ref(pdid, &dref)) { \
         goto end; \
     } \
     if (ddca_open_display2(dref, false, &dh)) { \
@@ -51,9 +51,6 @@
 end: \
     if (dh) { \
         ddca_close_display(dh); \
-    } \
-    if (dref) { \
-        ddca_free_display_ref(dref); \
     } \
     if (pdid) { \
         ddca_free_display_identifier(pdid); \
