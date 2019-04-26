@@ -1,5 +1,5 @@
 ## 3.5
-- [ ] Fix #24
+- [x] Fix #24
 - [x] Support greyscale pixelformat for CAMERA sensor
 - [x] Fix issues with timerfd_settime for long timeouts
 - [x] Add Cpack support to cmake
@@ -7,6 +7,8 @@
 - [x] Add issue template
 - [x] Improve camera.c code
 - [x] Update to new ddcutil 0.9.5 interface. Require it.
+
+- [ ] Fix frame capturing parameters...they are not applied immediately (at least on my webcam)
 
 ## 3.6
 - [ ] Drop privileges and only gain them when really needed (check repo history, there already was an attempt)
