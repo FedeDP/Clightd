@@ -6,6 +6,7 @@
 - [x] Reduce camera.c logging
 - [x] Add issue template
 - [x] Improve camera.c code
+- [x] Add support for Grayscale capturing too
 - [x] Update to new ddcutil 0.9.5 interface. Require it.
 
 - [ ] Fix frame capturing parameters...they are not applied immediately (at least on my webcam)

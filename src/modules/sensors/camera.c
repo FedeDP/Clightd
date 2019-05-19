@@ -17,6 +17,8 @@
     #define INFO(fmt, ...)
 #endif
 
+#define TEST_RET(fn) fn; if (state.quit) break;
+
 static int recv_frames(const char *interface);
 static void open_device(const char *interface);
 static void set_v4l2_contro_def(uint32_t id, const char *name);
@@ -65,28 +67,18 @@ static int capture(struct udev_device *dev, double *pct, const int num_captures)
 
 static int recv_frames(const char *interface) {
     open_device(interface);
-    if (!state.quit) {
-        init();
-        if (state.quit) {
-            goto end;
-        }
-        init_mmap();
-        if (state.quit) {
-            goto end;
-        }
-        start_stream();
-        if (state.quit) {
-            goto end;
-        }
+    while (!state.quit) {
+        TEST_RET(init());
+        TEST_RET(init_mmap());
+        TEST_RET(start_stream());
+        set_camera_settings();
         for (int i = 0; i < state.num_captures && !state.quit; i++) {
-            if (i > 0) {
-                send_frame();
-            }
+            send_frame();
             recv_frame(i);
         }
         stop_stream();
+        break;
     }
-end:
     return state.quit;
 }
 
@@ -123,26 +115,27 @@ static void set_camera_settings(void) {
     SET_V4L2(V4L2_CID_SCENE_MODE, V4L2_SCENE_MODE_NONE);
     // disable auto white balance
     SET_V4L2(V4L2_CID_AUTO_WHITE_BALANCE, 0);
-    // set default white balance
-    SET_V4L2_DEF(V4L2_CID_WHITE_BALANCE_TEMPERATURE);
     // disable auto exposure
     SET_V4L2(V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_MANUAL);
-    // set default exposure
-    SET_V4L2_DEF(V4L2_CID_EXPOSURE_ABSOLUTE);
-    // set default iris
-    SET_V4L2_DEF(V4L2_CID_IRIS_ABSOLUTE);
-    // disable auto iso
-    SET_V4L2(V4L2_CID_ISO_SENSITIVITY_AUTO, V4L2_ISO_SENSITIVITY_MANUAL);
-    // set default iso
-    SET_V4L2_DEF(V4L2_CID_ISO_SENSITIVITY);
     // disable autogain
     SET_V4L2(V4L2_CID_AUTOGAIN, 0);
-    // set default gain
-    SET_V4L2_DEF(V4L2_CID_GAIN);
+    // disable auto iso
+    SET_V4L2(V4L2_CID_ISO_SENSITIVITY_AUTO, V4L2_ISO_SENSITIVITY_MANUAL);
     // disable backlight compensation
     SET_V4L2(V4L2_CID_BACKLIGHT_COMPENSATION, 0);
     // disable autobrightness
     SET_V4L2(V4L2_CID_AUTOBRIGHTNESS, 0);
+        
+    // set default white balance
+    SET_V4L2_DEF(V4L2_CID_WHITE_BALANCE_TEMPERATURE);
+    // set default exposure
+    SET_V4L2_DEF(V4L2_CID_EXPOSURE_ABSOLUTE);
+    // set default iris
+    SET_V4L2_DEF(V4L2_CID_IRIS_ABSOLUTE);
+    // set default gain
+    SET_V4L2_DEF(V4L2_CID_GAIN);
+    // set default iso
+    SET_V4L2_DEF(V4L2_CID_ISO_SENSITIVITY);
     // set default brightness
     SET_V4L2_DEF(V4L2_CID_BRIGHTNESS);
 }
@@ -204,9 +197,7 @@ static void init(void) {
         perror("Setting Pixel Format");
         return;
     }    
-    
-    set_camera_settings();
-    
+        
     state.width = fmt.fmt.pix.width;
     state.height = fmt.fmt.pix.height;
     state.pixelformat = fmt.fmt.pix.pixelformat;
@@ -259,17 +250,9 @@ static int xioctl(int request, void *arg, bool exit_on_error) {
 }
 
 static void start_stream(void) {
-    /* 
-     * Enqueue a buffer before start streaming,
-     * as some driver would fail otherwise:
-     * they require a buffer to be enqueued before start streaming.
-     */
-    send_frame();
-    if (!state.quit) {
-        enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        if (-1 == xioctl(VIDIOC_STREAMON, &type, true)) {
-            perror("Start Capture");
-        }
+    enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    if (-1 == xioctl(VIDIOC_STREAMON, &type, true)) {
+        perror("Start Capture");
     }
 }
 
