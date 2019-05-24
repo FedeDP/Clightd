@@ -26,7 +26,7 @@ Even better, on tty: https://github.com/karelzak/util-linux/blob/master/term-uti
 - [x] Reduce camera.c logging
 - [x] Support Grayscale pixelformat for CAMERA sensor
 - [ ] Fix frame capturing parameters...they are not applied immediately (at least on my webcam)
-- [ ] Fix #24
+- [x] Fix #24
 
 ## 3.6
 - [ ] Drop privileges and only gain them when really needed (check repo history, there already was an attempt)
