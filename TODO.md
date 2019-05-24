@@ -8,7 +8,7 @@
 ### Dimmer
 - [x] Avoid depending on X
 - [x] IDLE support on wayland
-- [ ] Update API doc
+- [x] Update API doc
 
 ### Dpms
 - [ ] Drop DPMS Set/getTimeouts, and only use get/set 
