@@ -115,8 +115,8 @@ static void set_camera_settings(void) {
     SET_V4L2(V4L2_CID_SCENE_MODE, V4L2_SCENE_MODE_NONE);
     // disable auto white balance
     SET_V4L2(V4L2_CID_AUTO_WHITE_BALANCE, 0);
-    // disable auto exposure
-    SET_V4L2(V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_MANUAL);
+    // TODO: disable auto exposure?
+    SET_V4L2(V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_APERTURE_PRIORITY);
     // disable autogain
     SET_V4L2(V4L2_CID_AUTOGAIN, 0);
     // disable auto iso
@@ -128,8 +128,8 @@ static void set_camera_settings(void) {
         
     // set default white balance
     SET_V4L2_DEF(V4L2_CID_WHITE_BALANCE_TEMPERATURE);
-    // set default exposure
-    SET_V4L2_DEF(V4L2_CID_EXPOSURE_ABSOLUTE);
+    // TODO: set default exposure?
+    // SET_V4L2_DEF(V4L2_CID_EXPOSURE_ABSOLUTE);
     // set default iris
     SET_V4L2_DEF(V4L2_CID_IRIS_ABSOLUTE);
     // set default gain
