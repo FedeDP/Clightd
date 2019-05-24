@@ -7,7 +7,7 @@
 
 ### Dimmer
 - [x] Avoid depending on X
-- [x] IDLE support on wayland (wlroots)
+- [x] IDLE support on wayland
 - [ ] Update API doc
 
 ### Dpms
