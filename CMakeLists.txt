@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 
-project(clightd VERSION 3.5 LANGUAGES C)
+project(clightd VERSION 4.0 LANGUAGES C)
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
@@ -15,6 +15,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
                            "${CMAKE_CURRENT_SOURCE_DIR}/src"
                            "${CMAKE_CURRENT_SOURCE_DIR}/src/utils"
                            "${CMAKE_CURRENT_SOURCE_DIR}/src/modules"
+                           "${CMAKE_CURRENT_SOURCE_DIR}/src/dpms_plugins"
 )
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     -D_GNU_SOURCE
@@ -172,11 +173,11 @@ if(WITH_DDC)
 endif()
 if(WITH_GAMMA)
     set(CPACK_DEBIAN_PACKAGE_DEPENDS "${CPACK_DEBIAN_PACKAGE_DEPENDS}, libxrandr2")
-    set(CPACK_RPM_PACKAGE_REQUIRES "${CPACK_RPM_PACKAGE_REQUIRES} ddcutil>=0.9.5 libxrandr2")
+    set(CPACK_RPM_PACKAGE_REQUIRES "${CPACK_RPM_PACKAGE_REQUIRES} libxrandr2")
 endif()
 if(WITH_DPMS)
     set(CPACK_DEBIAN_PACKAGE_DEPENDS "${CPACK_DEBIAN_PACKAGE_DEPENDS}, libxext6")
-    set(CPACK_RPM_PACKAGE_REQUIRES "${CPACK_RPM_PACKAGE_REQUIRES} ddcutil>=0.9.5 libxext6")
+    set(CPACK_RPM_PACKAGE_REQUIRES "${CPACK_RPM_PACKAGE_REQUIRES} libxext6")
 endif()
 
 include(CPack)
