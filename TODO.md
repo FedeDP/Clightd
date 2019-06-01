@@ -14,7 +14,7 @@
 ### Dpms
 - [x] Drop DPMS Set/getTimeouts, and only use get/set 
 - [x] Add support for dpms on tty
-- [ ] Update doc
+- [x] Update doc
 
 ### CPack
 - [x] Add Cpack support to cmake
