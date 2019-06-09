@@ -61,14 +61,16 @@ end: \
     static void get_info_id(char *id, const int size, const DDCA_Display_Info *dinfo) {
         if (!strlen(dinfo->sn) || !strcasecmp(dinfo->sn, "Unspecified")) {
             switch(dinfo->path.io_mode) {
-                case (DDCA_IO_I2C):
-                    snprintf(id, sizeof(id), "/dev/i2c-%d", dinfo->path.path.i2c_busno);
+                case DDCA_IO_I2C:
+                    snprintf(id, size, "/dev/i2c-%d", dinfo->path.path.i2c_busno);
                     break;
-                case (DDCA_IO_ADL):
-                    snprintf(id, sizeof(id), "%d.%d", dinfo->path.path.adlno.iAdapterIndex, dinfo->path.path.adlno.iDisplayIndex);
+                case DDCA_IO_ADL:
+                    snprintf(id, size, "%d.%d", dinfo->path.path.adlno.iAdapterIndex, dinfo->path.path.adlno.iDisplayIndex);
                     break;
-                case (DDCA_IO_USB):
-                    snprintf(id, sizeof(id), "/dev/usb/hiddev%d", dinfo->path.path.hiddev_devno);
+                case DDCA_IO_USB:
+                    snprintf(id, size, "/dev/usb/hiddev%d", dinfo->path.path.hiddev_devno);
+                    break;
+                default:
                     break;
             }
         } else {
