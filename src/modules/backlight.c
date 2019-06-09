@@ -22,21 +22,7 @@
             DDCA_Any_Vcp_Value *valrec; \
             if (!ddca_get_any_vcp_value_using_explicit_type(dh, br_code, DDCA_NON_TABLE_VCP_VALUE, &valrec)) { \
                 char id[32]; \
-                if (!dinfo->sn || !strlen(dinfo->sn) || !strcasecmp(dinfo->sn, "Unspecified")) { \
-                    switch(dinfo->path.io_mode) { \
-                    case (DDCA_IO_I2C): \
-                        snprintf(id, sizeof(id), "/dev/i2c-%d", dinfo->path.path.i2c_busno); \
-                        break; \
-                    case (DDCA_IO_ADL): \
-                        snprintf(id, sizeof(id), "%d.%d", dinfo->path.path.adlno.iAdapterIndex, dinfo->path.path.adlno.iDisplayIndex); \
-                        break; \
-                    case (DDCA_IO_USB): \
-                        snprintf(id, sizeof(id), "/dev/usb/hiddev%d", dinfo->path.path.hiddev_devno); \
-                        break; \
-                    } \
-                } else { \
-                    strncpy(id, dinfo->sn, sizeof(id)); \
-                } \
+                get_info_id(id, sizeof(id), dinfo); \
                 func; \
                 ddca_free_any_vcp_value(valrec); \
             } \
@@ -51,7 +37,7 @@
     DDCA_Display_Ref dref = NULL; \
     DDCA_Display_Handle dh = NULL; \
     DDCA_Any_Vcp_Value *valrec = NULL; \
-    if (convert_sn_to_did(sn, &pdid)) { \
+    if (convert_sn_to_id(sn, &pdid)) { \
         goto end; \
     } \
     if (ddca_get_display_ref(pdid, &dref)) { \
@@ -72,7 +58,25 @@ end: \
         ddca_free_display_identifier(pdid); \
     }
 
-    static DDCA_Status convert_sn_to_did(const char *sn, DDCA_Display_Identifier *pdid) {
+    static void get_info_id(char *id, const int size, const DDCA_Display_Info *dinfo) {
+        if (!strlen(dinfo->sn) || !strcasecmp(dinfo->sn, "Unspecified")) {
+            switch(dinfo->path.io_mode) {
+                case (DDCA_IO_I2C):
+                    snprintf(id, sizeof(id), "/dev/i2c-%d", dinfo->path.path.i2c_busno);
+                    break;
+                case (DDCA_IO_ADL):
+                    snprintf(id, sizeof(id), "%d.%d", dinfo->path.path.adlno.iAdapterIndex, dinfo->path.path.adlno.iDisplayIndex);
+                    break;
+                case (DDCA_IO_USB):
+                    snprintf(id, sizeof(id), "/dev/usb/hiddev%d", dinfo->path.path.hiddev_devno);
+                    break;
+            }
+        } else {
+            strncpy(id, dinfo->sn, size);
+        }
+    }
+    
+    static DDCA_Status convert_sn_to_id(const char *sn, DDCA_Display_Identifier *pdid) {
         int id1, id2;
         if (sscanf(sn, "/dev/i2c-%d", &id1) == 1) {
             return ddca_create_busno_display_identifier(id1, pdid);
