@@ -22,7 +22,7 @@
             DDCA_Any_Vcp_Value *valrec; \
             if (!ddca_get_any_vcp_value_using_explicit_type(dh, br_code, DDCA_NON_TABLE_VCP_VALUE, &valrec)) { \
                 char id[32]; \
-                if (!dinfo->sn || !strlen(dinfo->sn)) { \
+                if (!dinfo->sn || !strlen(dinfo->sn) || strcasestr(dinfo->sn, "Unspecified")) { \
                     switch(dinfo->path.io_mode) { \
                     case (DDCA_IO_I2C): \
                         snprintf(id, sizeof(id), "/dev/i2c-%d", dinfo->path.path.i2c_busno); \
