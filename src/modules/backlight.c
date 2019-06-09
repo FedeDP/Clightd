@@ -21,6 +21,22 @@
             } \
             DDCA_Any_Vcp_Value *valrec; \
             if (!ddca_get_any_vcp_value_using_explicit_type(dh, br_code, DDCA_NON_TABLE_VCP_VALUE, &valrec)) { \
+                char id[32]; \
+                if (!dinfo->sn || !strlen(dinfo->sn)) { \
+                    switch(dinfo->path.io_mode) { \
+                    case (DDCA_IO_I2C): \
+                        snprintf(id, sizeof(id), "/dev/i2c-%d", dinfo->path.path.i2c_busno); \
+                        break; \
+                    case (DDCA_IO_ADL): \
+                        snprintf(id, sizeof(id), "%d.%d", dinfo->path.path.adlno.iAdapterIndex, dinfo->path.path.adlno.iDisplayIndex); \
+                        break; \
+                    case (DDCA_IO_USB): \
+                        snprintf(id, sizeof(id), "/dev/usb/hiddev%d", dinfo->path.path.hiddev_devno); \
+                        break; \
+                    } \
+                } else { \
+                    strncpy(id, dinfo->sn, sizeof(id)); \
+                } \
                 func; \
                 ddca_free_any_vcp_value(valrec); \
             } \
@@ -35,7 +51,7 @@
     DDCA_Display_Ref dref = NULL; \
     DDCA_Display_Handle dh = NULL; \
     DDCA_Any_Vcp_Value *valrec = NULL; \
-    if (ddca_create_mfg_model_sn_display_identifier(NULL, NULL, sn, &pdid)) { \
+    if (convert_sn_to_did(sn, &pdid)) { \
         goto end; \
     } \
     if (ddca_get_display_ref(pdid, &dref)) { \
@@ -54,6 +70,21 @@ end: \
     } \
     if (pdid) { \
         ddca_free_display_identifier(pdid); \
+    }
+
+    static DDCA_Status convert_sn_to_did(const char *sn, DDCA_Display_Identifier *pdid) {
+        int id1, id2;
+        if (sscanf(sn, "/dev/i2c-%d", &id1) == 1) {
+            return ddca_create_busno_display_identifier(id1, pdid);
+        }
+        if (sscanf(sn, "/dev/usb/hiddev%d", &id1) == 1) {
+            return ddca_create_usb_hiddev_display_identifier(id1, pdid);
+        }
+        if (sscanf(sn, "%d.%d", &id1, &id2) == 2) {
+            return ddca_create_adlno_display_identifier(id1, id2, pdid);
+        }
+        /* Ok it is a normal sn */
+        return ddca_create_mfg_model_sn_display_identifier(NULL, NULL, sn, pdid);
     }
 
 #else
@@ -162,7 +193,7 @@ static void receive(const msg_t *msg, const void *userdata) {
             timerValue.it_value.tv_nsec = 1000 * 1000 * (sc->smooth_wait % 1000); // ms
             timerfd_settime(sc->smooth_fd, 0, &timerValue, NULL);
         } else {
-            m_log("Reached target backlight: %s%.2lf.\n", sc->verse > 0 ? "+" : (sc->verse < 0 ? "-" : ""), sc->target_pct);
+            m_log("%s reached target backlight: %s%.2lf.\n", sc->d.sn, sc->verse > 0 ? "+" : (sc->verse < 0 ? "-" : ""), sc->target_pct);
             map_remove(running_clients, sc->d.sn);
         }
     }
@@ -268,7 +299,7 @@ static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_err
         map_set_dtor(running_clients, dtor_client);
         add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, backlight_interface, true);
         DDCUTIL_LOOP({
-            add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, dinfo->sn, false);
+            add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, id, false);
         });
         m_log("Target pct (smooth %d): %s%.2lf\n", is_smooth, verse > 0 ? "+" : (verse < 0 ? "-" : ""), target_pct);
         // Returns true if no errors happened; false if another client is already changing backlight
@@ -348,8 +379,8 @@ static int set_external_backlight(smooth_client *sc) {
 
 /**
  * Backlight pct getter method: for each screen (both internal and external)
- * it founds, it will return a "(serialNumber, current backlight pct)" struct.
- * Note that for internal laptop screen, serialNumber = syspath (eg: intel_backlight)
+ * it founds, it will return a "(uid, current backlight pct)" struct.
+ * Note that for internal laptop screen, uid = syspath (eg: intel_backlight)
  */
 static int method_getallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     sd_bus_message *reply = NULL;
@@ -360,11 +391,19 @@ static int method_getallbrightness(sd_bus_message *m, void *userdata, sd_bus_err
         sd_bus_message_new_method_return(m, &reply);
         sd_bus_message_open_container(reply, SD_BUS_TYPE_ARRAY, "(sd)");
 
-        append_internal_backlight(reply, backlight_interface);
-        append_external_backlight(reply, NULL);
+        if (append_internal_backlight(reply, backlight_interface) == -1 &&
+            append_external_backlight(reply, NULL) == -1) {
+            
+            r = -ENODEV;
+            sd_bus_error_set_errno(ret_error, ENODEV);
+        } else {
+            r = 0;
+        }
 
         sd_bus_message_close_container(reply);
-        r = sd_bus_send(NULL, reply, NULL);
+        if (!r) {
+            r = sd_bus_send(NULL, reply, NULL);
+        }
         sd_bus_message_unref(reply);
         sd_bus_message_exit_container(m);
     }
@@ -395,16 +434,19 @@ static int append_internal_backlight(sd_bus_message *reply, const char *path) {
 }
 
 static int append_external_backlight(sd_bus_message *reply, const char *sn) {
+    int ret = -1;
     if (sn) {
         DDCUTIL_FUNC(sn, {
+            ret = 0;
             append_backlight(reply, sn, (double)VALREC_CUR_VAL(valrec) / VALREC_MAX_VAL(valrec));
         });
     } else {
         DDCUTIL_LOOP({
-            append_backlight(reply, dinfo->sn, (double)VALREC_CUR_VAL(valrec) / VALREC_MAX_VAL(valrec));
+            ret = 0;
+            append_backlight(reply, id, (double)VALREC_CUR_VAL(valrec) / VALREC_MAX_VAL(valrec));
         });
     }
-    return 0;
+    return ret;
 }
 
 static int method_raiseallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
@@ -472,18 +514,23 @@ static int method_getbrightness(sd_bus_message *m, void *userdata, sd_bus_error 
    const char *sn = NULL;
    int r = sd_bus_message_read(m, "s", &sn);
     if (r >= 0) {
-        
         if (sn && strlen(sn)) {
             sd_bus_message *reply = NULL;
             sd_bus_message_new_method_return(m, &reply);
+            r = 0;
             if (append_internal_backlight(reply, sn) == -1) {
-                append_external_backlight(reply, sn);
+                if (append_external_backlight(reply, sn) == -1) {
+                    sd_bus_error_set_errno(ret_error, ENODEV);
+                    r = -ENODEV;
+                }
             }
-            r = sd_bus_send(NULL, reply, NULL);
+            if (!r) {
+                r = sd_bus_send(NULL, reply, NULL);
+            }
             sd_bus_message_unref(reply);
         } else {
             sd_bus_error_set_errno(ret_error, EINVAL);
-            return -EINVAL;
+            r = -EINVAL;
         }
     }
     return r;

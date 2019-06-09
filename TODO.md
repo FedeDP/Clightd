@@ -28,6 +28,9 @@
 - [x] Fix #24
 - [ ] Improve camera brightness compute with a new histogram-based algorithm (#25)
 
+### Backlight
+- [x] Support DDCutil DDCA_Display_Info path.io_mode (eg: /dev/i2c-%d) as uid (as SerialNumber can be null/empty on some devices) (Fix #27)
+
 ## 4.1
 
 #### Gamma
