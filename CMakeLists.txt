@@ -46,7 +46,7 @@ list(APPEND COMBINED_LDFLAGS ${LOGIN_LIBS_LDFLAGS})
 # using the native dependency handling in CMake).
 macro(optional_dep name modules description)
     option(ENABLE_${name}
-           "Enable support for ${description} (defaults to use if found)"
+           "Enable support for ${description} (defaults to not use it)"
            OFF)
     if(${ENABLE_${name}})
         pkg_check_modules(${name}_LIBS REQUIRED ${modules})
@@ -68,9 +68,10 @@ macro(optional_dep name modules description)
     endif()
 endmacro()
 
-optional_dep(GAMMA "x11;xrandr" "Gamma")
+optional_dep(GAMMA "x11;xrandr" "Gamma correction")
 optional_dep(DPMS "x11;xext" "DPMS")
-optional_dep(DDC "ddcutil>=0.9.5" "DDC")
+optional_dep(SCREEN "x11" "screen emitted brightness")
+optional_dep(DDC "ddcutil>=0.9.5" "external monitor backlight")
 
 # Convert ld flag list from list to space separated string.
 string(REPLACE ";" " " COMBINED_LDFLAGS "${COMBINED_LDFLAGS}")
@@ -155,8 +156,9 @@ set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Backlight-related bus API.")
 set(CPACK_RPM_PACKAGE_LICENSE "GPL")
 set(CPACK_RPM_PACKAGE_URL "https://github.com/FedeDP/Clightd")
 set(CPACK_RPM_PACKAGE_GROUP "System Environment/Daemons")
+set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/etc/dbus-1" "/etc/dbus-1/system.d" "${CMAKE_INSTALL_PREFIX}" "${CMAKE_INSTALL_LIBDIR}" "${SYSTEM_BUS_DIR}" "${POLKIT_ACTION_DIR}")
 set(CPACK_RPM_PACKAGE_DESCRIPTION ${CPACK_PACKAGE_DESCRIPTION})
-set(CPACK_RPM_PACKAGE_REQUIRES "libudev1 libmodule>=4.0.0 libsystemd0")
+set(CPACK_RPM_PACKAGE_REQUIRES "libmodule >= 4.0.0 systemd-libs")
 set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
 
 #
@@ -169,15 +171,15 @@ set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 
 if(WITH_DDC)
     set(CPACK_DEBIAN_PACKAGE_DEPENDS "${CPACK_DEBIAN_PACKAGE_DEPENDS}, ddcutil (>=0.9.5)")
-    set(CPACK_RPM_PACKAGE_REQUIRES "${CPACK_RPM_PACKAGE_REQUIRES} ddcutil>=0.9.5")
+    set(CPACK_RPM_PACKAGE_REQUIRES "${CPACK_RPM_PACKAGE_REQUIRES} ddcutil >= 0.9.5")
 endif()
 if(WITH_GAMMA)
     set(CPACK_DEBIAN_PACKAGE_DEPENDS "${CPACK_DEBIAN_PACKAGE_DEPENDS}, libxrandr2")
-    set(CPACK_RPM_PACKAGE_REQUIRES "${CPACK_RPM_PACKAGE_REQUIRES} libxrandr2")
+    set(CPACK_RPM_PACKAGE_REQUIRES "${CPACK_RPM_PACKAGE_REQUIRES} libXrandr")
 endif()
 if(WITH_DPMS)
     set(CPACK_DEBIAN_PACKAGE_DEPENDS "${CPACK_DEBIAN_PACKAGE_DEPENDS}, libxext6")
-    set(CPACK_RPM_PACKAGE_REQUIRES "${CPACK_RPM_PACKAGE_REQUIRES} libxext6")
+    set(CPACK_RPM_PACKAGE_REQUIRES "${CPACK_RPM_PACKAGE_REQUIRES} libXext")
 endif()
 
 include(CPack)

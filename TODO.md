@@ -5,6 +5,7 @@
 - [x] Add issue template
 - [x] Update to new ddcutil 0.9.5 interface. Require it.
 - [x] Bump to 4.0: api break
+- [x] Check polkit script!
 
 ### Idle
 - [x] Avoid depending on X
@@ -20,6 +21,7 @@
 - [x] Add Cpack support to cmake
 - [x] Fix cpack Dependencies on ubuntu
 - [x] Fix cpack: only add enabled dependencies
+- [ ] Fix rpm cpack -> fix cmakelists CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
 
 ### Camera
 - [x] Improve camera.c code
@@ -30,6 +32,9 @@
 
 ### Backlight
 - [x] Support DDCutil DDCA_Display_Info path.io_mode (eg: /dev/i2c-%d) as uid (as SerialNumber can be null/empty on some devices) (Fix #27)
+
+### Screen
+- [x] Add a method (X only) to compute current monitor emitted brightness
 
 ## 4.1
 
