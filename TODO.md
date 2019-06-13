@@ -21,7 +21,7 @@
 - [x] Add Cpack support to cmake
 - [x] Fix cpack Dependencies on ubuntu
 - [x] Fix cpack: only add enabled dependencies
-- [ ] Fix rpm cpack -> fix cmakelists CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
+- [x] Fix rpm cpack -> fix cmakelists CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
 
 ### Camera
 - [x] Improve camera.c code
