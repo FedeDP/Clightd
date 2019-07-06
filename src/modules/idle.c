@@ -8,6 +8,12 @@
 
 #define BUF_LEN (sizeof(struct inotify_event) + NAME_MAX + 1)
 
+#if MODULE_VERSION_MAJ >= 5
+#define KEY     const char *key,
+#else
+#define KEY     
+#endif
+
 typedef struct {
     bool in_use;                // Whether the client has already been requested by someone
     bool is_idle;               // Whether the client is in idle state
@@ -21,8 +27,8 @@ typedef struct {
 } idle_client_t;
 
 static map_ret_code dtor_client(void *client);
-static map_ret_code leave_idle(void *userdata, void *client);
-static map_ret_code find_free_client(void *out, void *client);
+static map_ret_code leave_idle(void *userdata, KEY void *client);
+static map_ret_code find_free_client(void *out, KEY void *client);
 static idle_client_t *find_available_client(void);
 static void destroy_client(idle_client_t *c);
 static int method_get_client(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
@@ -131,7 +137,7 @@ static void destroy(void) {
     map_free(clients);
 }
 
-static map_ret_code leave_idle(void *userdata, void *client) {
+static map_ret_code leave_idle(void *userdata, KEY void *client) {
     idle_client_t *c = (idle_client_t *)client;
     if (c->is_idle) {
         sd_bus_emit_signal(bus, c->path, clients_interface, "Idle", "b", false);
@@ -153,7 +159,7 @@ static map_ret_code dtor_client(void *client) {
     return MAP_OK;
 }
 
-static map_ret_code find_free_client(void *out, void *client) {
+static map_ret_code find_free_client(void *out, KEY void *client) {
     idle_client_t *c = (idle_client_t *)client;
     idle_client_t **o = (idle_client_t **)out;
     

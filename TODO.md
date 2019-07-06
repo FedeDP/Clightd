@@ -6,6 +6,8 @@
 - [x] Update to new ddcutil 0.9.5 interface. Require it.
 - [x] Bump to 4.0: api break
 - [x] Check polkit script!
+- [x] Add support for libmodule 5.0.0 api
+- [x] Add a "-v/--version" cmdline switch
 
 ### Idle
 - [x] Avoid depending on X

@@ -30,7 +30,20 @@ void modules_pre_start(void) {
     udev = udev_new();
 } 
 
-int main(void) {
+static void check_opts(int argc, char *argv[]) {
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-v") || !strcmp(argv[i], "--version")) {
+            printf("Clightd: dbus API to easily set screen brightness, gamma temperature and get ambient brightness through webcam frames capture or ALS devices.\n");
+            printf("* Current version: %s\n", VERSION);
+            printf("* https://github.com/FedeDP/Clightd\n");
+            printf("* Copyright (C) 2019  Federico Di Pierro <nierro92@gmail.com>\n");
+            exit(EXIT_SUCCESS);
+        }
+    }
+}
+
+int main(int argc, char *argv[]) {
+    check_opts(argc, argv);
     int r = sd_bus_request_name(bus, bus_interface, 0);
     if (r < 0) {
         fprintf(stderr, "Failed to acquire service name: %s\n", strerror(-r));
