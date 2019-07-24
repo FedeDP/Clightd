@@ -1,11 +1,10 @@
 #ifdef DPMS_PRESENT
 
+#include <commons.h>
 #include <linux/tiocl.h>
 #include <sys/ioctl.h>
 #include <linux/kd.h>
-#include <commons.h>
 #include <fcntl.h>
-#include <unistd.h>
 
 static int is_a_console(int fd);
 static int open_a_console(const char *fnam);

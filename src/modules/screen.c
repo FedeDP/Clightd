@@ -1,6 +1,5 @@
 #ifdef SCREEN_PRESENT
 
-#include <module/module_easy.h>
 #include <commons.h>
 #include <X11/Xutil.h>
 

@@ -1,8 +1,8 @@
 #ifdef DPMS_PRESENT
 
+#include <commons.h>
 #include <X11/Xlib.h>
 #include <X11/extensions/dpms.h>
-#include <commons.h>
 
 /*
  * info->power_level is one of:

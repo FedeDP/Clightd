@@ -1,6 +1,5 @@
 #ifdef DPMS_PRESENT
 
-#include <module/module_easy.h>
 #include <commons.h>
 #include <polkit.h>
 #include "dpms_plugins/xorg.h"

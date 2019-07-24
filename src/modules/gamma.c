@@ -5,7 +5,6 @@
 
 #ifdef GAMMA_PRESENT
 
-#include <module/module_easy.h>
 #include <commons.h>
 #include <polkit.h>
 #include <X11/extensions/Xrandr.h>

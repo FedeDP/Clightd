@@ -33,7 +33,7 @@ void modules_pre_start(void) {
 static void check_opts(int argc, char *argv[]) {
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-v") || !strcmp(argv[i], "--version")) {
-            printf("Clightd: dbus API to easily set screen brightness, gamma temperature and get ambient brightness through webcam frames capture or ALS devices.\n");
+            printf("Clightd: dbus API to easily set screen backlight, gamma temperature and get ambient brightness through webcam frames capture or ALS devices.\n");
             printf("* Current version: %s\n", VERSION);
             printf("* https://github.com/FedeDP/Clightd\n");
             printf("* Copyright (C) 2019  Federico Di Pierro <nierro92@gmail.com>\n");

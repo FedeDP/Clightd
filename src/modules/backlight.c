@@ -1,4 +1,4 @@
-#include <module/module_easy.h>
+#include <commons.h>
 #include <module/map.h>
 #include <polkit.h>
 #include <udev.h>
@@ -114,7 +114,7 @@ typedef struct {
     double verse;
 } smooth_client;
 
-static int dtor_client(void *client);
+static DTOR_RET dtor_client(void *client);
 static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_getallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_raiseallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
@@ -165,8 +165,12 @@ static bool evaluate(void) {
 }
 
 static void init(void) {
+#if MODULE_VERSION_MAJ >= 5
+    running_clients = map_new(false, dtor_client);
+#else
     running_clients = map_new();
     map_set_dtor(running_clients, dtor_client);
+#endif
     int r = sd_bus_add_object_vtable(bus,
                                  NULL,
                                  object_path,
@@ -209,13 +213,16 @@ static void destroy(void) {
     map_free(running_clients);
 }
 
-static int dtor_client(void *client) {
+static DTOR_RET dtor_client(void *client) {
     smooth_client *sc = (smooth_client *)client;
     /* Free all resources */
     m_deregister_fd(sc->smooth_fd); // this will automatically close it!
     free(sc->d.sn);
     free(sc);
+
+#if MODULE_VERSION_MAJ < 5
     return MAP_OK;
+#endif
 }
 
 static void reset_backlight_struct(smooth_client *sc, double target_pct, int is_smooth, double smooth_step, 
@@ -258,7 +265,12 @@ static int add_backlight_sn(double target_pct, int is_smooth, double smooth_step
         reset_backlight_struct(sc, target_pct, is_smooth, smooth_step, smooth_wait, verse);
         sc->d.sn = strdup(sn);
         sc->d.reached_target = false;
+
+#if MODULE_VERSION_MAJ >= 5
+        map_put(running_clients, sc->d.sn, sc);
+#else
         map_put(running_clients, sc->d.sn, sc, false, true);
+#endif
     }
     
     if (dev) {
@@ -302,7 +314,9 @@ static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_err
 
         /* Clear map */
         map_clear(running_clients);
+#if MODULE_VERSION_MAJ < 5
         map_set_dtor(running_clients, dtor_client);
+#endif
         add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, backlight_interface, true);
         DDCUTIL_LOOP({
             add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, id, false);
@@ -358,8 +372,8 @@ static int set_internal_backlight(smooth_client *sc) {
         int value = next_backlight_level(sc, curr, max) * max;
         /* Check if next_backlight_level returned -1 */
         if (value >= 0) {
-            char val[10] = {0};
-            sprintf(val, "%d", value);
+            char val[15] = {0};
+            snprintf(val, sizeof(val) - 1, "%d", value);
             r = udev_device_set_sysattr_value(dev, "brightness", val);
         }
         udev_device_unref(dev);
