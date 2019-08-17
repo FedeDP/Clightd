@@ -37,7 +37,8 @@ static void init(void) {
     } else {
         /* Process initial messages */
         receive(NULL, NULL);
-        m_register_fd(sd_bus_get_fd(bus), false, NULL);
+        int fd = sd_bus_get_fd(bus);
+        m_register_fd(dup(fd), true, NULL);
     }
 }
 
