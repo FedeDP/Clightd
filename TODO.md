@@ -9,6 +9,7 @@
 - [x] Add support for libmodule 5.0.0 api
 - [x] Add a "-v/--version" cmdline switch
 - [x] Require libmodule >= 5.0.0
+- [ ] Change libmodule required version in WIKI pages (Build requirements)
 
 ### Idle
 - [x] Avoid depending on X
@@ -38,8 +39,8 @@
 
 ### Screen
 - [x] Add a method (X only) to compute current monitor emitted brightness
-- [ ] Update wiki pages: drop DENABLE_IDLE and add DENABLE_SCREEN
-- [ ] Document new Screen API
+- [x] Update wiki pages: drop DENABLE_IDLE and add DENABLE_SCREEN
+- [x] Document new Screen API
 
 ## 4.1
 
