@@ -38,6 +38,8 @@
 
 ### Screen
 - [x] Add a method (X only) to compute current monitor emitted brightness
+- [ ] Update wiki pages: drop DENABLE_IDLE and add DENABLE_SCREEN
+- [ ] Document new Screen API
 
 ## 4.1
 
