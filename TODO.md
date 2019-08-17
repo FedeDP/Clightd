@@ -8,6 +8,7 @@
 - [x] Check polkit script!
 - [x] Add support for libmodule 5.0.0 api
 - [x] Add a "-v/--version" cmdline switch
+- [x] Require libmodule >= 5.0.0
 
 ### Idle
 - [x] Avoid depending on X
