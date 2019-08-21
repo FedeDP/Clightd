@@ -41,6 +41,8 @@
 - [x] Add a method (X only) to compute current monitor emitted brightness
 - [x] Update wiki pages: drop DENABLE_IDLE and add DENABLE_SCREEN
 - [x] Document new Screen API
+- [x] It needs xauthority too!
+- [ ] Document it
 
 ## 4.1
 
