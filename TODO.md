@@ -42,7 +42,7 @@
 - [x] Update wiki pages: drop DENABLE_IDLE and add DENABLE_SCREEN
 - [x] Document new Screen API
 - [x] It needs xauthority too!
-- [ ] Document it
+- [x] Document it
 
 ## 4.1
 
