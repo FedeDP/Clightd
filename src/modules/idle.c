@@ -197,7 +197,7 @@ static int method_get_client(sd_bus_message *m, void *userdata, sd_bus_error *re
     if (c) {
         c->in_use = true;
         c->fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
-        m_register_fd(c->fd, false, c);
+        m_register_fd(c->fd, true, c);
         c->sender = strdup(sd_bus_message_get_sender(m));
         snprintf(c->path, sizeof(c->path) - 1, "%s/Client%u", object_path, c->id);
 
