@@ -10,8 +10,8 @@
 #define CAMERA_SUBSYSTEM            "video4linux"
 
 #define SET_V4L2(id, val)           set_v4l2_control(id, val, #id)
-#define SET_V4L2_DEF(id)            set_v4l2_contro_def(id, #id)
-#ifdef NDEBUG
+#define SET_V4L2_DEF(id)            set_v4l2_control_def(id, #id)
+#ifndef NDEBUG
     #define INFO(fmt, ...)          printf(fmt, ##__VA_ARGS__);
 #else
     #define INFO(fmt, ...)
@@ -21,8 +21,9 @@
 
 static int recv_frames(const char *interface);
 static void open_device(const char *interface);
-static void set_v4l2_contro_def(uint32_t id, const char *name);
+static void set_v4l2_control_def(uint32_t id, const char *name);
 static void set_v4l2_control(uint32_t id, int32_t val, const char *name);
+static void set_camera_settings_def(void);
 static void set_camera_settings(void);
 static void init(void);
 static void init_mmap(void);
@@ -48,6 +49,7 @@ struct state {
     uint32_t pixelformat;
     double *brightness;
     struct buffer buf;
+    char *settings;
 };
 
 static struct state state;
@@ -57,9 +59,10 @@ SENSOR(CAMERA_NAME, CAMERA_SUBSYSTEM, NULL);
 /*
  * Frame capturing method
  */
-static int capture(struct udev_device *dev, double *pct, const int num_captures) {
+static int capture(struct udev_device *dev, double *pct, const int num_captures, char *settings) {
     state.num_captures = num_captures;
     state.brightness = pct;
+    state.settings = settings;
     int r = recv_frames(udev_device_get_devnode(dev));
     free_all();
     return -r;
@@ -90,12 +93,13 @@ static void open_device(const char *interface) {
     }
 }
 
-static void set_v4l2_contro_def(uint32_t id, const char *name) {
+static void set_v4l2_control_def(uint32_t id, const char *name) {
     struct v4l2_queryctrl arg = {0};
     arg.id = id;
     if (-1 == xioctl(VIDIOC_QUERYCTRL, &arg, false)) {
         INFO("%s unsupported\n", name);
     } else {
+        INFO("%s (%u) default val: %d\n", name, id, arg.default_value);
         set_v4l2_control(id, arg.default_value, name);
     }
 }
@@ -106,38 +110,45 @@ static void set_v4l2_control(uint32_t id, int32_t val, const char *name) {
     ctrl.value = val;
     if (-1 == xioctl(VIDIOC_S_CTRL, &ctrl, false)) {
         INFO("%s unsupported\n", name);
+    } else {
+        INFO("Set %u val: %d\n", id, val);
     }
 }
 
-/* Properly disable any automatic control and set everything to default value */
-static void set_camera_settings(void) {
-    // disable any scene mode
-    SET_V4L2(V4L2_CID_SCENE_MODE, V4L2_SCENE_MODE_NONE);
-    // disable auto white balance
-    SET_V4L2(V4L2_CID_AUTO_WHITE_BALANCE, 0);
-    // TODO: disable auto exposure?
-    SET_V4L2(V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_APERTURE_PRIORITY);
-    // disable autogain
-    SET_V4L2(V4L2_CID_AUTOGAIN, 0);
-    // disable auto iso
-    SET_V4L2(V4L2_CID_ISO_SENSITIVITY_AUTO, V4L2_ISO_SENSITIVITY_MANUAL);
-    // disable backlight compensation
-    SET_V4L2(V4L2_CID_BACKLIGHT_COMPENSATION, 0);
-    // disable autobrightness
-    SET_V4L2(V4L2_CID_AUTOBRIGHTNESS, 0);
-        
-    // set default white balance
+/* Properly set everything to default value */
+static void set_camera_settings_def(void) {
+    SET_V4L2_DEF(V4L2_CID_SCENE_MODE);
+    SET_V4L2_DEF(V4L2_CID_AUTO_WHITE_BALANCE);
+    SET_V4L2_DEF(V4L2_CID_EXPOSURE_AUTO);
+    SET_V4L2_DEF(V4L2_CID_AUTOGAIN);
+    SET_V4L2_DEF(V4L2_CID_ISO_SENSITIVITY_AUTO);
+    SET_V4L2_DEF(V4L2_CID_BACKLIGHT_COMPENSATION);
+    SET_V4L2_DEF(V4L2_CID_AUTOBRIGHTNESS);
+    
     SET_V4L2_DEF(V4L2_CID_WHITE_BALANCE_TEMPERATURE);
-    // TODO: set default exposure?
-    // SET_V4L2_DEF(V4L2_CID_EXPOSURE_ABSOLUTE);
-    // set default iris
+    SET_V4L2_DEF(V4L2_CID_EXPOSURE_ABSOLUTE);
     SET_V4L2_DEF(V4L2_CID_IRIS_ABSOLUTE);
-    // set default gain
     SET_V4L2_DEF(V4L2_CID_GAIN);
-    // set default iso
     SET_V4L2_DEF(V4L2_CID_ISO_SENSITIVITY);
-    // set default brightness
     SET_V4L2_DEF(V4L2_CID_BRIGHTNESS);
+}
+
+/* Parse settings string! */
+static void set_camera_settings(void) {
+    /* Set default values */
+    set_camera_settings_def();
+    if (state.settings && strlen(state.settings)) {
+        char *token; 
+        char *rest = state.settings; 
+        
+        while ((token = strtok_r(rest, ",", &rest))) {
+            uint32_t v4l2_op;
+            int32_t v4l2_val;
+            if (sscanf(token, "%u=%d", &v4l2_op, &v4l2_val) == 2) {
+                SET_V4L2(v4l2_op, v4l2_val);
+            }
+        }
+    }
 }
 
 static void init(void) {

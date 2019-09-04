@@ -33,6 +33,8 @@
 - [x] Support Grayscale pixelformat for CAMERA sensor
 - [x] Fix #24
 - [ ] Improve camera brightness compute with a new histogram-based algorithm (#25)
+- [x] Add a new Capture parameter to specify camera settings
+- [ ] Document new capture parameter
 
 ### Backlight
 - [x] Support DDCutil DDCA_Display_Info path.io_mode (eg: /dev/i2c-%d) as uid (as SerialNumber can be null/empty on some devices) (Fix #27)
