@@ -19,9 +19,9 @@ typedef struct {
     sd_bus_slot *slot;          // vtable's slot
 } idle_client_t;
 
-static DTOR_RET dtor_client(void *client);
-static map_ret_code leave_idle(void *userdata, KEY void *client);
-static map_ret_code find_free_client(void *out, KEY void *client);
+static void dtor_client(void *client);
+static map_ret_code leave_idle(void *userdata, const char *key, void *client);
+static map_ret_code find_free_client(void *out, const char *key, void *client);
 static idle_client_t *find_available_client(void);
 static void destroy_client(idle_client_t *c);
 static int method_get_client(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
@@ -71,12 +71,7 @@ static bool evaluate(void) {
 }
 
 static void init(void) {
-#if MODULE_VERSION_MAJ >= 5
     clients = map_new(true, dtor_client);
-#else
-    clients = map_new();
-    map_set_dtor(clients, dtor_client);
-#endif
     int r = sd_bus_add_object_vtable(bus,
                                      NULL,
                                      object_path,
@@ -134,7 +129,7 @@ static void destroy(void) {
     map_free(clients);
 }
 
-static map_ret_code leave_idle(void *userdata, KEY void *client) {
+static map_ret_code leave_idle(void *userdata, const char *key, void *client) {
     idle_client_t *c = (idle_client_t *)client;
     if (c->is_idle) {
         sd_bus_emit_signal(bus, c->path, clients_interface, "Idle", "b", false);
@@ -147,19 +142,15 @@ static map_ret_code leave_idle(void *userdata, KEY void *client) {
     return MAP_OK;
 }
 
-static DTOR_RET dtor_client(void *client) {
+static void dtor_client(void *client) {
     idle_client_t *c = (idle_client_t *)client;
     if (c->in_use) {
         destroy_client(c);
     }
     free(c);
-
-#if MODULE_VERSION_MAJ < 5
-    return MAP_OK;
-#endif
 }
 
-static map_ret_code find_free_client(void *out, KEY void *client) {
+static map_ret_code find_free_client(void *out, const char *key, void *client) {
     idle_client_t *c = (idle_client_t *)client;
     idle_client_t **o = (idle_client_t **)out;
     
@@ -206,15 +197,12 @@ static int method_get_client(sd_bus_message *m, void *userdata, sd_bus_error *re
     if (c) {
         c->in_use = true;
         c->fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
-        m_register_fd(c->fd, false, c);
+        m_register_fd(c->fd, true, c);
         c->sender = strdup(sd_bus_message_get_sender(m));
         snprintf(c->path, sizeof(c->path) - 1, "%s/Client%u", object_path, c->id);
 
-#if MODULE_VERSION_MAJ >= 5
         map_put(clients, c->path, c);
-#else
-        map_put(clients, c->path, c, true, true);
-#endif
+        
         sd_bus_add_object_vtable(bus,
                                 &c->slot,
                                 c->path,

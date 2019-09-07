@@ -15,7 +15,7 @@ static const char object_path[] = "/org/clightd/clightd/Sensor";
 static const char bus_interface[] = "org.clightd.clightd.Sensor";
 static const sd_bus_vtable vtable[] = {
     SD_BUS_VTABLE_START(0),
-    SD_BUS_METHOD("Capture", "si", "sad", method_capturesensor, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("Capture", "sis", "sad", method_capturesensor, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("IsAvailable", "s", "sb", method_issensoravailable, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_SIGNAL("Changed", "ss", 0),
     SD_BUS_VTABLE_END
@@ -174,8 +174,9 @@ static int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error 
     }
     
     const char *interface = NULL;
+    char *settings = NULL;
     const int num_captures;
-    int r = sd_bus_message_read(m, "si", &interface, &num_captures);
+    int r = sd_bus_message_read(m, "sis", &interface, &num_captures, &settings);
     if (r < 0) {
         m_log("Failed to parse parameters: %s\n", strerror(-r));
         return r;
@@ -197,13 +198,13 @@ static int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error 
         if (s != SENSOR_NUM) {
             if (is_sensor_available(&sensors[s], interface, &dev)) {
                 /* Bus Interface required sensor-specific method */
-                r = sensors[s].capture_method(dev, pct, num_captures);
+                r = sensors[s].capture_method(dev, pct, num_captures, settings);
             }
         } else {
             /* For CaptureSensor generic method, call capture_method on first available sensor */
             for (s = 0; s < SENSOR_NUM; s++) {
                 if (is_sensor_available(&sensors[s], interface, &dev)) {
-                    r = sensors[s].capture_method(dev, pct, num_captures);
+                    r = sensors[s].capture_method(dev, pct, num_captures, settings);
                     break;
                 }
             }

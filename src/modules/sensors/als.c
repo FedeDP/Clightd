@@ -7,7 +7,8 @@
 
 SENSOR(ALS_NAME, ALS_SUBSYSTEM, ALS_SYSNAME);
 
-static int capture(struct udev_device *dev, double *pct, const int num_captures) {
+/* Settings string unused */
+static int capture(struct udev_device *dev, double *pct, const int num_captures, char *settings) {
     for (int i = 0; i < num_captures; i++) {
         int32_t illuminance = atoi(udev_device_get_sysattr_value(dev, "in_illuminance_input"));
         pct[i] = (double)illuminance / ALS_ILL_MAX;

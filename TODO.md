@@ -8,6 +8,8 @@
 - [x] Check polkit script!
 - [x] Add support for libmodule 5.0.0 api
 - [x] Add a "-v/--version" cmdline switch
+- [x] Require libmodule >= 5.0.0
+- [ ] Change libmodule required version in WIKI pages (Build requirements)
 
 ### Idle
 - [x] Avoid depending on X
@@ -31,12 +33,18 @@
 - [x] Support Grayscale pixelformat for CAMERA sensor
 - [x] Fix #24
 - [ ] Improve camera brightness compute with a new histogram-based algorithm (#25)
+- [x] Add a new Capture parameter to specify camera settings
+- [ ] Document new capture parameter
 
 ### Backlight
 - [x] Support DDCutil DDCA_Display_Info path.io_mode (eg: /dev/i2c-%d) as uid (as SerialNumber can be null/empty on some devices) (Fix #27)
 
 ### Screen
 - [x] Add a method (X only) to compute current monitor emitted brightness
+- [x] Update wiki pages: drop DENABLE_IDLE and add DENABLE_SCREEN
+- [x] Document new Screen API
+- [x] It needs xauthority too!
+- [x] Document it
 
 ## 4.1
 

@@ -12,7 +12,7 @@ static const char object_path[] = "/org/clightd/clightd/Screen";
 static const char bus_interface[] = "org.clightd.clightd.Screen";
 static const sd_bus_vtable vtable[] = {
     SD_BUS_VTABLE_START(0),
-    SD_BUS_METHOD("GetEmittedBrightness", "s", "d", method_getbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("GetEmittedBrightness", "ss", "d", method_getbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_VTABLE_END
 };
 
@@ -51,16 +51,19 @@ static void destroy(void) {
 }
 
 static int method_getbrightness(sd_bus_message* m, void* userdata, sd_bus_error* ret_error) {
-    const char *display = NULL;
+    const char *display = NULL, *xauthority = NULL;
     
     /* Read the parameters */
-    int r = sd_bus_message_read(m, "s", &display);
+    int r = sd_bus_message_read(m, "ss", &display, &xauthority);
     if (r < 0) {
         m_log("Failed to parse parameters: %s\n", strerror(-r));
         return r;
     }
     
+    setenv("XAUTHORITY", xauthority, 1);
     const int br = getRootBrightness(display);
+    unsetenv("XAUTHORITY");
+
     switch (br) {
     case -EINVAL:
         sd_bus_error_set_errno(ret_error, -br);
