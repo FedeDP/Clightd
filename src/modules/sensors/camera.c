@@ -8,7 +8,7 @@
 #define CAMERA_NAME                 "Camera"
 #define CAMERA_ILL_MAX              255
 #define CAMERA_SUBSYSTEM            "video4linux"
-#define HISTOGRAM_STEPS             20
+#define HISTOGRAM_STEPS             40
 
 #define SET_V4L2(id, val)           set_v4l2_control(id, val, #id)
 #define SET_V4L2_DEF(id)            set_v4l2_control_def(id, #id)
@@ -319,6 +319,7 @@ static double compute_brightness(const unsigned int size) {
      * If YUYV -> increment by 2: we only want Y! 
      */
     const int inc = 1 + (state.pixelformat == V4L2_PIX_FMT_YUYV);
+    const double total = size / inc;
 
     // Find minimum and maximum brightness
     for (int i = 0; i < size; i += inc) {
@@ -343,10 +344,38 @@ static double compute_brightness(const unsigned int size) {
         }
     }
 
-    // Default to the average for the highest brightness bucket
-    brightness = state.hist[HISTOGRAM_STEPS-1].sum / state.hist[HISTOGRAM_STEPS-1].count;
+    // Find (approximate) quartiles for histogram steps
+    const double quartile_size = total / 4;
+    double quartiles[3] = {0.0, 0.0, 0.0};
+    int j = 0;
+    for (int i = 0; i < HISTOGRAM_STEPS; i++) {
+        quartiles[j] += state.hist[i].count;
+        if (quartiles[j] >= quartile_size) {
+            quartiles[j] = (quartile_size / quartiles[j]) + i;
+            if (j == 2) {
+                break;
+            }
+            j++;
+        }
+    }
+
+    // Results may be clustered in a single estimated quartile, in which case consider full range
+    int min_bucket = 0;
+    int max_bucket = HISTOGRAM_STEPS-1;
+    if (quartiles[2] > quartiles[0]) {
+        // Trim outlier buckets via interquartile range
+        const double iqr = (quartiles[2] - quartiles[0]) * 1.5;
+        min_bucket = quartiles[0] - iqr;
+        max_bucket = quartiles[2] + iqr;
+        if (min_bucket < 0) {
+            min_bucket = 0;
+        }
+        if (max_bucket > HISTOGRAM_STEPS-1) {
+            max_bucket = HISTOGRAM_STEPS-1;
+        }
+    }
     // Find the highest brightness bucket that has a significant sample count and return the average brightness for that bucket
-    for (int i = HISTOGRAM_STEPS-1; i >= 0; i--) {
+    for (int i = max_bucket; i >= min_bucket; i--) {
         if (state.hist[i].count > step_size) {
             brightness =  state.hist[i].sum / state.hist[i].count;
             break;
