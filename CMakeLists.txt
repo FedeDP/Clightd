@@ -101,9 +101,8 @@ pkg_get_variable(POLKIT_ACTION_DIR polkit-gobject-1 actiondir)
 # Only install systemd service in systemd environment
 pkg_check_modules(SYSTEMD libsystemd)
 if(SYSTEMD_FOUND)
-    # Use polkitd.service on ubuntu 16.04 (or wherever it is called polkitd instead of polkit)
-    find_file(POLKITD lib/systemd/system/polkitd.service)
-    if(POLKITD)
+    # Use polkitd.service on ubuntu 16.04
+    if(EXISTS /lib/systemd/system/polkitd.service)
         set(POLKIT_NAME "polkitd")
     else()
         set(POLKIT_NAME "polkit")
