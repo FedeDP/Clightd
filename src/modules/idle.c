@@ -111,7 +111,7 @@ static void receive(const msg_t *msg, const void *userdata) {
                 struct itimerspec timerValue = {{0}};
                 if (c->is_idle) {
                     idler++;
-                    sd_bus_emit_signal(bus, c->path, clients_interface, "Idle", "b", true);
+                    sd_bus_emit_signal(bus, c->path, clients_interface, "Idle", "b", c->is_idle);
                 } else {
                     timerValue.it_value.tv_sec = c->timeout - idle_t;
                 }
@@ -132,8 +132,8 @@ static void destroy(void) {
 static map_ret_code leave_idle(void *userdata, const char *key, void *client) {
     idle_client_t *c = (idle_client_t *)client;
     if (c->is_idle) {
-        sd_bus_emit_signal(bus, c->path, clients_interface, "Idle", "b", false);
         c->is_idle = false;
+        sd_bus_emit_signal(bus, c->path, clients_interface, "Idle", "b", c->is_idle);
         idler--;
         struct itimerspec timerValue = {{0}};
         timerValue.it_value.tv_sec = c->timeout;
@@ -267,11 +267,10 @@ static int method_stop_client(sd_bus_message *m, void *userdata, sd_bus_error *r
     if (c) {
         /* You can only stop running clients */
         if (c->running) {
+            leave_idle(NULL, NULL, c);
             /* Do not reset timerfd is client is in idle state */
-            if (!c->is_idle) {
-                struct itimerspec timerValue = {{0}};
-                timerfd_settime(c->fd, 0, &timerValue, NULL);
-            }
+            struct itimerspec timerValue = {{0}};
+            timerfd_settime(c->fd, 0, &timerValue, NULL);
             
             if (--running_clients == 0) {
                 /* this is the only running client; remove watch on /dev/input */
@@ -281,7 +280,6 @@ static int method_stop_client(sd_bus_message *m, void *userdata, sd_bus_error *r
             
             /* Reset client state */
             c->running = false;
-            c->is_idle = false;
             m_log("Stopping Client %u\n", c->id);
             return sd_bus_reply_method_return(m, NULL);
         }
