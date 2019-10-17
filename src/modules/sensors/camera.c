@@ -8,6 +8,7 @@
 #define CAMERA_NAME                 "Camera"
 #define CAMERA_ILL_MAX              255
 #define CAMERA_SUBSYSTEM            "video4linux"
+#define HISTOGRAM_STEPS             40
 
 #define SET_V4L2(id, val)           set_v4l2_control(id, val, #id)
 #define SET_V4L2_DEF(id)            set_v4l2_control_def(id, #id)
@@ -40,6 +41,11 @@ struct buffer {
     size_t length;
 };
 
+struct histogram {
+    double count;
+    double sum;
+};
+
 struct state {
     int quit;
     int width;
@@ -49,6 +55,7 @@ struct state {
     uint32_t pixelformat;
     double *brightness;
     struct buffer buf;
+    struct histogram hist[HISTOGRAM_STEPS];
     char *settings;
 };
 
@@ -76,6 +83,7 @@ static int recv_frames(const char *interface) {
         TEST_RET(start_stream());
         set_camera_settings();
         for (int i = 0; i < state.num_captures && !state.quit; i++) {
+            memset(state.hist, 0, HISTOGRAM_STEPS * sizeof(struct histogram));
             send_frame();
             recv_frame(i);
         }
@@ -303,16 +311,77 @@ static void recv_frame(int i) {
 
 static double compute_brightness(const unsigned int size) {
     double brightness = 0.0;
+    double min = CAMERA_ILL_MAX;
+    double max = 0.0;
+
     /*
      * If greyscale -> increment by 1. 
      * If YUYV -> increment by 2: we only want Y! 
      */
     const int inc = 1 + (state.pixelformat == V4L2_PIX_FMT_YUYV);
-    
+    const double total = size / inc;
+
+    // Find minimum and maximum brightness
     for (int i = 0; i < size; i += inc) {
-        brightness += state.buf.start[i];
+        if (state.buf.start[i] < min) {
+            min = state.buf.start[i];
+        }
+        if (state.buf.start[i] > max) {
+            max = state.buf.start[i];
+        }
     }
-    brightness /= state.width * state.height;
+    if (max == 0.0) {
+        return brightness;
+    }
+
+    // Calculate histogram
+    const double step_size = (max - min) / HISTOGRAM_STEPS;
+    for (int i = 0; i < size; i += inc) {
+        int bucket = (state.buf.start[i] - min) / step_size;
+        if (bucket >= 0 && bucket < HISTOGRAM_STEPS) {
+            state.hist[bucket].sum += state.buf.start[i];
+            state.hist[bucket].count++;
+        }
+    }
+
+    // Find (approximate) quartiles for histogram steps
+    const double quartile_size = total / 4;
+    double quartiles[3] = {0.0, 0.0, 0.0};
+    int j = 0;
+    for (int i = 0; i < HISTOGRAM_STEPS; i++) {
+        quartiles[j] += state.hist[i].count;
+        if (quartiles[j] >= quartile_size) {
+            quartiles[j] = (quartile_size / quartiles[j]) + i;
+            if (j == 2) {
+                break;
+            }
+            j++;
+        }
+    }
+
+    // Results may be clustered in a single estimated quartile, in which case consider full range
+    int min_bucket = 0;
+    int max_bucket = HISTOGRAM_STEPS-1;
+    if (quartiles[2] > quartiles[0]) {
+        // Trim outlier buckets via interquartile range
+        const double iqr = (quartiles[2] - quartiles[0]) * 1.5;
+        min_bucket = quartiles[0] - iqr;
+        max_bucket = quartiles[2] + iqr;
+        if (min_bucket < 0) {
+            min_bucket = 0;
+        }
+        if (max_bucket > HISTOGRAM_STEPS-1) {
+            max_bucket = HISTOGRAM_STEPS-1;
+        }
+    }
+    // Find the highest brightness bucket that has a significant sample count and return the average brightness for that bucket
+    for (int i = max_bucket; i >= min_bucket; i--) {
+        if (state.hist[i].count > step_size) {
+            brightness =  state.hist[i].sum / state.hist[i].count;
+            break;
+        }
+    }
+
     return brightness;
 }
 
