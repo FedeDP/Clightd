@@ -321,7 +321,7 @@ static double compute_brightness(const unsigned int size) {
     const int inc = 1 + (state.pixelformat == V4L2_PIX_FMT_YUYV);
     const double total = size / inc;
 
-    // Find minimum and maximum brightness
+    /* Find minimum and maximum brightness */
     for (int i = 0; i < size; i += inc) {
         if (state.buf.start[i] < min) {
             min = state.buf.start[i];
@@ -330,11 +330,13 @@ static double compute_brightness(const unsigned int size) {
             max = state.buf.start[i];
         }
     }
+
+    /* Ok, we should never get in here */
     if (max == 0.0) {
         return brightness;
     }
 
-    // Calculate histogram
+    /* Calculate histogram */
     const double step_size = (max - min) / HISTOGRAM_STEPS;
     for (int i = 0; i < size; i += inc) {
         int bucket = (state.buf.start[i] - min) / step_size;
@@ -344,40 +346,45 @@ static double compute_brightness(const unsigned int size) {
         }
     }
 
-    // Find (approximate) quartiles for histogram steps
+    /* Find (approximate) quartiles for histogram steps */
     const double quartile_size = total / 4;
     double quartiles[3] = {0.0, 0.0, 0.0};
     int j = 0;
-    for (int i = 0; i < HISTOGRAM_STEPS; i++) {
+    for (int i = 0; i < HISTOGRAM_STEPS && j < 3; i++) {
         quartiles[j] += state.hist[i].count;
         if (quartiles[j] >= quartile_size) {
             quartiles[j] = (quartile_size / quartiles[j]) + i;
-            if (j == 2) {
-                break;
-            }
             j++;
         }
     }
 
-    // Results may be clustered in a single estimated quartile, in which case consider full range
+    /*
+     * Results may be clustered in a single estimated quartile, 
+     * in which case consider full range.
+     */
     int min_bucket = 0;
-    int max_bucket = HISTOGRAM_STEPS-1;
+    int max_bucket = HISTOGRAM_STEPS - 1;
     if (quartiles[2] > quartiles[0]) {
-        // Trim outlier buckets via interquartile range
+        /* Trim outlier buckets via interquartile range */
         const double iqr = (quartiles[2] - quartiles[0]) * 1.5;
         min_bucket = quartiles[0] - iqr;
         max_bucket = quartiles[2] + iqr;
         if (min_bucket < 0) {
             min_bucket = 0;
         }
-        if (max_bucket > HISTOGRAM_STEPS-1) {
-            max_bucket = HISTOGRAM_STEPS-1;
+        if (max_bucket > HISTOGRAM_STEPS - 1) {
+            max_bucket = HISTOGRAM_STEPS - 1;
         }
     }
-    // Find the highest brightness bucket that has a significant sample count and return the average brightness for that bucket
+    
+    /*
+     * Find the highest brightness bucket with
+     * a significant sample count
+     * and return the average brightness for it.
+     */
     for (int i = max_bucket; i >= min_bucket; i--) {
         if (state.hist[i].count > step_size) {
-            brightness =  state.hist[i].sum / state.hist[i].count;
+            brightness = state.hist[i].sum / state.hist[i].count;
             break;
         }
     }

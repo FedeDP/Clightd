@@ -9,7 +9,7 @@
 - [x] Add support for libmodule 5.0.0 api
 - [x] Add a "-v/--version" cmdline switch
 - [x] Require libmodule >= 5.0.0
-- [ ] Change libmodule required version in WIKI pages (Build requirements)
+- [x] Change libmodule required version in WIKI pages (Build requirements)
 
 ### Idle
 - [x] Avoid depending on X
@@ -32,7 +32,7 @@
 - [x] Reduce camera.c logging
 - [x] Support Grayscale pixelformat for CAMERA sensor
 - [x] Fix #24
-- [ ] Improve camera brightness compute with a new histogram-based algorithm (#25)
+- [x] Improve camera brightness compute with a new histogram-based algorithm (#25)
 - [x] Add a new Capture parameter to specify camera settings
 - [ ] Document new capture parameter
 
