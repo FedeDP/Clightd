@@ -37,19 +37,19 @@ static bool evaluate(void) {
 
 static void init(void) {
     int r = sd_bus_add_object_vtable(bus,
-                                     NULL,
-                                     object_path,
-                                     bus_interface,
-                                     vtable,
-                                     NULL);
-    for (int i = ALS; i < SENSOR_NUM && !r; i++) {
+                                    NULL,
+                                    object_path,
+                                    bus_interface,
+                                    vtable,
+                                    NULL);
+    for (int i = 0; i < SENSOR_NUM && !r; i++) {
         snprintf(sensors[i].obj_path, sizeof(sensors[i].obj_path) - 1, "%s/%s", object_path, sensors[i].name);
         r += sd_bus_add_object_vtable(bus,
-                                     NULL,
-                                     sensors[i].obj_path,
-                                     bus_interface,
-                                     vtable,
-                                     NULL);
+                                    NULL,
+                                    sensors[i].obj_path,
+                                    bus_interface,
+                                    vtable,
+                                    NULL);
         r += m_register_fd(sensor_get_monitor(i), false, &sensors[i]);
     }
     if (r < 0) {
@@ -73,6 +73,13 @@ static void receive(const msg_t *msg, const void *userdata) {
 
 static void destroy(void) {
     destroy_udev_monitors();
+
+    for (int i = 0; i < SENSOR_NUM; i++) {
+        if (sensors[i].udev_reg) {
+            regfree(sensors[i].udev_reg);
+            free(sensors[i].udev_reg);
+        }
+    }
 }
 
 void sensor_register_new(const sensor_t *sensor) {
@@ -94,8 +101,8 @@ static void sensor_receive_device(const sensor_t *sensor, struct udev_device **d
     if (sensor) {
         struct udev_device *d = NULL;
         receive_udev_device(&d, sensor->mon_handler);
-        if (d && (!sensor->udev_name || 
-            !strcmp(udev_device_get_sysattr_value(d, "name"), sensor->udev_name))) {
+        if (d && (!sensor->udev_name_match ||
+            !regexec(sensor->udev_reg, udev_device_get_sysattr_value(d, "name"), 0, NULL, 0))) {
 
             *dev = d;
         } else if (d) {
@@ -125,7 +132,7 @@ static int is_sensor_available(sensor_t *sensor, const char *interface,
     int present = 0;
     
     struct udev_device *dev = NULL;
-    get_udev_device(interface, sensor->subsystem, sensor->udev_name, NULL, &dev);
+    get_udev_device(interface, sensor->subsystem, sensor->udev_name_match, NULL, &dev);
     if (dev) {
         present = 1;
         if (device) {

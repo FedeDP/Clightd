@@ -1,6 +1,6 @@
 #include <udev.h>
 
-static void get_first_matching_device(struct udev_device **dev, const char *subsystem, const char *sysname);
+static void get_first_matching_device(struct udev_device **dev, const char *subsystem, const char *sysname_match);
 
 static struct udev_monitor **mons;
 static int num_monitor;
@@ -35,14 +35,14 @@ void destroy_udev_monitors(void) {
 }
 
 /**
- * Set dev to first device in subsystem
- */
+* Set dev to first device in subsystem
+*/
 static void get_first_matching_device(struct udev_device **dev, const char *subsystem, 
-                                      const char *sysname) {
+                                    const char *sysname_match) {
     struct udev_enumerate *enumerate = udev_enumerate_new(udev);
     udev_enumerate_add_match_subsystem(enumerate, subsystem);
-    if (sysname) {
-        udev_enumerate_add_match_sysattr(enumerate, "name", sysname);
+    if (sysname_match) {
+        udev_enumerate_add_match_sysattr(enumerate, "name", sysname_match);
     }
     udev_enumerate_scan_devices(enumerate);
     struct udev_list_entry *devices = udev_enumerate_get_list_entry(enumerate);
@@ -54,16 +54,16 @@ static void get_first_matching_device(struct udev_device **dev, const char *subs
     udev_enumerate_unref(enumerate);
 }
 
-void get_udev_device(const char *interface, const char *subsystem, const char *sysname,
+void get_udev_device(const char *interface, const char *subsystem, const char *sysname_match,
                             sd_bus_error **ret_error, struct udev_device **dev) {
     *dev = NULL;
     /* if no interface is specified, try to get first matching device */
     if (!interface || !strlen(interface)) {
-        get_first_matching_device(dev, subsystem, sysname);
+        get_first_matching_device(dev, subsystem, sysname_match);
     } else {
         char *name = strrchr(interface, '/');
         if (name) {
-            return get_udev_device(++name, subsystem, sysname, ret_error, dev);
+            return get_udev_device(++name, subsystem, sysname_match, ret_error, dev);
         }
         *dev = udev_device_new_from_subsystem_sysname(udev, subsystem, interface);
     }

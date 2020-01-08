@@ -11,13 +11,7 @@
 #include <module/modules_easy.h>
 #include <module/module_easy.h>
 
-typedef struct module {
-    const int idx;
-    const char *name;
-    int (*init)(void);                    // module init function
-    void (*destroy)(void);                // module destroy function
-    int (*poll_cb)(const int fd);         // module poll callback
-} module_t;
+#define SIZE(x) (sizeof(x) / sizeof(*x))
 
-sd_bus *bus;
-struct udev *udev;
+extern sd_bus *bus;
+extern struct udev *udev;

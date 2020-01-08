@@ -23,6 +23,9 @@
 
 #include <commons.h>
 
+sd_bus *bus = NULL;
+struct udev *udev = NULL;
+
 static const char bus_interface[] = "org.clightd.clightd";
 
 /* Every module needs these; let's init them before any module */
