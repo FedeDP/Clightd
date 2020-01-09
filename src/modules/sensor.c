@@ -2,8 +2,10 @@
 #include <sensor.h>
 #include <polkit.h>
 
+#define SENSOR_MAX_CAPTURES    20
+
 static enum sensors get_sensor_type(const char *str);
-static int is_sensor_available(sensor_t *sensor, const char *interface, 
+static bool is_sensor_available(sensor_t *sensor, const char *interface, 
                                 struct udev_device **device);
 static int sensor_get_monitor(const enum sensors s);
 static void sensor_receive_device(const sensor_t *sensor, struct udev_device **dev);
@@ -73,13 +75,6 @@ static void receive(const msg_t *msg, const void *userdata) {
 
 static void destroy(void) {
     destroy_udev_monitors();
-
-    for (int i = 0; i < SENSOR_NUM; i++) {
-        if (sensors[i].udev_reg) {
-            regfree(sensors[i].udev_reg);
-            free(sensors[i].udev_reg);
-        }
-    }
 }
 
 void sensor_register_new(const sensor_t *sensor) {
@@ -101,9 +96,7 @@ static void sensor_receive_device(const sensor_t *sensor, struct udev_device **d
     if (sensor) {
         struct udev_device *d = NULL;
         receive_udev_device(&d, sensor->mon_handler);
-        if (d && (!sensor->udev_name_match ||
-            !regexec(sensor->udev_reg, udev_device_get_sysattr_value(d, "name"), 0, NULL, 0))) {
-
+        if (d && sensor->validate(d)) {
             *dev = d;
         } else if (d) {
             udev_device_unref(d);
@@ -127,14 +120,14 @@ static enum sensors get_sensor_type(const char *str) {
     return s;
 }
 
-static int is_sensor_available(sensor_t *sensor, const char *interface, 
+static bool is_sensor_available(sensor_t *sensor, const char *interface, 
                                 struct udev_device **device) {
-    int present = 0;
+    bool present = false;
     
     struct udev_device *dev = NULL;
-    get_udev_device(interface, sensor->subsystem, sensor->udev_name_match, NULL, &dev);
+    sensor->fetch(interface, &dev);
     if (dev) {
-        present = 1;
+        present = true;
         if (device) {
             *device = dev;
         } else {
@@ -148,7 +141,7 @@ static int method_issensoravailable(sd_bus_message *m, void *userdata, sd_bus_er
     const char *member = sd_bus_message_get_path(m);
     const enum sensors s = get_sensor_type(member);
     
-    int present = 0;
+    bool present = false;
     const char *interface = NULL;
     int r = sd_bus_message_read(m, "s", &interface);
     if (r < 0) {
@@ -189,8 +182,8 @@ static int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error 
         return r;
     }
     
-    if (num_captures <= 0 || num_captures > 20) {
-        sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Number of captures should be between 1 and 20.");
+    if (num_captures <= 0 || num_captures > SENSOR_MAX_CAPTURES) {
+        sd_bus_error_set_const(ret_error, SD_BUS_ERROR_INVALID_ARGS, "Number of captures should be between 1 and 20.");
         return -EINVAL;
     }
     
@@ -205,13 +198,13 @@ static int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error 
         if (s != SENSOR_NUM) {
             if (is_sensor_available(&sensors[s], interface, &dev)) {
                 /* Bus Interface required sensor-specific method */
-                r = sensors[s].capture_method(dev, pct, num_captures, settings);
+                r = sensors[s].capture(dev, pct, num_captures, settings);
             }
         } else {
             /* For CaptureSensor generic method, call capture_method on first available sensor */
             for (s = 0; s < SENSOR_NUM; s++) {
                 if (is_sensor_available(&sensors[s], interface, &dev)) {
-                    r = sensors[s].capture_method(dev, pct, num_captures, settings);
+                    r = sensors[s].capture(dev, pct, num_captures, settings);
                     break;
                 }
             }

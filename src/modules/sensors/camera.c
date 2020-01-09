@@ -61,7 +61,15 @@ struct state {
 
 static struct state state;
 
-SENSOR(CAMERA_NAME, CAMERA_SUBSYSTEM, NULL);
+SENSOR(CAMERA_NAME, CAMERA_SUBSYSTEM);
+
+static bool validate(struct udev_device *dev) {
+    return true;
+}
+
+static void fetch(const char *interface, struct udev_device **dev) {
+    get_udev_device(interface, CAMERA_SUBSYSTEM, NULL, NULL, dev);
+}
 
 /*
  * Frame capturing method
