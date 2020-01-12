@@ -162,6 +162,8 @@ static void set_camera_settings(void) {
             int32_t v4l2_val;
             if (sscanf(token, "%u=%d", &v4l2_op, &v4l2_val) == 2) {
                 SET_V4L2(v4l2_op, v4l2_val);
+            } else {
+                fprintf(stderr, "Expected a=b format.\n");
             }
         }
     }
