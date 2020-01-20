@@ -170,7 +170,7 @@ static int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error 
     
     const char *interface = NULL;
     char *settings = NULL;
-    const int num_captures = 0;
+    const int num_captures;
     int r = sd_bus_message_read(m, "sis", &interface, &num_captures, &settings);
     if (r < 0) {
         m_log("Failed to parse parameters: %s\n", strerror(-r));
