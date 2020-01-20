@@ -10,7 +10,7 @@ int init_udev_monitor(const char *subsystem, struct udev_monitor **mon) {
 }
 
 /**
-* Set dev to first device in subsystem
+* Set dev to first device in subsystem, eventually matching requested sysattr existence.
 */
 static void get_first_matching_device(struct udev_device **dev, const char *subsystem, 
                                       const char *sysattr_match) {
