@@ -249,7 +249,7 @@ static void init(void) {
     if (-1 == xioctl(VIDIOC_S_FMT, &fmt, true)) {
         perror("Setting Pixel Format");
         return;
-    }    
+    }
         
     state.width = fmt.fmt.pix.width;
     state.height = fmt.fmt.pix.height;

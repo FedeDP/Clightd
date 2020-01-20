@@ -7,6 +7,8 @@
 - [x] Document new sensor settings
 - [x] Add a Custom sensor to fetch data from user provided scripts
 
+- [ ] Use validate()/fetch() function to check for webcams with correct capabilities?
+
 - [ ] Document new Custom sensor
 
 - [ ] Release!
