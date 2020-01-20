@@ -117,7 +117,7 @@ static void sensor_receive_device(const sensor_t *sensor, void **dev) {
 }
 
 static bool is_sensor_available(sensor_t *sensor, const char *interface, 
-                                void **device) {    
+                                void **device) {
     sensor->fetch_dev(interface, device);
     return *device != NULL;
 }
@@ -128,7 +128,8 @@ static void *find_available_sensor(sensor_t *sensor, const char *interface, void
     if (!sensor) {
         /* No sensor requested; check first available one */
         for (enum sensors s = 0; s < SENSOR_NUM && !*dev; s++) {
-            is_sensor_available(sensors[s], interface, dev);
+            sensor = sensors[s];
+            is_sensor_available(sensor, interface, dev);
         }
     } else {
         is_sensor_available(sensor, interface, dev);
@@ -169,7 +170,7 @@ static int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error 
     
     const char *interface = NULL;
     char *settings = NULL;
-    const int num_captures;
+    const int num_captures = 0;
     int r = sd_bus_message_read(m, "sis", &interface, &num_captures, &settings);
     if (r < 0) {
         m_log("Failed to parse parameters: %s\n", strerror(-r));
