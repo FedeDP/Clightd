@@ -4,6 +4,7 @@
 #include <sys/ioctl.h>
 #include <stdint.h>
 #include <sensor.h>
+#include <udev.h>
 
 #define CAMERA_NAME                 "Camera"
 #define CAMERA_ILL_MAX              255
@@ -60,21 +61,44 @@ struct state {
 };
 
 static struct state state;
+static struct udev_monitor *mon;
 
-SENSOR(CAMERA_NAME, CAMERA_SUBSYSTEM);
+SENSOR(CAMERA_NAME);
 
-static bool validate(struct udev_device *dev) {
+static bool validate_dev(void *dev) {
     return true;
 }
 
-static void fetch(const char *interface, struct udev_device **dev) {
-    get_udev_device(interface, CAMERA_SUBSYSTEM, NULL, NULL, dev);
+static void fetch_dev(const char *interface, void **dev) {
+    get_udev_device(interface, CAMERA_SUBSYSTEM, NULL, NULL, (struct udev_device **)dev);
 }
 
-/*
- * Frame capturing method
- */
-static int capture(struct udev_device *dev, double *pct, const int num_captures, char *settings) {
+static void fetch_props_dev(void *dev, const char **node, const char **action) {
+    if (node) {
+        *node =  udev_device_get_devnode(dev);
+    }
+    if (action) {
+        *action = udev_device_get_action(dev);
+    }
+}
+
+static void destroy_dev(void *dev) {
+    udev_device_unref(dev);
+}
+
+static int init_monitor(void) {
+    return init_udev_monitor(CAMERA_SUBSYSTEM, &mon);
+}
+
+static void recv_monitor(void **dev) {
+    *dev = udev_monitor_receive_device(mon);
+}
+
+static void destroy_monitor(void) {
+    udev_monitor_unref(mon);
+}
+
+static int capture(void *dev, double *pct, const int num_captures, char *settings) {
     state.num_captures = num_captures;
     state.brightness = pct;
     state.settings = settings;

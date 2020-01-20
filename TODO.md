@@ -5,6 +5,11 @@
 - [x] Properly fix support for ALS sensors (right now only acpi-als is supported)
 - [x] Support settings string for ALS sensor (interval, min and max)
 - [x] Document new sensor settings
+- [x] Add a Custom sensor to fetch data from user provided scripts
+
+- [ ] Document new Custom sensor
+
+- [ ] Release!
 
 ## 4.X
 - [ ] Keep it up to date with possible ddcutil/libmodule api changes

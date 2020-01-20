@@ -2,36 +2,11 @@
 
 static void get_first_matching_device(struct udev_device **dev, const char *subsystem, const char *sysattr_match);
 
-static struct udev_monitor **mons;
-static int num_monitor;
-
-int init_udev_monitor(const char *subsystem, int *handler) {
-    struct udev_monitor **tmp = realloc(mons, sizeof(struct udev_monitor *) * ++num_monitor);
-    if (tmp) {
-        mons = tmp;
-        *handler = num_monitor - 1;
-        mons[num_monitor - 1] = udev_monitor_new_from_netlink(udev, "udev");
-        udev_monitor_filter_add_match_subsystem_devtype(mons[num_monitor - 1], subsystem, NULL);
-        udev_monitor_enable_receiving(mons[num_monitor - 1]);
-        return udev_monitor_get_fd(mons[num_monitor - 1]);
-    }
-    return -1;
-}
-
-void receive_udev_device(struct udev_device **dev, int handler) {
-    if (handler != -1) {
-        *dev = udev_monitor_receive_device(mons[handler]);
-    } else {
-        *dev = NULL;
-    }
-}
-
-void destroy_udev_monitors(void) {
-    for (int i = 0; i < num_monitor; i++) {
-        udev_monitor_unref(mons[i]);
-    }
-    free(mons);
-    num_monitor = 0;
+int init_udev_monitor(const char *subsystem, struct udev_monitor **mon) {
+    *mon = udev_monitor_new_from_netlink(udev, "udev");
+    udev_monitor_filter_add_match_subsystem_devtype(*mon, subsystem, NULL);
+    udev_monitor_enable_receiving(*mon);
+    return udev_monitor_get_fd(*mon);
 }
 
 /**
