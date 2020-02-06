@@ -6,10 +6,11 @@
 - [x] Support settings string for ALS sensor (interval, min and max)
 - [x] Document new sensor settings
 - [x] Add a Custom sensor to fetch data from user provided scripts
+- [x] Use validate_dev() even after fetch_dev(): when user passes is a fixed sysname to be used, we must assure it is a correct device
+- [x] Add YoctoLight sensor support
+- [x] Use validate() function to check for webcams with correct capabilities and start opening it?
 
-- [ ] Use validate()/fetch() function to check for webcams with correct capabilities?
-
-- [ ] Document new Custom sensor
+- [x] Document new Custom sensor
 
 - [ ] Release!
 

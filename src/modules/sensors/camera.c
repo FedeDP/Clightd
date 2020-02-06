@@ -19,23 +19,19 @@
     #define INFO(fmt, ...)
 #endif
 
-#define TEST_RET(fn) fn; if (state.quit) break;
-
-static int recv_frames(const char *interface);
-static void open_device(const char *interface);
 static void set_v4l2_control_def(uint32_t id, const char *name);
 static void set_v4l2_control(uint32_t id, int32_t val, const char *name);
 static void set_camera_settings_def(void);
 static void set_camera_settings(void);
-static void init(void);
-static void init_mmap(void);
-static int xioctl(int request, void *arg, bool exit_on_error);
-static void start_stream(void);
-static void stop_stream(void);
-static void send_frame(void);
-static void recv_frame(int i);
+static int check_camera_caps(void);
+static int init_mmap(void);
+static void destroy_mmap(void);
+static int xioctl(int request, void *arg);
+static int start_stream(void);
+static int stop_stream(void);
+static int send_frame(struct v4l2_buffer *buf);
+static int recv_frame(struct v4l2_buffer *buf);
 static double compute_brightness(const unsigned int size);
-static void free_all();
 
 struct buffer {
     uint8_t *start;
@@ -48,13 +44,8 @@ struct histogram {
 };
 
 struct state {
-    int quit;
-    int width;
-    int height;
     int device_fd;
-    int num_captures;
     uint32_t pixelformat;
-    double *brightness;
     struct buffer buf;
     struct histogram hist[HISTOGRAM_STEPS];
     char *settings;
@@ -66,7 +57,13 @@ static struct udev_monitor *mon;
 SENSOR(CAMERA_NAME);
 
 static bool validate_dev(void *dev) {
-    return true;
+    state.device_fd = open(udev_device_get_devnode(dev), O_RDWR);
+    if (state.device_fd >= 0) {
+        return check_camera_caps() == 0;
+    }
+    /* Always return true if action is "remove", ie: when called by udev monitor */
+    const char *action = udev_device_get_action(dev);
+    return action && !strcmp(action, UDEV_RM_ACTION);
 }
 
 static void fetch_dev(const char *interface, void **dev) {
@@ -84,6 +81,12 @@ static void fetch_props_dev(void *dev, const char **node, const char **action) {
 
 static void destroy_dev(void *dev) {
     udev_device_unref(dev);
+    if (state.device_fd >= 0) {
+        close(state.device_fd);
+    }
+    /* reset state */
+    memset(&state, 0, sizeof(struct state));
+    state.device_fd = -1;
 }
 
 static int init_monitor(void) {
@@ -99,44 +102,30 @@ static void destroy_monitor(void) {
 }
 
 static int capture(void *dev, double *pct, const int num_captures, char *settings) {
-    state.num_captures = num_captures;
-    state.brightness = pct;
     state.settings = settings;
-    int r = recv_frames(udev_device_get_devnode(dev));
-    free_all();
-    return -r;
-}
-
-static int recv_frames(const char *interface) {
-    open_device(interface);
-    while (!state.quit) {
-        TEST_RET(init());
-        TEST_RET(init_mmap());
-        TEST_RET(start_stream());
+    int ret = -num_captures;
+    
+    if (init_mmap() == 0 && start_stream() == 0) {
         set_camera_settings();
-        for (int i = 0; i < state.num_captures && !state.quit; i++) {
+        for (int i = 0; i < num_captures; i++) {
+            struct v4l2_buffer buf = { .type = V4L2_BUF_TYPE_VIDEO_CAPTURE, .memory = V4L2_MEMORY_MMAP};
             memset(state.hist, 0, HISTOGRAM_STEPS * sizeof(struct histogram));
-            send_frame();
-            recv_frame(i);
+            
+            if (send_frame(&buf) == 0 && recv_frame(&buf) == 0) {
+                pct[i] = compute_brightness(buf.bytesused) / CAMERA_ILL_MAX;
+                ret++;
+            }
         }
         stop_stream();
-        break;
     }
-    return state.quit;
-}
-
-static void open_device(const char *interface) {
-    state.device_fd = open(interface, O_RDWR);
-    if (state.device_fd == -1) {
-        perror(interface);
-        state.quit = errno;
-    }
+    destroy_mmap();
+    return ret;
 }
 
 static void set_v4l2_control_def(uint32_t id, const char *name) {
     struct v4l2_queryctrl arg = {0};
     arg.id = id;
-    if (-1 == xioctl(VIDIOC_QUERYCTRL, &arg, false)) {
+    if (-1 == xioctl(VIDIOC_QUERYCTRL, &arg)) {
         INFO("%s unsupported\n", name);
     } else {
         INFO("%s (%u) default val: %d\n", name, id, arg.default_value);
@@ -148,7 +137,7 @@ static void set_v4l2_control(uint32_t id, int32_t val, const char *name) {
     struct v4l2_control ctrl ={0};
     ctrl.id = id;
     ctrl.value = val;
-    if (-1 == xioctl(VIDIOC_S_CTRL, &ctrl, false)) {
+    if (-1 == xioctl(VIDIOC_S_CTRL, &ctrl)) {
         INFO("%s unsupported\n", name);
     } else {
         INFO("Set %u val: %d\n", id, val);
@@ -193,30 +182,28 @@ static void set_camera_settings(void) {
     }
 }
 
-static void init(void) {
+static int check_camera_caps(void) {
     struct v4l2_capability caps = {{0}};
-    if (-1 == xioctl(VIDIOC_QUERYCAP, &caps, true)) {
+    if (-1 == xioctl(VIDIOC_QUERYCAP, &caps)) {
         perror("Querying Capabilities");
-        return;
+        return -1;
     }
     
-    // check if it is a capture dev
+    /* Check if it is a capture dev */
     if (!(caps.capabilities & V4L2_CAP_VIDEO_CAPTURE)) {
         perror("No video capture device");
-        state.quit = EINVAL;
-        return;
+        return -1;
     }
     
-    // check if it does support streaming
+    /* Check if it does support streaming */
     if (!(caps.capabilities & V4L2_CAP_STREAMING)) {
         perror("Device does not support streaming i/o");
-        state.quit = EINVAL;
-        return;
+        return -1;
     }
     
-    // check device priority level. No need to quit if this is not supported.
+    /* Try to set lowest device priority level. No need to quit if this is not supported. */
     enum v4l2_priority priority = V4L2_PRIORITY_BACKGROUND;
-    if (-1 == xioctl(VIDIOC_S_PRIORITY, &priority, false)) {
+    if (-1 == xioctl(VIDIOC_S_PRIORITY, &priority)) {
         INFO("Failed to set priority\n");
     }
     
@@ -229,7 +216,7 @@ static void init(void) {
     /* Check supported formats */
     struct v4l2_fmtdesc fmtdesc = {0};
     fmtdesc.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    while (xioctl(VIDIOC_ENUM_FMT, &fmtdesc, false) == 0 && fmt.fmt.pix.pixelformat == 0) {    
+    while (xioctl(VIDIOC_ENUM_FMT, &fmtdesc) == 0 && fmt.fmt.pix.pixelformat == 0) {    
         if (fmtdesc.pixelformat == V4L2_PIX_FMT_GREY) {
             fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_GREY;
         } else if (fmtdesc.pixelformat == V4L2_PIX_FMT_YUYV) {
@@ -238,41 +225,42 @@ static void init(void) {
         fmtdesc.index++;
     }
     
+    /* No supported formats found? */
     if (fmt.fmt.pix.pixelformat == 0) {
         perror("Device does not support neither GREY nor YUYV pixelformats.");
-        state.quit = EINVAL;
-        return;
+        return -1;
     }
     
     INFO("Using %s pixelformat.\n", (char *)&fmt.fmt.pix.pixelformat);
     
-    if (-1 == xioctl(VIDIOC_S_FMT, &fmt, true)) {
+    /* Try to set desired formati */
+    if (-1 == xioctl(VIDIOC_S_FMT, &fmt)) {
         perror("Setting Pixel Format");
-        return;
+        return -1;
     }
-        
-    state.width = fmt.fmt.pix.width;
-    state.height = fmt.fmt.pix.height;
+    
+    /* Store format */
     state.pixelformat = fmt.fmt.pix.pixelformat;
+    return 0;
 }
 
-static void init_mmap(void) {
+static int init_mmap(void) {
     struct v4l2_requestbuffers req = {0};
     req.count = 1;
     req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     req.memory = V4L2_MEMORY_MMAP;
     
-    if (-1 == xioctl(VIDIOC_REQBUFS, &req, true)) {
+    if (-1 == xioctl(VIDIOC_REQBUFS, &req)) {
         perror("Requesting Buffer");
-        return;
+        return -1;
     }
     
     struct v4l2_buffer buf = {0};
     buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     buf.memory = V4L2_MEMORY_MMAP;
-    if (-1 == xioctl(VIDIOC_QUERYBUF, &buf, true)) {
+    if (-1 == xioctl(VIDIOC_QUERYBUF, &buf)) {
         perror("Querying Buffer");
-        return;
+        return -1;
     }
         
     state.buf.start = mmap(NULL,
@@ -283,64 +271,60 @@ static void init_mmap(void) {
         
     if (MAP_FAILED == state.buf.start) {
         perror("mmap");
-        state.quit = errno;
-    } else {
-        state.buf.length = buf.length;
+        return -1;
+    }
+    state.buf.length = buf.length;
+    return 0;
+}
+
+static void destroy_mmap(void) {
+    if (state.buf.length > 0) {
+        munmap(state.buf.start, state.buf.length);
     }
 }
 
-static int xioctl(int request, void *arg, bool exit_on_error) {
+static int xioctl(int request, void *arg) {
     int r;
-    
     do {
         r = ioctl(state.device_fd, request, arg);
-    } while (-1 == r && EINTR == errno);
-    
-    if (r == -1 && exit_on_error) {
-        state.quit = errno;
-    }
+    } while (r == -1 && EINTR == errno);
     return r;
 }
 
-static void start_stream(void) {
+static int start_stream(void) {
     enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    if (-1 == xioctl(VIDIOC_STREAMON, &type, true)) {
+    if (-1 == xioctl(VIDIOC_STREAMON, &type)) {
         perror("Start Capture");
+        return -1;
     }
+    return 0;
 }
 
-static void stop_stream(void) {
+static int stop_stream(void) {
     enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    if(-1 == xioctl(VIDIOC_STREAMOFF, &type, true)) {
+    if(-1 == xioctl(VIDIOC_STREAMOFF, &type)) {
         perror("Stop Capture");
+        return -1;
     }
+    return 0;
 }
 
-static void send_frame(void) {
-    struct v4l2_buffer buf = {0};
-    
-    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    buf.memory = V4L2_MEMORY_MMAP;
-    
+static int send_frame(struct v4l2_buffer *buf) {
     /* Enqueue buffer */
-    if (-1 == xioctl(VIDIOC_QBUF, &buf, true)) {
+    if (-1 == xioctl(VIDIOC_QBUF, buf)) {
         perror("VIDIOC_QBUF");
+        return -1;
     }
+    return 0;
 }
 
-static void recv_frame(int i) {
-    struct v4l2_buffer buf = {0};
-    
-    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    buf.memory = V4L2_MEMORY_MMAP;
-    
+static int recv_frame(struct v4l2_buffer *buf) {    
     /* Dequeue the buffer */
-    if(-1 == xioctl(VIDIOC_DQBUF, &buf, true)) {
-        perror("Retrieving Frame");
-        return;
+    if(-1 == xioctl(VIDIOC_DQBUF, buf)) {
+        perror("VIDIOC_DQBUF");
+        return -1;
     }
-    
-    state.brightness[i] = compute_brightness(buf.bytesused) / CAMERA_ILL_MAX;
+    return 0;
 }
 
 static double compute_brightness(const unsigned int size) {
@@ -424,15 +408,4 @@ static double compute_brightness(const unsigned int size) {
     }
 
     return brightness;
-}
-
-static void free_all(void) {
-    if (state.buf.length) {
-        munmap(state.buf.start, state.buf.length);
-    }
-    if (state.device_fd != -1) {
-        close(state.device_fd);
-    }
-    /* reset state */
-    memset(&state, 0, sizeof(struct state));
 }

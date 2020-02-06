@@ -72,6 +72,7 @@ optional_dep(GAMMA "x11;xrandr" "Gamma correction")
 optional_dep(DPMS "x11;xext" "DPMS")
 optional_dep(SCREEN "x11" "screen emitted brightness")
 optional_dep(DDC "ddcutil>=0.9.5" "external monitor backlight")
+optional_dep(YOCTOLIGHT "libusb-1.0" "Yoctolight usb als devices support")
 
 # Convert ld flag list from list to space separated string.
 string(REPLACE ";" " " COMBINED_LDFLAGS "${COMBINED_LDFLAGS}")
