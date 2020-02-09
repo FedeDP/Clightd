@@ -10,7 +10,11 @@
 - [x] Add YoctoLight sensor support
 - [x] Use validate() function to check for webcams with correct capabilities and start opening it?
 
+- [ ] Sensor.Capture method to return number of correctly captured frames
+- [ ] Avoid infinite loops in yoctolight sensor
+
 - [x] Document new Custom sensor
+- [ ] Document new yoctolight sensor
 
 - [ ] Release!
 
