@@ -47,7 +47,7 @@ static void check_opts(int argc, char *argv[]) {
             exit(EXIT_SUCCESS);
         }
 #ifdef DDC_PRESENT
-        else if (!strcmp(argv[i], "--c") || !strcmp(argv[i], "--vpcode")) {
+        else if (!strcmp(argv[i], "-c") || !strcmp(argv[i], "--vpcode")) {
             if (++i < argc) {
                 bl_store_vpcode(atoi(argv[i]));
             }
