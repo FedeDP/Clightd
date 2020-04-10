@@ -7,8 +7,13 @@
 
 #include <ddcutil_c_api.h>
 
+static DDCA_Vcp_Feature_Code br_code = 0x10;
+
+void bl_store_vpcode(int code) {
+    br_code = code;
+}
+
 #define DDCUTIL_LOOP(func) \
-    const DDCA_Vcp_Feature_Code br_code = 0x10; \
     DDCA_Display_Info_List *dlist = NULL; \
     ddca_get_display_info_list2(false, &dlist); \
     if (dlist) { \
@@ -32,7 +37,6 @@
     }
 
 #define DDCUTIL_FUNC(sn, func) \
-    const DDCA_Vcp_Feature_Code br_code = 0x10; \
     DDCA_Display_Identifier pdid = NULL; \
     DDCA_Display_Ref dref = NULL; \
     DDCA_Display_Handle dh = NULL; \

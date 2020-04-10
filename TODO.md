@@ -18,6 +18,11 @@
 
 - [ ] Release!
 
+#### Bugfix
+
+- [x] Kill clightd on bus connection closed/reset
+- [x] Provide a way to customize ddcutil vp code
+
 ## 4.X
 - [ ] Keep it up to date with possible ddcutil/libmodule api changes
 
