@@ -7,8 +7,20 @@
 
 #include <ddcutil_c_api.h>
 
+/* Default value */
+static DDCA_Vcp_Feature_Code br_code = 0x10;
+
+void bl_store_vpcode(int code) {
+    br_code = code;
+}
+
+static void bl_load_vpcode(void) {
+    if (getenv("CLIGHTD_BL_VCP")) {
+        br_code = strtol(getenv("CLIGHTD_BL_VCP"), NULL, 16);
+    }
+}
+
 #define DDCUTIL_LOOP(func) \
-    const DDCA_Vcp_Feature_Code br_code = 0x10; \
     DDCA_Display_Info_List *dlist = NULL; \
     ddca_get_display_info_list2(false, &dlist); \
     if (dlist) { \
@@ -32,7 +44,6 @@
     }
 
 #define DDCUTIL_FUNC(sn, func) \
-    const DDCA_Vcp_Feature_Code br_code = 0x10; \
     DDCA_Display_Identifier pdid = NULL; \
     DDCA_Display_Ref dref = NULL; \
     DDCA_Display_Handle dh = NULL; \
@@ -114,7 +125,24 @@ typedef struct {
     double verse;
 } smooth_client;
 
+/* Helpers */
 static void dtor_client(void *client);
+static void reset_backlight_struct(smooth_client *sc, double target_pct, int is_smooth, double smooth_step, 
+                                   unsigned int smooth_wait, int verse);
+static int add_backlight_sn(double target_pct, int is_smooth, double smooth_step, 
+                            unsigned int smooth_wait, int verse, const char *sn, bool internal);
+static void sanitize_target_step(double *target_pct, double *smooth_step);
+static int get_all_brightness(sd_bus_message *m, sd_bus_message **reply, sd_bus_error *ret_error);
+static double next_backlight_level(smooth_client *sc, int curr, int max);
+static int set_internal_backlight(smooth_client *sc);
+static int set_external_backlight(smooth_client *sc);
+static int set_single_serial(double target_pct, bool is_smooth, double smooth_step, const unsigned int smooth_wait,
+                             const char *serial, int verse);
+static void append_backlight(sd_bus_message *reply, const char *name, const double pct);
+static int append_internal_backlight(sd_bus_message *reply, const char *path);
+static int append_external_backlight(sd_bus_message *reply, const char *sn);
+
+/* Exposed */
 static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_getallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_raiseallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
@@ -123,16 +151,6 @@ static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error 
 static int method_getbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_raisebrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_lowerbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
-static void reset_backlight_struct(smooth_client *sc, double target_pct, int is_smooth, double smooth_step, 
-                                             unsigned int smooth_wait, int verse);
-static int add_backlight_sn(double target_pct, int is_smooth, double smooth_step, 
-                            unsigned int smooth_wait, int verse, const char *sn, bool internal);
-static double next_backlight_level(smooth_client *sc, int curr, int max);
-static int set_internal_backlight(smooth_client *sc);
-static int set_external_backlight(smooth_client *sc);
-static void append_backlight(sd_bus_message *reply, const char *name, const double pct);
-static int append_internal_backlight(sd_bus_message *reply, const char *path);
-static int append_external_backlight(sd_bus_message *reply, const char *sn);
 
 static map_t *running_clients;
 static const char object_path[] = "/org/clightd/clightd/Backlight";
@@ -165,6 +183,9 @@ static bool evaluate(void) {
 }
 
 static void init(void) {
+#ifdef DDC_PRESENT
+    bl_load_vpcode();
+#endif
     running_clients = map_new(false, dtor_client);
     int r = sd_bus_add_object_vtable(bus,
                                  NULL,
@@ -266,48 +287,39 @@ static int add_backlight_sn(double target_pct, int is_smooth, double smooth_step
     return ok;
 }
 
-static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    if (!check_authorization(m)) {
-        sd_bus_error_set_errno(ret_error, EPERM);
-        return -EPERM;
+static void sanitize_target_step(double *target_pct, double *smooth_step) {
+    if (target_pct) {
+        if (*target_pct > 1.0) {
+            *target_pct = 1.0;
+        } else if (*target_pct < 0.0) {
+            *target_pct = 0.0;
+        }
     }
 
+    if (smooth_step) {
+        if (*smooth_step >= 1.0 || *smooth_step < 0.0) {
+            *smooth_step = 0.0; // disable smoothing
+        }
+    }
+}
+
+static int get_all_brightness(sd_bus_message *m, sd_bus_message **reply, sd_bus_error *ret_error) {
     const char *backlight_interface = NULL;
-    double target_pct, smooth_step;
-    const int is_smooth;
-    const unsigned int smooth_wait;
 
-    int r = sd_bus_message_read(m, "d(bdu)s", &target_pct, &is_smooth, &smooth_step,
-                                &smooth_wait, &backlight_interface);
+    int r = sd_bus_message_read(m, "s", &backlight_interface);
     if (r >= 0) {
-        /** Sanity checks **/
-        if (target_pct > 1.0) {
-            target_pct = 1.0;
-        } else if (target_pct < 0.0) {
-            target_pct = 0.0;
-        }
+        sd_bus_message_new_method_return(m, reply);
+        sd_bus_message_open_container(*reply, SD_BUS_TYPE_ARRAY, "(sd)");
 
-        if (smooth_step > 1.0) {
-            smooth_step = 1.0;
-        } else if (smooth_step <= 0.0) {
-            smooth_step = 0.0; // disable smoothing
-        }
-        /** End of sanity checks **/
+        if (append_internal_backlight(*reply, backlight_interface) == -1 &&
+            append_external_backlight(*reply, NULL) == -1) {
 
-        int verse = 0;
-        if (userdata) {
-            verse = *((int *)userdata);
-        }
-
-        /* Clear map */
-        map_clear(running_clients);
-        add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, backlight_interface, true);
-        DDCUTIL_LOOP({
-            add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, id, false);
-        });
-        m_log("Target pct (smooth %d): %s%.2lf\n", is_smooth, verse > 0 ? "+" : (verse < 0 ? "-" : ""), target_pct);
-        // Returns true if no errors happened; false if another client is already changing backlight
-        r = sd_bus_reply_method_return(m, "b", true);
+                r = -ENODEV;
+                sd_bus_error_set_errno(ret_error, -r);
+            } else {
+                r = 0;
+            }
+            sd_bus_message_close_container(*reply);
     }
     return r;
 }
@@ -317,12 +329,7 @@ static double next_backlight_level(smooth_client *sc, int curr, int max) {
     double target_pct = sc->target_pct;
     if (sc->verse != 0) {
         target_pct = curr_pct + (sc->verse * sc->target_pct);
-        /* Sanity checks */
-        if (target_pct > 1.0) {
-            target_pct = 1.0;
-        } else if (target_pct < 0.0) {
-            target_pct = 0.0;
-        }
+        sanitize_target_step(&target_pct, NULL);
     } 
     if (sc->smooth_step > 0) {
         if (target_pct < curr_pct) {
@@ -381,35 +388,19 @@ static int set_external_backlight(smooth_client *sc) {
     return ret;
 }
 
-/**
- * Backlight pct getter method: for each screen (both internal and external)
- * it founds, it will return a "(uid, current backlight pct)" struct.
- * Note that for internal laptop screen, uid = syspath (eg: intel_backlight)
- */
-static int method_getallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    sd_bus_message *reply = NULL;
-    const char *backlight_interface = NULL;
+static int set_single_serial(double target_pct, bool is_smooth, double smooth_step, const unsigned int smooth_wait, const char *serial, int verse) {
+    int r = -1;
+    sanitize_target_step(&target_pct, &smooth_step);
 
-    int r = sd_bus_message_read(m, "s", &backlight_interface);
-    if (r >= 0) {
-        sd_bus_message_new_method_return(m, &reply);
-        sd_bus_message_open_container(reply, SD_BUS_TYPE_ARRAY, "(sd)");
-
-        if (append_internal_backlight(reply, backlight_interface) == -1 &&
-            append_external_backlight(reply, NULL) == -1) {
-            
-            r = -ENODEV;
-            sd_bus_error_set_errno(ret_error, ENODEV);
+    if (serial && strlen(serial)) {
+        smooth_client *sc = map_get(running_clients, serial);
+        if (!sc) {
+            // we do not know if this is an internal backlight, skip check (passing 0 as last param)
+            add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, serial, 0);
         } else {
-            r = 0;
+            reset_backlight_struct(sc, target_pct, is_smooth, smooth_step, smooth_wait, verse);
         }
-
-        sd_bus_message_close_container(reply);
-        if (!r) {
-            r = sd_bus_send(NULL, reply, NULL);
-        }
-        sd_bus_message_unref(reply);
-        sd_bus_message_exit_container(m);
+        r = 0;
     }
     return r;
 }
@@ -453,6 +444,56 @@ static int append_external_backlight(sd_bus_message *reply, const char *sn) {
     return ret;
 }
 
+static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+    if (!check_authorization(m)) {
+        sd_bus_error_set_errno(ret_error, EPERM);
+        return -EPERM;
+    }
+
+    const char *backlight_interface = NULL;
+    double target_pct, smooth_step;
+    const int is_smooth;
+    const unsigned int smooth_wait;
+
+    int r = sd_bus_message_read(m, "d(bdu)s", &target_pct, &is_smooth, &smooth_step,
+                                &smooth_wait, &backlight_interface);
+    if (r >= 0) {
+        sanitize_target_step(&target_pct, &smooth_step);
+
+        int verse = 0;
+        if (userdata) {
+            verse = *((int *)userdata);
+        }
+
+        /* Clear map */
+        map_clear(running_clients);
+        add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, backlight_interface, true);
+        DDCUTIL_LOOP({
+            add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, id, false);
+        });
+        m_log("Target pct (smooth %d): %s%.2lf\n", is_smooth, verse > 0 ? "+" : (verse < 0 ? "-" : ""), target_pct);
+        // Returns true if no errors happened; false if another client is already changing backlight
+        r = sd_bus_reply_method_return(m, "b", true);
+    }
+    return r;
+}
+
+/**
+ * Backlight pct getter method: for each screen (both internal and external)
+ * it founds, it will return a "(uid, current backlight pct)" struct.
+ * Note that for internal laptop screen, uid = syspath (eg: intel_backlight)
+ */
+static int method_getallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+    sd_bus_message *reply = NULL;
+    int r = get_all_brightness(m, &reply, ret_error);
+
+    if (r == 0) {
+        r = sd_bus_send(NULL, reply, NULL);
+    }
+    sd_bus_message_unref(reply);
+    return r;
+}
+
 static int method_raiseallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     int verse = 1;
     return method_setallbrightness(m, &verse, ret_error);
@@ -477,38 +518,17 @@ static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error 
     int r = sd_bus_message_read(m, "d(bdu)s", &target_pct, &is_smooth, &smooth_step,
                                 &smooth_wait, &serial);
     if (r >= 0) {
-        /** Sanity checks **/
-        if (target_pct > 1.0) {
-            target_pct = 1.0;
-        } else if (target_pct < 0.0) {
-            target_pct = 0.0;
+        int verse = 0;
+        if (userdata) {
+            verse = *((int *)userdata);
         }
-        
-        if (smooth_step > 1.0) {
-            smooth_step = 1.0;
-        } else if (smooth_step <= 0.0) {
-            smooth_step = 0.0; // disable smoothing
-        }
-        /** End of sanity checks **/
-        
-        if (serial && strlen(serial)) {
-            int verse = 0;
-            if (userdata) {
-                verse = *((int *)userdata);
-            }
-            
-            smooth_client *sc = map_get(running_clients, serial);
-            if (!sc) {
-                // we do not know if this is an internal backlight, skip check (passing 0 as last param)
-                add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, serial, 0);
-            } else {
-                reset_backlight_struct(sc, target_pct, is_smooth, smooth_step, smooth_wait, verse);
-            }
+        r = set_single_serial(target_pct, is_smooth, smooth_step, smooth_wait, serial, verse);
+        if (r == -1) {
+            r = -EINVAL;
+            sd_bus_error_set_errno(ret_error, -r);
+        } else {
             // Returns true if no errors happened;
             r = sd_bus_reply_method_return(m, "b", true);
-        } else {
-            sd_bus_error_set_errno(ret_error, EINVAL);
-            r = -EINVAL;
         }
     }
     return r;

@@ -43,14 +43,16 @@ static void init(void) {
                                     vtable,
                                     NULL);
     for (int i = 0; i < SENSOR_NUM && !r; i++) {
-        snprintf(sensors[i]->obj_path, sizeof(sensors[i]->obj_path) - 1, "%s/%s", object_path, sensors[i]->name);
-        r += sd_bus_add_object_vtable(bus,
-                                    NULL,
-                                    sensors[i]->obj_path,
-                                    bus_interface,
-                                    vtable,
-                                    sensors[i]);
-        r += m_register_fd(sensors[i]->init_monitor(), false, sensors[i]);
+        if (sensors[i]) {
+            snprintf(sensors[i]->obj_path, sizeof(sensors[i]->obj_path) - 1, "%s/%s", object_path, sensors[i]->name);
+            r += sd_bus_add_object_vtable(bus,
+                                        NULL,
+                                        sensors[i]->obj_path,
+                                        bus_interface,
+                                        vtable,
+                                        sensors[i]);
+            r += m_register_fd(sensors[i]->init_monitor(), false, sensors[i]);
+        }
     }
     if (r < 0) {
         m_log("Failed to issue method call: %s\n", strerror(-r));
@@ -77,7 +79,9 @@ static void receive(const msg_t *msg, const void *userdata) {
 
 static void destroy(void) {
     for (int i = 0; i < SENSOR_NUM; i++) {
-        sensors[i]->destroy_monitor();
+        if (sensors[i]) {
+            sensors[i]->destroy_monitor();
+        }
     }
 }
 
@@ -90,16 +94,16 @@ void sensor_register_new(sensor_t *sensor) {
     
     enum sensors s;
     for (s = 0; s < SENSOR_NUM; s++) {
-        if (strcasestr(sensor->name, sensor_names[s])) {
+        if (strcasestr(sensor_names[s], sensor->name)) {
             break;
         }
     }
     
     if (s < SENSOR_NUM) {
         sensors[s] = sensor;
-        printf("Registered %s sensor.\n", sensor->name);
+        printf("Registered '%s' sensor.\n", sensor->name);
     } else {
-        printf("Sensor not recognized. Not registering.\n");
+        printf("Sensor '%s' not recognized. Not registering.\n", sensor->name);
     }
 }
 
@@ -119,7 +123,14 @@ static void sensor_receive_device(const sensor_t *sensor, void **dev) {
 static bool is_sensor_available(sensor_t *sensor, const char *interface, 
                                 void **device) {
     sensor->fetch_dev(interface, device);
-    return *device != NULL;
+    if (*device) {
+        if (sensor->validate_dev(*device)) {
+            return true;
+        }
+        sensor->destroy_dev(*device);
+        *device = NULL;
+    }
+    return false;
 }
 
 static void *find_available_sensor(sensor_t *sensor, const char *interface, void **dev) {
@@ -128,8 +139,10 @@ static void *find_available_sensor(sensor_t *sensor, const char *interface, void
     if (!sensor) {
         /* No sensor requested; check first available one */
         for (enum sensors s = 0; s < SENSOR_NUM && !*dev; s++) {
-            sensor = sensors[s];
-            is_sensor_available(sensor, interface, dev);
+            if (sensors[s]) {
+                sensor = sensors[s];
+                is_sensor_available(sensor, interface, dev);
+            }
         }
     } else {
         is_sensor_available(sensor, interface, dev);
@@ -151,7 +164,7 @@ static int method_issensoravailable(sd_bus_message *m, void *userdata, sd_bus_er
 
     void *dev = NULL;
     sensor_t *sensor = find_available_sensor(userdata, interface, &dev);
-    if (dev) {
+    if (sensor) {
         const char *node = NULL;
         sensor->fetch_props_dev(dev, &node, NULL);
         r = sd_bus_reply_method_return(m, "sb", node, true);
@@ -201,6 +214,8 @@ static int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error 
     /* No sensors available */
     if (r < 0) {
         sd_bus_error_set_errno(ret_error, -r);
+    } else if (r == 0) {
+        sd_bus_error_set_errno(ret_error, EIO);
     } else {
         /* Reply with array response */
         sd_bus_message *reply = NULL;
@@ -209,7 +224,7 @@ static int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error 
         const char *node = NULL;
         sensor->fetch_props_dev(dev, &node, NULL);
         sd_bus_message_append(reply, "s", node);
-        sd_bus_message_append_array(reply, 'd', pct, num_captures * sizeof(double));
+        sd_bus_message_append_array(reply, 'd', pct, r * sizeof(double));
         r = sd_bus_send(NULL, reply, NULL);
         sd_bus_message_unref(reply);
     }

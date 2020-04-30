@@ -6,12 +6,23 @@
 - [x] Support settings string for ALS sensor (interval, min and max)
 - [x] Document new sensor settings
 - [x] Add a Custom sensor to fetch data from user provided scripts
+- [x] Use validate_dev() even after fetch_dev(): when user passes is a fixed sysname to be used, we must assure it is a correct device
+- [x] Add YoctoLight sensor support
+- [x] Use validate() function to check for webcams with correct capabilities and start opening it?
 
-- [ ] Use validate()/fetch() function to check for webcams with correct capabilities?
+- [x] Sensor.Capture method to return number of correctly captured frames
+- [ ] Avoid infinite loops in yoctolight sensor
 
-- [ ] Document new Custom sensor
+- [x] Document new Custom sensor
+- [ ] Document new yoctolight sensor
 
 - [ ] Release!
+
+#### Bugfix
+
+- [x] Kill clightd on bus connection closed/reset
+- [x] Provide a way to customize ddcutil vp code
+- [x] Provide a way to customize ddcutil vp code through bash env
 
 ## 4.X
 - [ ] Keep it up to date with possible ddcutil/libmodule api changes

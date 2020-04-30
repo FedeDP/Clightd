@@ -49,6 +49,9 @@ static void receive(const msg_t *msg, const void *userdata) {
             r = sd_bus_process(bus, NULL);
             if (r < 0) {
                 m_log("Failed to process bus: %s\n", strerror(-r));
+                if (r == -ENOTCONN || r == -ECONNRESET) {
+                    modules_quit(r);
+                }
             }
         } while (r > 0);
     }

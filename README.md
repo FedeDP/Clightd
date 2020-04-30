@@ -1,6 +1,6 @@
-# Clightd
+# Clightd [![builds.sr.ht status](https://builds.sr.ht/~fededp/clightd.svg)](https://builds.sr.ht/~fededp/clightd?)
 
-[![builds.sr.ht status](https://builds.sr.ht/~fededp/clightd.svg)](https://builds.sr.ht/~fededp/clightd?)
+[![Packaging status](https://repology.org/badge/vertical-allrepos/clightd.svg)](https://repology.org/project/clightd/versions)
 
 Clightd is a bus interface that lets you easily set screen brightness, gamma temperature and get ambient brightness through webcam frames capture or ALS devices.
 

@@ -154,7 +154,7 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
     int min, max, interval;
     parse_settings(settings, &min, &max, &interval);
 
-    int ret = -num_captures;
+    int ctr = 0;
     FILE *fdev = fopen(dev, "r");
     if (fdev) {
         for (int i = 0; i < num_captures; i++) {
@@ -165,14 +165,12 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
                 } else if (ill < min) {
                     ill = min;
                 }
-                pct[i] = (double)ill / max;
-                ret++;
-
+                pct[ctr++] = (double)ill / max;
                 rewind(fdev);
             }
             usleep(interval * 1000);
         }
     }
     fclose(fdev);
-    return ret;
+    return ctr;
 }

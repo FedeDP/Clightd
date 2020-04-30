@@ -30,7 +30,9 @@ static bool validate_dev(void *dev) {
 static void fetch_dev(const char *interface, void **dev) {
     /* Check if any device exposes requested sysattr */
     for (int i = 0; i < SIZE(ill_names) && !*dev; i++) {
-        get_udev_device(interface, ALS_SUBSYSTEM, ill_names[i], NULL, (struct udev_device **)dev);
+        /* Only check existence for needed sysattr */
+        const udev_match match = { ill_names[i] };
+        get_udev_device(interface, ALS_SUBSYSTEM, &match, NULL, (struct udev_device **)dev);
     }
 }
 
@@ -118,7 +120,7 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
     int min, max, interval;
     parse_settings(settings, &min, &max, &interval);
 
-    int ret = -num_captures;
+    int ctr = 0;
     const char *val = NULL;
 
     /* Properly load scale value; defaults to 1.0 */
@@ -145,11 +147,10 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
         }
 
         if (illuminance >= 0) {
-            pct[i] = illuminance / max;
-            ret++;
+            pct[ctr++] = illuminance / max;
         }
 
         usleep(interval * 1000);
     }
-    return ret; // 0 if all requested captures are fullfilled
+    return ctr;
 }

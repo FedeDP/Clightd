@@ -26,6 +26,10 @@
 sd_bus *bus = NULL;
 struct udev *udev = NULL;
 
+#ifdef DDC_PRESENT
+extern void bl_store_vpcode(int code);
+#endif
+
 static const char bus_interface[] = "org.clightd.clightd";
 
 /* Every module needs these; let's init them before any module */
@@ -42,6 +46,13 @@ static void check_opts(int argc, char *argv[]) {
             printf("* Copyright (C) 2019  Federico Di Pierro <nierro92@gmail.com>\n");
             exit(EXIT_SUCCESS);
         }
+#ifdef DDC_PRESENT
+        else if (!strcmp(argv[i], "-c") || !strcmp(argv[i], "--vpcode")) {
+            if (++i < argc) {
+                bl_store_vpcode(atoi(argv[i]));
+            }
+        }
+#endif
     }
 }
 

@@ -27,9 +27,10 @@
 /* Sensor->name must match its enumeration stringified value */
 #define _SENSORS \
     X(ALS, 0) \
-    X(CAMERA, 1) \
-    X(CUSTOM, 2) \
-    X(SENSOR_NUM, 3)
+    X(YOCTOLIGHT, 1) \
+    X(CAMERA, 2) \
+    X(CUSTOM, 3) \
+    X(SENSOR_NUM, 4)
 
 enum sensors { 
 #define X(name, val) name = val,
@@ -45,7 +46,7 @@ typedef struct _sensor {
     void (*destroy_dev)(void *dev);
     int (*init_monitor)(void);
     void (*recv_monitor)(void **dev);
-    void (*destroy_monitor)(void);
+    void (*destroy_monitor)(void);  // return number of frames actually captured, or a -errno style error
     int (*capture)(void *userdata, double *pct, const int num_captures, char *settings);
     char obj_path[100];
 } sensor_t;
