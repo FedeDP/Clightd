@@ -103,7 +103,7 @@ static void destroy_monitor(void) {
 
 static int capture(void *dev, double *pct, const int num_captures, char *settings) {
     state.settings = settings;
-    int ret = -num_captures;
+    int ctr = 0;
     
     if (init_mmap() == 0 && start_stream() == 0) {
         set_camera_settings();
@@ -112,14 +112,13 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
             memset(state.hist, 0, HISTOGRAM_STEPS * sizeof(struct histogram));
             
             if (send_frame(&buf) == 0 && recv_frame(&buf) == 0) {
-                pct[i] = compute_brightness(buf.bytesused) / CAMERA_ILL_MAX;
-                ret++;
+                pct[ctr++] = compute_brightness(buf.bytesused) / CAMERA_ILL_MAX;
             }
         }
         stop_stream();
     }
     destroy_mmap();
-    return ret;
+    return ctr;
 }
 
 static void set_v4l2_control_def(uint32_t id, const char *name) {

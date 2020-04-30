@@ -10,7 +10,7 @@
 - [x] Add YoctoLight sensor support
 - [x] Use validate() function to check for webcams with correct capabilities and start opening it?
 
-- [ ] Sensor.Capture method to return number of correctly captured frames
+- [x] Sensor.Capture method to return number of correctly captured frames
 - [ ] Avoid infinite loops in yoctolight sensor
 
 - [x] Document new Custom sensor
@@ -22,6 +22,7 @@
 
 - [x] Kill clightd on bus connection closed/reset
 - [x] Provide a way to customize ddcutil vp code
+- [x] Provide a way to customize ddcutil vp code through bash env
 
 ## 4.X
 - [ ] Keep it up to date with possible ddcutil/libmodule api changes

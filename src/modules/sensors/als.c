@@ -120,7 +120,7 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
     int min, max, interval;
     parse_settings(settings, &min, &max, &interval);
 
-    int ret = -num_captures;
+    int ctr = 0;
     const char *val = NULL;
 
     /* Properly load scale value; defaults to 1.0 */
@@ -147,11 +147,10 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
         }
 
         if (illuminance >= 0) {
-            pct[i] = illuminance / max;
-            ret++;
+            pct[ctr++] = illuminance / max;
         }
 
         usleep(interval * 1000);
     }
-    return ret; // 0 if all requested captures are fullfilled
+    return ctr;
 }

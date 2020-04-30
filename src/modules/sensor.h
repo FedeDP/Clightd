@@ -46,7 +46,7 @@ typedef struct _sensor {
     void (*destroy_dev)(void *dev);
     int (*init_monitor)(void);
     void (*recv_monitor)(void **dev);
-    void (*destroy_monitor)(void);
+    void (*destroy_monitor)(void);  // return number of frames actually captured, or a -errno style error
     int (*capture)(void *userdata, double *pct, const int num_captures, char *settings);
     char obj_path[100];
 } sensor_t;

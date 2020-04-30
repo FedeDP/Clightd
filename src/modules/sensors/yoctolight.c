@@ -375,13 +375,13 @@ static int destroy_usb_device(void) {
 static int capture(void *dev, double *pct, const int num_captures, char *settings) {
     int min, max, interval;
     parse_settings(settings, &min, &max, &interval);
-    int ret = -ENODEV;
+    int ctr = -ENODEV;
     
     if (state.hdl) {
         state.interval = interval;
         USB_Packet rpkt = { 0 };
         if (init_usb_device() == 0 && start_usb_device(&rpkt) == 0) {
-            ret = 0;
+            ctr = 0;
             for (int i = 0; i < num_captures; i++) {
                 int trans = 0;
                 libusb_interrupt_transfer(state.hdl, state.rdendp, (unsigned char *) &rpkt, YOCTO_PKT_SIZE, &trans, interval);
@@ -391,12 +391,12 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
                 } else if (illuminance < min) {
                     illuminance = min;
                 }
-                pct[i] = illuminance / max;
+                pct[ctr++] = illuminance / max;
             }
         }
         destroy_usb_device();
     }
-    return ret; // 0 if all requested captures are fullfilled
+    return ctr;
 }
 
 #endif

@@ -214,6 +214,8 @@ static int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error 
     /* No sensors available */
     if (r < 0) {
         sd_bus_error_set_errno(ret_error, -r);
+    } else if (r == 0) {
+        sd_bus_error_set_errno(ret_error, EIO);
     } else {
         /* Reply with array response */
         sd_bus_message *reply = NULL;
@@ -222,7 +224,7 @@ static int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error 
         const char *node = NULL;
         sensor->fetch_props_dev(dev, &node, NULL);
         sd_bus_message_append(reply, "s", node);
-        sd_bus_message_append_array(reply, 'd', pct, num_captures * sizeof(double));
+        sd_bus_message_append_array(reply, 'd', pct, r * sizeof(double));
         r = sd_bus_send(NULL, reply, NULL);
         sd_bus_message_unref(reply);
     }
