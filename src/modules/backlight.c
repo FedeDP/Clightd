@@ -24,7 +24,8 @@ static void bl_load_vpcode(void) {
     DDCA_Display_Info_List *dlist = NULL; \
     ddca_get_display_info_list2(false, &dlist); \
     if (dlist) { \
-        for (int ndx = 0; ndx < dlist->ct; ndx++) { \
+        bool leave = false; \
+        for (int ndx = 0; ndx < dlist->ct && !leave; ndx++) { \
             DDCA_Display_Info *dinfo = &dlist->info[ndx]; \
             DDCA_Display_Ref dref = dinfo->dref; \
             DDCA_Display_Handle dh = NULL; \
@@ -140,7 +141,7 @@ static int set_single_serial(double target_pct, bool is_smooth, double smooth_st
                              const char *serial, int verse);
 static void append_backlight(sd_bus_message *reply, const char *name, const double pct);
 static int append_internal_backlight(sd_bus_message *reply, const char *path);
-static int append_external_backlight(sd_bus_message *reply, const char *sn);
+static int append_external_backlight(sd_bus_message *reply, const char *sn, bool first_found);
 
 /* Exposed */
 static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
@@ -212,7 +213,6 @@ static void receive(const msg_t *msg, const void *userdata) {
                 set_external_backlight(sc);
             }
         }
-
         if (!sc->d.reached_target) {
             struct itimerspec timerValue = {{0}};
             timerValue.it_value.tv_sec = sc->smooth_wait / 1000;
@@ -312,7 +312,7 @@ static int get_all_brightness(sd_bus_message *m, sd_bus_message **reply, sd_bus_
         sd_bus_message_open_container(*reply, SD_BUS_TYPE_ARRAY, "(sd)");
 
         if (append_internal_backlight(*reply, backlight_interface) == -1 &&
-            append_external_backlight(*reply, NULL) == -1) {
+            append_external_backlight(*reply, NULL, false) == -1) {
 
                 r = -ENODEV;
                 sd_bus_error_set_errno(ret_error, -r);
@@ -388,15 +388,16 @@ static int set_external_backlight(smooth_client *sc) {
     return ret;
 }
 
-static int set_single_serial(double target_pct, bool is_smooth, double smooth_step, const unsigned int smooth_wait, const char *serial, int verse) {
+static int set_single_serial(double target_pct, bool is_smooth, double smooth_step, 
+                             const unsigned int smooth_wait, const char *serial, int verse) {
     int r = -1;
     sanitize_target_step(&target_pct, &smooth_step);
 
     if (serial && strlen(serial)) {
         smooth_client *sc = map_get(running_clients, serial);
         if (!sc) {
-            // we do not know if this is an internal backlight, skip check (passing 0 as last param)
-            add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, serial, 0);
+            // we do not know if this is an internal backlight, skip check
+            add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, serial, false);
         } else {
             reset_backlight_struct(sc, target_pct, is_smooth, smooth_step, smooth_wait, verse);
         }
@@ -428,7 +429,7 @@ static int append_internal_backlight(sd_bus_message *reply, const char *path) {
     return ret;
 }
 
-static int append_external_backlight(sd_bus_message *reply, const char *sn) {
+static int append_external_backlight(sd_bus_message *reply, const char *sn, bool first_found) {
     int ret = -1;
     if (sn) {
         DDCUTIL_FUNC(sn, {
@@ -439,6 +440,9 @@ static int append_external_backlight(sd_bus_message *reply, const char *sn) {
         DDCUTIL_LOOP({
             ret = 0;
             append_backlight(reply, id, (double)VALREC_CUR_VAL(valrec) / VALREC_MAX_VAL(valrec));
+            if (first_found) {
+                leave = true; // loop variable defined in DDCUTIL_LOOP
+            }
         });
     }
     return ret;
@@ -538,24 +542,19 @@ static int method_getbrightness(sd_bus_message *m, void *userdata, sd_bus_error 
    const char *sn = NULL;
    int r = sd_bus_message_read(m, "s", &sn);
     if (r >= 0) {
-        if (sn && strlen(sn)) {
-            sd_bus_message *reply = NULL;
-            sd_bus_message_new_method_return(m, &reply);
-            r = 0;
-            if (append_internal_backlight(reply, sn) == -1) {
-                if (append_external_backlight(reply, sn) == -1) {
-                    sd_bus_error_set_errno(ret_error, ENODEV);
-                    r = -ENODEV;
-                }
+        sd_bus_message *reply = NULL;
+        sd_bus_message_new_method_return(m, &reply);
+        r = 0;
+        if (append_internal_backlight(reply, sn) == -1) {
+            if (append_external_backlight(reply, sn, true) == -1) {
+                sd_bus_error_set_errno(ret_error, ENODEV);
+                r = -ENODEV;
             }
-            if (!r) {
-                r = sd_bus_send(NULL, reply, NULL);
-            }
-            sd_bus_message_unref(reply);
-        } else {
-            sd_bus_error_set_errno(ret_error, EINVAL);
-            r = -EINVAL;
         }
+        if (!r) {
+            r = sd_bus_send(NULL, reply, NULL);
+        }
+        sd_bus_message_unref(reply);
     }
     return r;
 }

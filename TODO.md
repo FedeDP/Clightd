@@ -11,10 +11,10 @@
 - [x] Use validate() function to check for webcams with correct capabilities and start opening it?
 
 - [x] Sensor.Capture method to return number of correctly captured frames
-- [ ] Avoid infinite loops in yoctolight sensor
 
 - [x] Document new Custom sensor
-- [ ] Document new yoctolight sensor
+
+- [ ] ALlow to call Backlight.Get/Set without specifying a serial id
 
 - [ ] Release!
 
@@ -23,6 +23,12 @@
 - [x] Kill clightd on bus connection closed/reset
 - [x] Provide a way to customize ddcutil vp code
 - [x] Provide a way to customize ddcutil vp code through bash env
+
+## 4.2
+
+- [ ] Fix Yoctolight Sensor
+- [ ] Avoid infinite loops in yoctolight sensor
+- [ ] Document new yoctolight sensor
 
 ## 4.X
 - [ ] Keep it up to date with possible ddcutil/libmodule api changes
