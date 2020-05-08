@@ -131,7 +131,7 @@ static void dtor_client(void *client);
 static void reset_backlight_struct(smooth_client *sc, double target_pct, int is_smooth, double smooth_step, 
                                    unsigned int smooth_wait, int verse);
 static int add_backlight_sn(double target_pct, int is_smooth, double smooth_step, 
-                            unsigned int smooth_wait, int verse, const char *sn, bool internal);
+                            unsigned int smooth_wait, int verse, const char *sn, int internal);
 static void sanitize_target_step(double *target_pct, double *smooth_step);
 static int get_all_brightness(sd_bus_message *m, sd_bus_message **reply, sd_bus_error *ret_error);
 static double next_backlight_level(smooth_client *sc, int curr, int max);
@@ -257,25 +257,37 @@ static void reset_backlight_struct(smooth_client *sc, double target_pct, int is_
 }
 
 static int add_backlight_sn(double target_pct, int is_smooth, double smooth_step, 
-                             unsigned int smooth_wait, int verse, const char *sn, bool internal) {
-    bool ok = !internal;
+                             unsigned int smooth_wait, int verse, const char *sn, int internal) {
+    bool ok = !internal; // for external monitor -> always ok
     struct udev_device *dev = NULL;
+    char *sn_id = (sn && strlen(sn)) ? strdup(sn) : NULL;
     
     /* Properly check internal interface exists before adding it */
     if (internal) {
-        get_udev_device(sn, "backlight", NULL, NULL, &dev);
+        get_udev_device(sn_id, "backlight", NULL, NULL, &dev);
         if (dev) {
             ok = true;
-            if (!sn || !strlen(sn)) {
-                sn = udev_device_get_sysname(dev);
+            if (!sn_id) {
+                sn_id = strdup(udev_device_get_sysname(dev));
             }
         }
+    }
+    if (internal == -1 && !ok) {
+        DDCUTIL_LOOP({
+            if (!sn_id) {
+                sn_id = strdup(id);
+            }
+            if (!strcmp(sn_id, id)) {
+                ok = true;
+                leave = true; // loop variable defined in DDCUTIL_LOOP
+            }
+        });
     }
 
     if (ok) {
         smooth_client *sc = calloc(1, sizeof(smooth_client));
         reset_backlight_struct(sc, target_pct, is_smooth, smooth_step, smooth_wait, verse);
-        sc->d.sn = strdup(sn);
+        sc->d.sn = sn_id;
         sc->d.reached_target = false;
 
         map_put(running_clients, sc->d.sn, sc);
@@ -284,7 +296,7 @@ static int add_backlight_sn(double target_pct, int is_smooth, double smooth_step
     if (dev) {
         udev_device_unref(dev);
     }
-    return ok;
+    return ok ? 0 : -1;
 }
 
 static void sanitize_target_step(double *target_pct, double *smooth_step) {
@@ -311,15 +323,15 @@ static int get_all_brightness(sd_bus_message *m, sd_bus_message **reply, sd_bus_
         sd_bus_message_new_method_return(m, reply);
         sd_bus_message_open_container(*reply, SD_BUS_TYPE_ARRAY, "(sd)");
 
-        if (append_internal_backlight(*reply, backlight_interface) == -1 &&
-            append_external_backlight(*reply, NULL, false) == -1) {
-
-                r = -ENODEV;
-                sd_bus_error_set_errno(ret_error, -r);
-            } else {
-                r = 0;
-            }
-            sd_bus_message_close_container(*reply);
+        int ret = append_internal_backlight(*reply, backlight_interface);
+        ret += append_external_backlight(*reply, NULL, false);
+        if (ret == -2) { // both returned -1
+            r = -ENODEV;
+            sd_bus_error_set_errno(ret_error, -r);
+        } else {
+            r = 0;
+        }
+        sd_bus_message_close_container(*reply);
     }
     return r;
 }
@@ -393,15 +405,16 @@ static int set_single_serial(double target_pct, bool is_smooth, double smooth_st
     int r = -1;
     sanitize_target_step(&target_pct, &smooth_step);
 
+    smooth_client *sc = NULL;
     if (serial && strlen(serial)) {
-        smooth_client *sc = map_get(running_clients, serial);
-        if (!sc) {
-            // we do not know if this is an internal backlight, skip check
-            add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, serial, false);
-        } else {
-            reset_backlight_struct(sc, target_pct, is_smooth, smooth_step, smooth_wait, verse);
-        }
+        sc = map_get(running_clients, serial);
         r = 0;
+    }
+    if (!sc) {
+        // we do not know if this is an internal backlight, check both (-1)
+        r = add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, serial, -1);
+    } else {
+        reset_backlight_struct(sc, target_pct, is_smooth, smooth_step, smooth_wait, verse);
     }
     return r;
 }
@@ -471,9 +484,9 @@ static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_err
 
         /* Clear map */
         map_clear(running_clients);
-        add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, backlight_interface, true);
+        add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, backlight_interface, 1);
         DDCUTIL_LOOP({
-            add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, id, false);
+            add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, id, 0);
         });
         m_log("Target pct (smooth %d): %s%.2lf\n", is_smooth, verse > 0 ? "+" : (verse < 0 ? "-" : ""), target_pct);
         // Returns true if no errors happened; false if another client is already changing backlight
@@ -490,7 +503,6 @@ static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_err
 static int method_getallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     sd_bus_message *reply = NULL;
     int r = get_all_brightness(m, &reply, ret_error);
-
     if (r == 0) {
         r = sd_bus_send(NULL, reply, NULL);
     }

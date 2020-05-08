@@ -14,7 +14,11 @@
 
 - [x] Document new Custom sensor
 
-- [ ] ALlow to call Backlight.Get/Set without specifying a serial id
+- [x] ALlow to call Backlight.Get/Set without specifying a serial id
+
+- [x] Mask Yoctolight for 4.1 release (not yet ready)
+
+- [x] Fix bug in GetAll introduced recently
 
 - [ ] Release!
 
