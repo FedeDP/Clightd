@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 
-project(clightd VERSION 4.1 LANGUAGES C)
+project(clightd VERSION 4.2 LANGUAGES C)
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
@@ -72,7 +72,7 @@ optional_dep(GAMMA "x11;xrandr" "Gamma correction")
 optional_dep(DPMS "x11;xext" "DPMS")
 optional_dep(SCREEN "x11" "screen emitted brightness")
 optional_dep(DDC "ddcutil>=0.9.5" "external monitor backlight")
-# optional_dep(YOCTOLIGHT "libusb-1.0" "Yoctolight usb als devices support")
+optional_dep(YOCTOLIGHT "libusb-1.0" "Yoctolight usb als devices support")
 
 # Convert ld flag list from list to space separated string.
 string(REPLACE ";" " " COMBINED_LDFLAGS "${COMBINED_LDFLAGS}")
