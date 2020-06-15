@@ -293,17 +293,18 @@ static int add_backlight_sn(double target_pct, int is_smooth, double smooth_step
                 sn_id = strdup(udev_device_get_sysname(dev));
             }
         }
-    }
-    if (internal == -1 && !ok) {
-        DDCUTIL_LOOP({
-            if (!sn_id) {
-                sn_id = strdup(id);
-            }
-            if (!strcmp(sn_id, id)) {
-                ok = true;
-                leave = true; // loop variable defined in DDCUTIL_LOOP
-            }
-        });
+
+        if (internal == -1 && !ok) {
+            DDCUTIL_LOOP({
+                if (!sn_id) {
+                    sn_id = strdup(id);
+                }
+                if (!strcmp(sn_id, id)) {
+                    ok = true;
+                    leave = true; // loop variable defined in DDCUTIL_LOOP
+                }
+            });
+        }
     }
 
     if (ok) {
