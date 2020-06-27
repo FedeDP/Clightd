@@ -1,12 +1,14 @@
 ## 4.2
 
+### Backlight
+- [x] Add a backlight Changed signal in Clightd (Then hook the signal to update state.current_bl. Easy for laptop's internal monitor; impossibile with ddcutil, but possible through ddcci-kernel-driver only for software changes, not hardware ones (ie: through monitor buttons))
+
+## 4.3
+
 ### Sensor
 - [ ] Fix Yoctolight Sensor
 - [ ] Avoid infinite loops in yoctolight sensor
 - [ ] Document new yoctolight sensor
-
-### Backlight
-- [x] Add a backlight Changed signal in Clightd (Then hook the signal to update state.current_bl. Easy for laptop's internal monitor; impossibile with ddcutil, but possible through ddcci-kernel-driver only for software changes, not hardware ones (ie: through monitor buttons))
 
 ## 4.X
 - [ ] Keep it up to date with possible ddcutil/libmodule api changes
