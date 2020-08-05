@@ -1,8 +1,3 @@
-## 4.2
-
-### Backlight
-- [x] Add a backlight Changed signal in Clightd (Then hook the signal to update state.current_bl. Easy for laptop's internal monitor; impossibile with ddcutil, but possible through ddcci-kernel-driver only for software changes, not hardware ones (ie: through monitor buttons))
-
 ## 4.3
 
 ### Sensor
