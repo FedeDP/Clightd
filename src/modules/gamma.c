@@ -37,6 +37,7 @@ static const sd_bus_vtable vtable[] = {
     SD_BUS_VTABLE_START(0),
     SD_BUS_METHOD("Set", "ssi(buu)", "b", method_setgamma, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("Get", "ss", "i", method_getgamma, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_SIGNAL("Changed", "si", 0),
     SD_BUS_VTABLE_END
 };
 
@@ -88,7 +89,9 @@ static void receive(const msg_t *msg, const void *userdata) {
         } else {
             sc.current_temp = sc.target_temp;
         }
-    
+        
+        sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "si", DisplayString(sc.dpy), sc.current_temp);
+        
         struct itimerspec timerValue = {{0}};
         if (set_gamma(sc.current_temp, sc.dpy) == sc.target_temp) {
             XCloseDisplay(sc.dpy);

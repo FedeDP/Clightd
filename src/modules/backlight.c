@@ -234,7 +234,7 @@ static void receive(const msg_t *msg, const void *userdata) {
         } else {
             /* From udev monitor, consume! */
             struct udev_device *dev = udev_monitor_receive_device(mon);
-            if (dev) {                
+            if (dev) {
                 int val = atoi(udev_device_get_sysattr_value(dev, "brightness"));
                 int max = atoi(udev_device_get_sysattr_value(dev, "max_brightness"));
                 const double pct = (double)val / max;

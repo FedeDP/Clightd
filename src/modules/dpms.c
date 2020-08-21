@@ -14,6 +14,7 @@ static const sd_bus_vtable vtable[] = {
     SD_BUS_VTABLE_START(0),
     SD_BUS_METHOD("Get", "ss", "i", method_getdpms, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("Set", "ssi", "i", method_setdpms, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_SIGNAL("Changed", "si", 0),
     SD_BUS_VTABLE_END
 };
 
@@ -114,6 +115,7 @@ static int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
     }
     
     m_log("New dpms state: %d.\n", level);
+    sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "si", display, level);
     return sd_bus_reply_method_return(m, "i", level);
 }
 

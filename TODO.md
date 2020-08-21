@@ -1,5 +1,11 @@
 ## 4.3
 
+### Gamma
+- [x] Add a Gamma.Changed signal
+
+### DPMS
+- [x] Add a Dpms.Changed signal
+
 ### Sensor
 - [ ] Fix Yoctolight Sensor
 - [ ] Avoid infinite loops in yoctolight sensor
