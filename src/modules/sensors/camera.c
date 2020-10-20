@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <sensor.h>
 #include <udev.h>
+#include <jpeglib.h>
 
 #define CAMERA_NAME                 "Camera"
 #define CAMERA_ILL_MAX              255
@@ -24,6 +25,9 @@ static void set_v4l2_control(uint32_t id, int32_t val, const char *name);
 static void set_camera_settings_def(void);
 static void set_camera_settings(void);
 static int check_camera_caps(void);
+static void create_decoder(void);
+static int mjpeg_to_gray(uint8_t **img_data, int size);
+static void destroy_decoder(void);
 static int init_mmap(void);
 static void destroy_mmap(void);
 static int xioctl(int request, void *arg);
@@ -31,7 +35,7 @@ static int start_stream(void);
 static int stop_stream(void);
 static int send_frame(struct v4l2_buffer *buf);
 static int recv_frame(struct v4l2_buffer *buf);
-static double compute_brightness(const unsigned int size);
+static double compute_brightness(unsigned int size);
 
 struct buffer {
     uint8_t *start;
@@ -43,12 +47,19 @@ struct histogram {
     double sum;
 };
 
+struct mjpeg_dec {
+    struct jpeg_decompress_struct cinfo;
+    struct jpeg_error_mgr err;
+    int (*dec_cb)(uint8_t **frame, int len);
+};
+
 struct state {
     int device_fd;
     uint32_t pixelformat;
     struct buffer buf;
     struct histogram hist[HISTOGRAM_STEPS];
     char *settings;
+    struct mjpeg_dec *decoder;
 };
 
 static struct state state;
@@ -107,6 +118,7 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
     
     if (init_mmap() == 0 && start_stream() == 0) {
         set_camera_settings();
+        create_decoder();
         for (int i = 0; i < num_captures; i++) {
             struct v4l2_buffer buf = { .type = V4L2_BUF_TYPE_VIDEO_CAPTURE, .memory = V4L2_MEMORY_MMAP};
             memset(state.hist, 0, HISTOGRAM_STEPS * sizeof(struct histogram));
@@ -115,6 +127,7 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
                 pct[ctr++] = compute_brightness(buf.bytesused) / CAMERA_ILL_MAX;
             }
         }
+        destroy_decoder();
         stop_stream();
     }
     destroy_mmap();
@@ -220,27 +233,75 @@ static int check_camera_caps(void) {
             fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_GREY;
         } else if (fmtdesc.pixelformat == V4L2_PIX_FMT_YUYV) {
             fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
+        } else if (fmtdesc.pixelformat == V4L2_PIX_FMT_MJPEG) {
+            fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
         }
         fmtdesc.index++;
     }
     
     /* No supported formats found? */
     if (fmt.fmt.pix.pixelformat == 0) {
-        perror("Device does not support neither GREY nor YUYV pixelformats.");
+        perror("Device does not support neither GREY nor YUYV nor MJPEG pixelformats.");
         return -1;
     }
-    
-    INFO("Using %s pixelformat.\n", (char *)&fmt.fmt.pix.pixelformat);
-    
+        
     /* Try to set desired formati */
     if (-1 == xioctl(VIDIOC_S_FMT, &fmt)) {
         perror("Setting Pixel Format");
         return -1;
     }
     
+    INFO("Image fmt: %s\n", (char *)&fmt.fmt.pix.pixelformat);
+    INFO("Image res: %d x %d\n", fmt.fmt.pix.width, fmt.fmt.pix.height);
+    
     /* Store format */
     state.pixelformat = fmt.fmt.pix.pixelformat;
     return 0;
+}
+
+static void create_decoder(void) {
+    if (state.pixelformat == V4L2_PIX_FMT_MJPEG) {
+        state.decoder = malloc(sizeof(*state.decoder));
+        state.decoder->cinfo.err = jpeg_std_error(&state.decoder->err);
+        jpeg_create_decompress(&state.decoder->cinfo);
+        state.decoder->dec_cb = mjpeg_to_gray;
+    }
+}
+
+static int mjpeg_to_gray(uint8_t **img_data, int size) {
+     /* Decompress jpeg and convert to grayscale through libjpeg */
+    jpeg_mem_src(&state.decoder->cinfo, *img_data, size);
+    int rc = jpeg_read_header(&state.decoder->cinfo, TRUE);
+    if (rc != 1) {
+        INFO("File does not seem to be a normal JPEG");
+        return 0;
+    }
+        
+    /* Convert from RGB to grayscale */
+    state.decoder->cinfo.out_color_space = JCS_GRAYSCALE;
+        
+    jpeg_start_decompress(&state.decoder->cinfo);
+    int width = state.decoder->cinfo.output_width;
+    int  height = state.decoder->cinfo.output_height;
+    int pixel_size = state.decoder->cinfo.output_components;
+
+    int bmp_size = width * height * pixel_size;
+    *img_data = malloc(bmp_size);
+
+    // The row_stride is the total number of bytes it takes to store an
+    // entire scanline (row). 
+    int row_stride = width * pixel_size;
+    while (state.decoder->cinfo.output_scanline < state.decoder->cinfo.output_height) {
+        unsigned char *buffer_array[1];
+        buffer_array[0] = *img_data + state.decoder->cinfo.output_scanline * row_stride;
+        jpeg_read_scanlines(&state.decoder->cinfo, buffer_array, 1);
+    }
+    jpeg_finish_decompress(&state.decoder->cinfo);
+    return bmp_size;
+}
+
+static void destroy_decoder(void) {
+    jpeg_destroy_decompress(&state.decoder->cinfo);
 }
 
 static int init_mmap(void) {
@@ -326,11 +387,16 @@ static int recv_frame(struct v4l2_buffer *buf) {
     return 0;
 }
 
-static double compute_brightness(const unsigned int size) {
+static double compute_brightness(unsigned int size) {
     double brightness = 0.0;
     double min = CAMERA_ILL_MAX;
     double max = 0.0;
-
+        
+    uint8_t *img_data = state.buf.start;
+    if (state.decoder) {
+        size = state.decoder->dec_cb(&img_data, size);
+    }
+    
     /*
      * If greyscale -> increment by 1. 
      * If YUYV -> increment by 2: we only want Y! 
@@ -340,25 +406,28 @@ static double compute_brightness(const unsigned int size) {
 
     /* Find minimum and maximum brightness */
     for (int i = 0; i < size; i += inc) {
-        if (state.buf.start[i] < min) {
-            min = state.buf.start[i];
+        if (img_data[i] < min) {
+            min = img_data[i];
         }
-        if (state.buf.start[i] > max) {
-            max = state.buf.start[i];
+        if (img_data[i] > max) {
+            max = img_data[i];
         }
     }
 
     /* Ok, we should never get in here */
     if (max == 0.0) {
+        if (img_data != state.buf.start) {
+            free(img_data);
+        }
         return brightness;
     }
 
     /* Calculate histogram */
     const double step_size = (max - min) / HISTOGRAM_STEPS;
     for (int i = 0; i < size; i += inc) {
-        int bucket = (state.buf.start[i] - min) / step_size;
+        int bucket = (img_data[i] - min) / step_size;
         if (bucket >= 0 && bucket < HISTOGRAM_STEPS) {
-            state.hist[bucket].sum += state.buf.start[i];
+            state.hist[bucket].sum += img_data[i];
             state.hist[bucket].count++;
         }
     }
@@ -405,6 +474,9 @@ static double compute_brightness(const unsigned int size) {
             break;
         }
     }
-
+    
+    if (img_data != state.buf.start) {
+        free(img_data);
+    }
     return brightness;
 }

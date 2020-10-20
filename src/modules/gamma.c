@@ -9,7 +9,9 @@
 #include <polkit.h>
 #include <X11/extensions/Xrandr.h>
 #include <math.h>
+#include <module/map.h>
 
+static void client_dtor(void *c);
 static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static unsigned short clamp(double x, double max);
@@ -27,10 +29,12 @@ typedef struct {
     unsigned int smooth_wait;
     unsigned int current_temp;
     Display *dpy;
-} smooth_change;
+    char *xauthority;
+    char *display;
+    int fd;
+} smooth_client;
 
-static smooth_change sc;
-static int smooth_fd;
+static map_t *smooth_clients;
 static const char object_path[] = "/org/clightd/clightd/Gamma";
 static const char bus_interface[] = "org.clightd.clightd.Gamma";
 static const sd_bus_vtable vtable[] = {
@@ -65,51 +69,56 @@ static void init(void) {
     if (r < 0) {
         m_log("Failed to issue method call: %s\n", strerror(-r));
     } else {
-        smooth_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
-        m_register_fd(smooth_fd, true, NULL);
+        smooth_clients = map_new(true, client_dtor);
     }
 }
 
 static void receive(const msg_t *msg, const void *userdata) {
-    if (!msg || !msg->is_pubsub) {
+    if (msg && !msg->is_pubsub) {
         uint64_t t;
         // nonblocking mode!
-        read(smooth_fd, &t, sizeof(uint64_t));
-    
-        if (sc.is_smooth) {
-            if (sc.target_temp < sc.current_temp) {
-                sc.current_temp = sc.current_temp - sc.smooth_step < sc.target_temp ? 
-                sc.target_temp :
-                sc.current_temp - sc.smooth_step;
+        read(msg->fd_msg->fd, &t, sizeof(uint64_t));
+        smooth_client *sc = (smooth_client *)msg->fd_msg->userptr;
+            
+        if (sc->is_smooth) {
+            if (sc->target_temp < sc->current_temp) {
+                sc->current_temp = sc->current_temp - sc->smooth_step < sc->target_temp ? 
+                sc->target_temp :
+                sc->current_temp - sc->smooth_step;
             } else {
-                sc.current_temp = sc.current_temp + sc.smooth_step > sc.target_temp ? 
-                sc.target_temp :
-                sc.current_temp + sc.smooth_step;
+                sc->current_temp = sc->current_temp + sc->smooth_step > sc->target_temp ? 
+                sc->target_temp :
+                sc->current_temp + sc->smooth_step;
             }
         } else {
-            sc.current_temp = sc.target_temp;
+            sc->current_temp = sc->target_temp;
         }
         
-        sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "si", DisplayString(sc.dpy), sc.current_temp);
+        sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "si", DisplayString(sc->dpy), sc->current_temp);
         
         struct itimerspec timerValue = {{0}};
-        if (set_gamma(sc.current_temp, sc.dpy) == sc.target_temp) {
-            XCloseDisplay(sc.dpy);
-            unsetenv("XAUTHORITY");
-            m_log("Reached target temp: %d.\n", sc.target_temp);
+        setenv("XAUTHORITY", sc->xauthority, 1);
+        if (set_gamma(sc->current_temp, sc->dpy) == sc->target_temp) {
+            m_deregister_fd(sc->fd); // this will close fd
+            map_remove(smooth_clients, sc->display); // this will free sc->display (used as key)
+            m_log("Reached target temp: %d.\n", sc->target_temp);
         } else {
-            timerValue.it_value.tv_sec = sc.smooth_wait / 1000; // in ms
-            timerValue.it_value.tv_nsec = 1000 * 1000 * (sc.smooth_wait % 1000); // ms
+            timerValue.it_value.tv_sec = sc->smooth_wait / 1000; // in ms
+            timerValue.it_value.tv_nsec = 1000 * 1000 * (sc->smooth_wait % 1000); // ms
         }
-        int ret = timerfd_settime(smooth_fd, 0, &timerValue, NULL);
-        if (userdata) {
-            *(int *)userdata = ret;
-        }
+        unsetenv("XAUTHORITY");
+        timerfd_settime(sc->fd, 0, &timerValue, NULL);
     }
 }
 
 static void destroy(void) {
-    
+    map_free(smooth_clients);
+}
+
+static void client_dtor(void *c) {
+    smooth_client *sc = (smooth_client *)c;
+    XCloseDisplay(sc->dpy);
+    free(sc->xauthority);
 }
 
 static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
@@ -134,26 +143,45 @@ static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
     if (temp < 1000 || temp > 10000) {
         error = EINVAL;
     } else {
-        /* set xauthority cookie */
-        setenv("XAUTHORITY", xauthority, 1);
-        
-        Display *dpy = XOpenDisplay(display);
-        if (dpy == NULL) {
-            m_log("XopenDisplay");
-            error = ENXIO;
-            /* Drop xauthority cookie */
+        Display *dpy = NULL;
+        smooth_client *sc = map_get(smooth_clients, display);
+        if (!sc) {
+            setenv("XAUTHORITY", xauthority, 1);
+            dpy = XOpenDisplay(display);
+            if (dpy == NULL) {
+                m_log("XopenDisplay");
+                error = ENXIO;
+            } else {
+                sc = calloc(1, sizeof(smooth_client));
+                if (!sc) {
+                    error = ENOMEM;
+                } else {
+                    sc->fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+                    m_register_fd(sc->fd, true, sc);
+                    sc->dpy = dpy;
+                    sc->current_temp = get_gamma(sc->dpy);
+                    sc->xauthority = strdup(xauthority);
+                    sc->display = strdup(display);
+                }
+            }
             unsetenv("XAUTHORITY");
-        } else {
-            sc.target_temp = temp;
-            sc.smooth_step = smooth_step;
-            sc.smooth_wait = smooth_wait;
-            sc.is_smooth = is_smooth;
-            sc.dpy = dpy;
-            sc.current_temp = get_gamma(sc.dpy);
+        }
+        
+        if (sc) {
+            sc->target_temp = temp;
+            sc->smooth_step = smooth_step;
+            sc->smooth_wait = smooth_wait;
+            sc->is_smooth = is_smooth;
+            
+            // start transitioning right now
+            struct itimerspec timerValue = {{0}};
+            timerValue.it_value.tv_nsec = 1;
+            timerfd_settime(sc->fd, 0, &timerValue, NULL);
+            map_put(smooth_clients, sc->display, sc);
             m_log("Temperature target value set (smooth %d): %d.\n", is_smooth, temp);
-            receive(NULL, &error); // xauthority cookie will be dropped here when smooth transition is finished
         }
     }
+    
     if (error) {
         if (error == EINVAL) {
             sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Temperature value should be between 1000 and 10000.");
@@ -177,20 +205,23 @@ static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
         return r;
     }
     
-    /* set xauthority cookie */
-    setenv("XAUTHORITY", xauthority, 1);
-    
-    Display *dpy = XOpenDisplay(display);
-    if (dpy == NULL) {
-        m_log("XopenDisplay");
-        error = ENXIO;
+    smooth_client *sc = map_get(smooth_clients, display);
+    if (sc) {
+        temp = sc->current_temp;
     } else {
-        temp = get_gamma(dpy);
-        XCloseDisplay(dpy);
+         /* set xauthority cookie */
+        setenv("XAUTHORITY", xauthority, 1);
+        Display *dpy = XOpenDisplay(display);
+        if (dpy == NULL) {
+            m_log("XopenDisplay");
+            error = ENXIO;
+        } else {
+            temp = get_gamma(dpy);
+            XCloseDisplay(dpy);
+        }
+        /* Drop xauthority cookie */
+        unsetenv("XAUTHORITY");
     }
-    
-    /* Drop xauthority cookie */
-    unsetenv("XAUTHORITY");
     
     if (error) {
         if (error == ENXIO) {
@@ -300,6 +331,9 @@ static int set_gamma(int temp, Display *dpy) {
     Window root = RootWindow(dpy, screen);
 
     XRRScreenResources *res = XRRGetScreenResourcesCurrent(dpy, root);
+    if (!res) {
+        return -ENOENT;
+    }
     
     double red = get_red(temp) / (double)255;
     double green = get_green(temp) / (double)255;

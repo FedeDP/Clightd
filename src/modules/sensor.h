@@ -22,8 +22,6 @@
 
 #include <commons.h>
 
-#define _ctor_     __attribute__((constructor (101))) // Used for Sensors registering
-
 /* Sensor->name must match its enumeration stringified value */
 #define _SENSORS \
     X(ALS, 0) \

@@ -6,8 +6,6 @@
 
 #define YOCTO_ERR(fmt, ...)  fprintf(stderr, fmt, ##__VA_ARGS__); return -1;
 
-#define _dtor_                __attribute__((destructor (101))) // Used for libusb dtor
-
 #define YOCTO_NAME            "YoctoLight"
 #define YOCTO_ILL_MAX         500
 #define YOCTO_ILL_MIN         22

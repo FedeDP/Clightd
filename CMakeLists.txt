@@ -24,7 +24,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 set_property(TARGET ${PROJECT_NAME} PROPERTY C_STANDARD 99)
 
 # Required dependencies
-pkg_check_modules(REQ_LIBS REQUIRED libudev libmodule>=5.0.0)
+pkg_check_modules(REQ_LIBS REQUIRED libudev libmodule>=5.0.0 libjpeg)
 pkg_check_modules(POLKIT REQUIRED polkit-gobject-1)
 pkg_search_module(LOGIN_LIBS REQUIRED libelogind libsystemd>=221)
 target_link_libraries(${PROJECT_NAME}
@@ -158,7 +158,7 @@ set(CPACK_RPM_PACKAGE_URL "https://github.com/FedeDP/Clightd")
 set(CPACK_RPM_PACKAGE_GROUP "System Environment/Daemons")
 set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/etc/dbus-1" "/etc/dbus-1/system.d" "${CMAKE_INSTALL_PREFIX}" "${CMAKE_INSTALL_LIBDIR}" "${SYSTEM_BUS_DIR}" "${POLKIT_ACTION_DIR}")
 set(CPACK_RPM_PACKAGE_DESCRIPTION ${CPACK_PACKAGE_DESCRIPTION})
-set(CPACK_RPM_PACKAGE_REQUIRES "libmodule >= 5.0.0 systemd-libs")
+set(CPACK_RPM_PACKAGE_REQUIRES "libmodule >= 5.0.0 systemd-libs libjpeg-turbo")
 set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
 
 #
@@ -166,7 +166,7 @@ set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
 #
 set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/FedeDP/Clightd")
 set(CPACK_DEBIAN_PACKAGE_SECTION "admin")
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "libudev1, libmodule (>=5.0.0), libsystemd0")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libudev1, libmodule (>=5.0.0), libsystemd0 libjpeg-turbo8")
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 
 if(WITH_DDC)
