@@ -20,6 +20,12 @@
     #define INFO(fmt, ...)
 #endif
 
+static const __u32 supported_fmts[] = {
+    V4L2_PIX_FMT_GREY,
+    V4L2_PIX_FMT_YUYV,
+    V4L2_PIX_FMT_MJPEG
+};
+
 static void set_v4l2_control_def(uint32_t id, const char *name);
 static void set_v4l2_control(uint32_t id, int32_t val, const char *name);
 static void set_camera_settings_def(void);
@@ -228,13 +234,12 @@ static int check_camera_caps(void) {
     /* Check supported formats */
     struct v4l2_fmtdesc fmtdesc = {0};
     fmtdesc.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    while (xioctl(VIDIOC_ENUM_FMT, &fmtdesc) == 0 && fmt.fmt.pix.pixelformat == 0) {    
-        if (fmtdesc.pixelformat == V4L2_PIX_FMT_GREY) {
-            fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_GREY;
-        } else if (fmtdesc.pixelformat == V4L2_PIX_FMT_YUYV) {
-            fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
-        } else if (fmtdesc.pixelformat == V4L2_PIX_FMT_MJPEG) {
-            fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
+    while (xioctl(VIDIOC_ENUM_FMT, &fmtdesc) == 0 && fmt.fmt.pix.pixelformat == 0) {
+        for (int i = 0; i < SIZE(supported_fmts); i++) {
+              if (fmtdesc.pixelformat == supported_fmts[i]) {
+                fmt.fmt.pix.pixelformat = supported_fmts[i];
+                break;
+              }
         }
         fmtdesc.index++;
     }
@@ -301,7 +306,12 @@ static int mjpeg_to_gray(uint8_t **img_data, int size) {
 }
 
 static void destroy_decoder(void) {
-    jpeg_destroy_decompress(&state.decoder->cinfo);
+    if (state.decoder) {
+        if (state.pixelformat == V4L2_PIX_FMT_MJPEG) {
+            jpeg_destroy_decompress(&state.decoder->cinfo);
+        }
+        free(state.decoder);
+    }
 }
 
 static int init_mmap(void) {
@@ -416,10 +426,7 @@ static double compute_brightness(unsigned int size) {
 
     /* Ok, we should never get in here */
     if (max == 0.0) {
-        if (img_data != state.buf.start) {
-            free(img_data);
-        }
-        return brightness;
+        goto end;
     }
 
     /* Calculate histogram */
@@ -475,6 +482,7 @@ static double compute_brightness(unsigned int size) {
         }
     }
     
+end:
     if (img_data != state.buf.start) {
         free(img_data);
     }
