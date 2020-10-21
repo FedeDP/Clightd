@@ -14,7 +14,7 @@
 
 #### Yoctolight
 - [ ] Fix Yoctolight Sensor
-- [ ] Avoid infinite loops in yoctolight sensor
+- [x] Avoid infinite loops in yoctolight sensor
 - [ ] Document new yoctolight sensor
 
 ## 4.X

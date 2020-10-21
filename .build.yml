@@ -10,6 +10,7 @@ packages:
   - cmake
   - polkit
   - libusb
+  - libjpeg-turbo
 sources:
   - https://github.com/FedeDP/Clightd
 tasks:
