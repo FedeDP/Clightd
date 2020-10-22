@@ -487,10 +487,7 @@ static int append_external_backlight(sd_bus_message *reply, const char *sn, bool
 }
 
 static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    if (!check_authorization(m)) {
-        sd_bus_error_set_errno(ret_error, EPERM);
-        return -EPERM;
-    }
+    ASSERT_AUTH();
 
     const char *backlight_interface = NULL;
     double target_pct, smooth_step;
@@ -546,10 +543,7 @@ static int method_lowerallbrightness(sd_bus_message *m, void *userdata, sd_bus_e
 }
 
 static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    if (!check_authorization(m)) {
-        sd_bus_error_set_errno(ret_error, EPERM);
-        return -EPERM;
-    }
+    ASSERT_AUTH();
     
     const char *serial = NULL;
     double target_pct, smooth_step;

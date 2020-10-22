@@ -13,7 +13,7 @@
 - [x] Support mjpeg input format through libjpeg
 
 #### Yoctolight
-- [ ] Fix Yoctolight Sensor
+- [x] Fix Yoctolight Sensor
 - [x] Avoid infinite loops in yoctolight sensor
 - [ ] Document new yoctolight sensor
 
@@ -23,6 +23,8 @@
 #### Gamma
 - [ ] Add gamma support on wayland (??)
 https://github.com/swaywm/wlroots/blob/master/examples/gamma-control.c
+- [ ] Use a double for gamma value too (eg: between 0 and 10000), -> 0.65 default value (6500) -> gamma protocol for wlroots uses that 
+- [ ] Split gamma api like dpms: for X, wlroots and tty. On tty, use libdrm
 
 #### Dpms
 - [ ] Add support for dpms on wayland(??)

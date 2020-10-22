@@ -82,11 +82,7 @@ static int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
     const char *display = NULL, *xauthority = NULL;
     int level;
     
-    /* Require polkit auth */
-    if (!check_authorization(m)) {
-        sd_bus_error_set_errno(ret_error, EPERM);
-        return -EPERM;
-    }
+   ASSERT_AUTH();
     
     /* Read the parameters */
     int r = sd_bus_message_read(m, "ssi", &display, &xauthority, &level);

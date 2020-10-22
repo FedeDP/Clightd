@@ -127,10 +127,7 @@ static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
     const int is_smooth;
     const unsigned int smooth_step, smooth_wait;
     
-    if (!check_authorization(m)) {
-        sd_bus_error_set_errno(ret_error, EPERM);
-        return -EPERM;
-    }
+    ASSERT_AUTH();
     
     /* Read the parameters */
     int r = sd_bus_message_read(m, "ssi(buu)", &display, &xauthority, &temp, 

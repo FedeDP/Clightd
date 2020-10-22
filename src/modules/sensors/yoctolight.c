@@ -18,7 +18,6 @@
 #define YOCTO_IFACE           0
 
 #define YOCTO_MAX_TRIES       20
-#define YOCTO_SLEEP           5000 // (us)
 
 #define YOCTO_CONF_RESET      0
 #define YOCTO_CONF_START      1
@@ -259,7 +258,6 @@ static inline int send_and_recv_packet(USB_Packet *pkt, USB_Packet *rpkt) {
             if (rpkt->confpkt.head.pkt == pkt_type && rpkt->confpkt.head.stream == stream_type) {
                 return 0;
             }
-            usleep(YOCTO_SLEEP);
         }
     }
     return -1;
@@ -325,23 +323,32 @@ static int start_usb_device(USB_Packet *rpkt) {
     /** **/
     
     /** Wait on stream ready **/
-    int trans = 0;
+    
+    /* 
+     * Note: we wait on firstByte == 1 AND streamready notification received.
+     * They seem to not always arrive at the same moment;
+     * sometimes, eg: first time yocto sensor is plugged, we receive 
+     * firstByte == 76, not->head.type == YOCTO_NOTIFY_PKT_STREAMREADY
+     * 
+     * This means that stream is ready but device is not yet able to stream data.
+     * We then wait on firstByte == 1.
+     */
+    bool recved_streamready = false;
     memset(rpkt, 0, sizeof(USB_Packet));
     for (int i = 0; i < YOCTO_MAX_TRIES; i++) {
+        int trans = 0;
         libusb_interrupt_transfer(state.hdl, state.rdendp, (unsigned char *) rpkt, YOCTO_PKT_SIZE, &trans, state.interval);
         if (rpkt->confpkt.head.pkt == YOCTO_PKT_STREAM) {
             if (rpkt->confpkt.head.stream == YOCTO_STREAM_NOTICE || rpkt->confpkt.head.stream == YOCTO_STREAM_NOTICE_V2) {
                 uint8_t *data =((uint8_t*)&rpkt->confpkt.head) + sizeof(YSTREAM_Head);
                 USB_Notify_Pkt *not = (USB_Notify_Pkt*)data;
-                if (not->firstByte == 1) {
-                    if (not->head.type == YOCTO_NOTIFY_PKT_STREAMREADY || not->head.type == YOCTO_NOTIFY_PKT_STREAMREADY_2) {
-                        /* Device is now ready. */
-                        return 0;
-                    }
+                recved_streamready |= not->head.type == YOCTO_NOTIFY_PKT_STREAMREADY || not->head.type == YOCTO_NOTIFY_PKT_STREAMREADY_2;
+                if (not->firstByte == 1 && recved_streamready) {
+                    /* Device is now fully ready. */
+                    return 0;
                 }
             }
         }
-        usleep(YOCTO_SLEEP);
     }
     /** **/
     YOCTO_ERR("failed to wait on stream ready packet\n");

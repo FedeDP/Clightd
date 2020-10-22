@@ -176,10 +176,7 @@ static int method_issensoravailable(sd_bus_message *m, void *userdata, sd_bus_er
 }
 
 static int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    if (!check_authorization(m)) {
-        sd_bus_error_set_errno(ret_error, EPERM);
-        return -EPERM;
-    }
+    ASSERT_AUTH();
     
     const char *interface = NULL;
     char *settings = NULL;
