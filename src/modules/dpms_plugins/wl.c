@@ -1,6 +1,6 @@
 #ifdef DPMS_PRESENT
 
-#include "build/dpms-client-protocol.h"
+#include "build/org_kde_kwin_dpms-client-protocol.h"
 #include "commons.h"
 
 struct output {
