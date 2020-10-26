@@ -34,8 +34,8 @@ endfunction()
 # Create program target
 file(GLOB_RECURSE SOURCES src/*.c)
 
- WAYLAND_ADD_PROTOCOL_CLIENT(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/protocol/wlr-gamma-control-unstable-v1.xml" wlr-gamma-control-unstable-v1)
- WAYLAND_ADD_PROTOCOL_CLIENT(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/protocol/dpms.xml" dpms)
+WAYLAND_ADD_PROTOCOL_CLIENT(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/protocol/wlr-gamma-control-unstable-v1.xml" wlr-gamma-control-unstable-v1)
+WAYLAND_ADD_PROTOCOL_CLIENT(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/protocol/dpms.xml" dpms)
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -52,7 +52,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 set_property(TARGET ${PROJECT_NAME} PROPERTY C_STANDARD 99)
 
 # Required dependencies
-pkg_check_modules(REQ_LIBS REQUIRED libudev libmodule>=5.0.0 libjpeg wayland-client)
+pkg_check_modules(REQ_LIBS REQUIRED libudev libmodule>=5.0.0 libjpeg)
 pkg_check_modules(POLKIT REQUIRED polkit-gobject-1)
 pkg_search_module(LOGIN_LIBS REQUIRED libelogind libsystemd>=221)
 target_link_libraries(${PROJECT_NAME}
@@ -96,8 +96,8 @@ macro(optional_dep name modules description)
     endif()
 endmacro()
 
-optional_dep(GAMMA "x11;xrandr;libdrm" "Gamma correction")
-optional_dep(DPMS "x11;xext" "DPMS")
+optional_dep(GAMMA "x11;xrandr;libdrm;wayland-client" "Gamma correction")
+optional_dep(DPMS "x11;xext;libdrm;wayland-client" "DPMS")
 optional_dep(SCREEN "x11" "screen emitted brightness")
 optional_dep(DDC "ddcutil>=0.9.5" "external monitor backlight")
 optional_dep(YOCTOLIGHT "libusb-1.0" "Yoctolight usb als devices support")
