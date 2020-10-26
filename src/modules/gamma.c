@@ -49,7 +49,7 @@ static void init(void) {
     if (r < 0) {
         m_log("Failed to issue method call: %s\n", strerror(-r));
     } else {
-        clients = map_new(true, client_dtor);
+        clients = map_new(false, client_dtor);
     }
 }
 
@@ -76,16 +76,16 @@ static void receive(const msg_t *msg, const void *userdata) {
         
         sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "si", sc->display, sc->current_temp);
         
-        struct itimerspec timerValue = {{0}};
         if (sc->handler.set(sc, sc->current_temp) == 0 && sc->current_temp == sc->target_temp) {
+            m_log("Reached target temp: %d.\n", sc->target_temp);
             m_deregister_fd(sc->fd); // this will close fd
             map_remove(clients, sc->display); // this will free sc->display (used as key)
-            m_log("Reached target temp: %d.\n", sc->target_temp);
         } else {
+            struct itimerspec timerValue = {{0}};
             timerValue.it_value.tv_sec = sc->smooth_wait / 1000; // in ms
             timerValue.it_value.tv_nsec = 1000 * 1000 * (sc->smooth_wait % 1000); // ms
+            timerfd_settime(sc->fd, 0, &timerValue, NULL);
         }
-        timerfd_settime(sc->fd, 0, &timerValue, NULL);
     }
 }
 
@@ -100,6 +100,8 @@ static void client_dtor(void *c) {
         cl->handler.dtor(cl);
     }
     free(cl->handler.priv);
+    free(cl->display);
+    free(cl);
 }
 
 static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
