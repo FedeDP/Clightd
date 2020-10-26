@@ -150,6 +150,10 @@ int wl_get_handler(gamma_client *cl) {
     /* init private data */
     cl->handler.priv = calloc(1, sizeof(wlr_gamma_priv));
     wlr_gamma_priv *priv = (wlr_gamma_priv *)cl->handler.priv;
+    if (!priv) {
+        wl_display_disconnect(display);
+        return -ENOMEM;
+    }
     
     priv->registry = wl_display_get_registry(display);
     wl_registry_add_listener(priv->registry, &registry_listener, priv);

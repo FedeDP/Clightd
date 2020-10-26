@@ -146,7 +146,7 @@ static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
 }
 
 static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    int error = 0, temp;
+    int error = 0, temp = -1;
     const char *display = NULL, *xauthority = NULL;
     
     /* Read the parameters */

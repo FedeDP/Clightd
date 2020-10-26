@@ -38,12 +38,14 @@ int drm_get_handler(gamma_client *cl) {
     } else {
         ret = UNSUPPORTED;
     }
-    
-    if (res) {
-        drmModeFreeResources(res);
-    }
-    if (fd != -1) {
-        close(fd);
+
+    if (ret != 0) {
+        if (res) {
+            drmModeFreeResources(res);
+        }
+        if (fd != -1) {
+            close(fd);
+        }
     }
     return ret;
 }
