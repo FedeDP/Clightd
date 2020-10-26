@@ -11,6 +11,8 @@ packages:
   - polkit
   - libusb
   - libjpeg-turbo
+  - wayland
+  - libdrm
 sources:
   - https://github.com/FedeDP/Clightd
 tasks:

@@ -6,9 +6,37 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 include(GNUInstallDirs)
 find_package(PkgConfig)
+find_program(WAYLAND_SCANNER_EXECUTABLE NAMES wayland-scanner)
+
+# wayland_add_protocol_client(outfiles inputfile basename)
+# Stolen from: https://github.com/giucam/orbital/blob/512c1b3b20a32cf67ba326e8acce3c1c32e11fa2/cmake/Wayland.cmake, thanks!
+function(WAYLAND_ADD_PROTOCOL_CLIENT _sources _protocol _basename)
+    if(NOT WAYLAND_SCANNER_EXECUTABLE)
+        message(FATAL "The wayland-scanner executable has not been found on your system. You must install it.")
+    endif()
+
+    get_filename_component(_infile ${_protocol} ABSOLUTE)
+    set(_client_header "${CMAKE_CURRENT_BINARY_DIR}/${_basename}-client-protocol.h")
+    set(_code "${CMAKE_CURRENT_BINARY_DIR}/${_basename}-protocol.c")
+
+    add_custom_command(OUTPUT "${_client_header}"
+        COMMAND ${WAYLAND_SCANNER_EXECUTABLE} client-header < ${_infile} > ${_client_header}
+        DEPENDS ${_infile} VERBATIM)
+
+    add_custom_command(OUTPUT "${_code}"
+        COMMAND ${WAYLAND_SCANNER_EXECUTABLE} private-code < ${_infile} > ${_code}
+        DEPENDS ${_infile} VERBATIM)
+
+    list(APPEND ${_sources} "${_client_header}" "${_code}")
+    set(${_sources} ${${_sources}} PARENT_SCOPE)
+endfunction()
 
 # Create program target
 file(GLOB_RECURSE SOURCES src/*.c)
+
+ WAYLAND_ADD_PROTOCOL_CLIENT(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/protocol/wlr-gamma-control-unstable-v1.xml" wlr-gamma-control-unstable-v1)
+ WAYLAND_ADD_PROTOCOL_CLIENT(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/protocol/dpms.xml" dpms)
+
 add_executable(${PROJECT_NAME} ${SOURCES})
 target_include_directories(${PROJECT_NAME} PRIVATE
                            # Internal headers
@@ -24,7 +52,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 set_property(TARGET ${PROJECT_NAME} PROPERTY C_STANDARD 99)
 
 # Required dependencies
-pkg_check_modules(REQ_LIBS REQUIRED libudev libmodule>=5.0.0 libjpeg)
+pkg_check_modules(REQ_LIBS REQUIRED libudev libmodule>=5.0.0 libjpeg wayland-client)
 pkg_check_modules(POLKIT REQUIRED polkit-gobject-1)
 pkg_search_module(LOGIN_LIBS REQUIRED libelogind libsystemd>=221)
 target_link_libraries(${PROJECT_NAME}
@@ -68,7 +96,7 @@ macro(optional_dep name modules description)
     endif()
 endmacro()
 
-optional_dep(GAMMA "x11;xrandr" "Gamma correction")
+optional_dep(GAMMA "x11;xrandr;libdrm" "Gamma correction")
 optional_dep(DPMS "x11;xext" "DPMS")
 optional_dep(SCREEN "x11" "screen emitted brightness")
 optional_dep(DDC "ddcutil>=0.9.5" "external monitor backlight")

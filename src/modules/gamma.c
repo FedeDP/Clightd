@@ -7,34 +7,18 @@
 
 #include <commons.h>
 #include <polkit.h>
-#include <X11/extensions/Xrandr.h>
-#include <math.h>
 #include <module/map.h>
+#include "gamma_plugins/xorg.h"
+#include "gamma_plugins/drm.h"
+#include "gamma_plugins/wl.h"
 
 static void client_dtor(void *c);
 static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
-static unsigned short clamp(double x, double max);
-static unsigned short get_red(int temp);
-static unsigned short get_green(int temp);
-static unsigned short get_blue(int temp);
-static int get_temp(const unsigned short R, const unsigned short B);
-static int set_gamma(int temp, Display *dpy);
-static int get_gamma(Display *dpy);
+static gamma_client *fetch_client(const char *display, const char *xauth);
+static int start_client(gamma_client *sc, int temp, int smooth_step, int smooth_wait, int is_smooth);
 
-typedef struct {
-    unsigned int target_temp;
-    unsigned int is_smooth;
-    unsigned int smooth_step;
-    unsigned int smooth_wait;
-    unsigned int current_temp;
-    Display *dpy;
-    char *xauthority;
-    char *display;
-    int fd;
-} smooth_client;
-
-static map_t *smooth_clients;
+static map_t *clients;
 static const char object_path[] = "/org/clightd/clightd/Gamma";
 static const char bus_interface[] = "org.clightd.clightd.Gamma";
 static const sd_bus_vtable vtable[] = {
@@ -46,10 +30,6 @@ static const sd_bus_vtable vtable[] = {
 };
 
 MODULE("GAMMA");
-
-static void module_pre_start(void) {
-    
-}
 
 static bool check(void) {
     return true;
@@ -69,7 +49,7 @@ static void init(void) {
     if (r < 0) {
         m_log("Failed to issue method call: %s\n", strerror(-r));
     } else {
-        smooth_clients = map_new(true, client_dtor);
+        clients = map_new(true, client_dtor);
     }
 }
 
@@ -78,7 +58,7 @@ static void receive(const msg_t *msg, const void *userdata) {
         uint64_t t;
         // nonblocking mode!
         read(msg->fd_msg->fd, &t, sizeof(uint64_t));
-        smooth_client *sc = (smooth_client *)msg->fd_msg->userptr;
+        gamma_client *sc = (gamma_client *)msg->fd_msg->userptr;
             
         if (sc->is_smooth) {
             if (sc->target_temp < sc->current_temp) {
@@ -94,31 +74,32 @@ static void receive(const msg_t *msg, const void *userdata) {
             sc->current_temp = sc->target_temp;
         }
         
-        sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "si", DisplayString(sc->dpy), sc->current_temp);
+        sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "si", sc->display, sc->current_temp);
         
         struct itimerspec timerValue = {{0}};
-        setenv("XAUTHORITY", sc->xauthority, 1);
-        if (set_gamma(sc->current_temp, sc->dpy) == sc->target_temp) {
+        if (sc->handler.set(sc, sc->current_temp) == 0 && sc->current_temp == sc->target_temp) {
             m_deregister_fd(sc->fd); // this will close fd
-            map_remove(smooth_clients, sc->display); // this will free sc->display (used as key)
+            map_remove(clients, sc->display); // this will free sc->display (used as key)
             m_log("Reached target temp: %d.\n", sc->target_temp);
         } else {
             timerValue.it_value.tv_sec = sc->smooth_wait / 1000; // in ms
             timerValue.it_value.tv_nsec = 1000 * 1000 * (sc->smooth_wait % 1000); // ms
         }
-        unsetenv("XAUTHORITY");
         timerfd_settime(sc->fd, 0, &timerValue, NULL);
     }
 }
 
 static void destroy(void) {
-    map_free(smooth_clients);
+    map_free(clients);
 }
 
 static void client_dtor(void *c) {
-    smooth_client *sc = (smooth_client *)c;
-    XCloseDisplay(sc->dpy);
-    free(sc->xauthority);
+    gamma_client *cl = (gamma_client *)c;
+    
+    if (cl->handler.dtor) {
+        cl->handler.dtor(cl);
+    }
+    free(cl->handler.priv);
 }
 
 static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
@@ -140,42 +121,14 @@ static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
     if (temp < 1000 || temp > 10000) {
         error = EINVAL;
     } else {
-        Display *dpy = NULL;
-        smooth_client *sc = map_get(smooth_clients, display);
+        gamma_client *sc = map_get(clients, display);
         if (!sc) {
-            setenv("XAUTHORITY", xauthority, 1);
-            dpy = XOpenDisplay(display);
-            if (dpy == NULL) {
-                m_log("XopenDisplay");
-                error = ENXIO;
-            } else {
-                sc = calloc(1, sizeof(smooth_client));
-                if (!sc) {
-                    error = ENOMEM;
-                } else {
-                    sc->fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
-                    m_register_fd(sc->fd, true, sc);
-                    sc->dpy = dpy;
-                    sc->current_temp = get_gamma(sc->dpy);
-                    sc->xauthority = strdup(xauthority);
-                    sc->display = strdup(display);
-                }
-            }
-            unsetenv("XAUTHORITY");
+            sc = fetch_client(display, xauthority);
         }
-        
         if (sc) {
-            sc->target_temp = temp;
-            sc->smooth_step = smooth_step;
-            sc->smooth_wait = smooth_wait;
-            sc->is_smooth = is_smooth;
-            
-            // start transitioning right now
-            struct itimerspec timerValue = {{0}};
-            timerValue.it_value.tv_nsec = 1;
-            timerfd_settime(sc->fd, 0, &timerValue, NULL);
-            map_put(smooth_clients, sc->display, sc);
-            m_log("Temperature target value set (smooth %d): %d.\n", is_smooth, temp);
+            error = start_client(sc, temp, smooth_step, smooth_wait, is_smooth);
+        } else {
+            error = -EACCES;
         }
     }
     
@@ -188,6 +141,7 @@ static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
         return -error;
     }
     
+    m_log("Temperature target value set (smooth %d): %d.\n", is_smooth, temp);
     return sd_bus_reply_method_return(m, "b", !error);
 }
 
@@ -202,30 +156,21 @@ static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
         return r;
     }
     
-    smooth_client *sc = map_get(smooth_clients, display);
-    if (sc) {
-        temp = sc->current_temp;
+    gamma_client *cl = map_get(clients, display);
+    if (cl) {
+        temp = cl->current_temp;
     } else {
-         /* set xauthority cookie */
-        setenv("XAUTHORITY", xauthority, 1);
-        Display *dpy = XOpenDisplay(display);
-        if (dpy == NULL) {
-            m_log("XopenDisplay");
-            error = ENXIO;
+        cl = fetch_client(display, xauthority);
+        if (cl) {
+            temp = cl->current_temp;
+            client_dtor(cl);
         } else {
-            temp = get_gamma(dpy);
-            XCloseDisplay(dpy);
+            error = -EACCES;
         }
-        /* Drop xauthority cookie */
-        unsetenv("XAUTHORITY");
     }
     
-    if (error) {
-        if (error == ENXIO) {
-            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Could not open X screen.");
-        } else {
-            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Failed to get screen temperature.");
-        }
+    if (error || temp == -1) {
+        sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Failed to get screen temperature.");
         return -error;
     }
     
@@ -233,140 +178,44 @@ static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
     return sd_bus_reply_method_return(m, "i", temp);
 }
 
-static unsigned short clamp(double x, double max) {
-    if (x > max) {
-        return max;
-    }
-    return x;
-}
-
-static unsigned short get_red(int temp) {
-    if (temp <= 6500) {
-        return 255;
-    }
-    const double a = 351.97690566805693;
-    const double b = 0.114206453784165;
-    const double c = -40.25366309332127;
-    const double new_temp = ((double)temp / 100) - 55;
-    
-    return clamp(a + b * new_temp + c * log(new_temp), 255);
-}
-
-static unsigned short get_green(int temp) {
-    double a, b, c;
-    double new_temp;
-    if (temp <= 6500) {
-        a = -155.25485562709179;
-        b = -0.44596950469579133;
-        c = 104.49216199393888;
-        new_temp = ((double)temp / 100) - 2;
-    } else {
-        a = 325.4494125711974;
-        b = 0.07943456536662342;
-        c = -28.0852963507957;
-        new_temp = ((double)temp / 100) - 50;
-    }
-    return clamp(a + b * new_temp + c * log(new_temp), 255);
-}
-
-static unsigned short get_blue(int temp) {
-    if (temp <= 1900) {
-        return 0;
-    }
-    
-    if (temp < 6500) {
-        const double new_temp = ((double)temp / 100) - 10;
-        const double a = -254.76935184120902;
-        const double b = 0.8274096064007395;
-        const double c = 115.67994401066147;
-        
-        return clamp(a + b * new_temp + c * log(new_temp), 255);
-    }
-    return 255;
-}
-
-/* Thanks to: https://github.com/neilbartlett/color-temperature/blob/master/index.js */
-static int get_temp(const unsigned short R, const unsigned short B) {
-    int temperature;
-    int min_temp = B == 255 ? 6500 : 1000; // lower bound
-    int max_temp = R == 255 ? 6500 : 10000; // upper bound
-    unsigned short testR, testB;
-    
-    int ctr = 0;
-    
-    /* Compute first temperature with same R and B value as parameters */
-    do {
-        temperature = (max_temp + min_temp) / 2;
-        testR = get_red(temperature);
-        testB = get_blue(temperature);
-        if ((double) testB / testR > (double) B / R) {
-            max_temp = temperature;
-        } else {
-            min_temp = temperature;
-        }
-        ctr++;
-    } while ((testR != R || testB != B) && (ctr < 10));
-    
-    /* try to fit value in 50-steps temp -> ie: instead of 5238, try 5200 or 5250 */
-    if (temperature % 50 != 0) {
-        int tmp_temp = temperature - temperature % 50;
-        if (get_red(tmp_temp) == R && get_blue(tmp_temp) == B) {
-            temperature = tmp_temp;
-        } else {
-            tmp_temp = temperature + 50 - temperature % 50;
-            if (get_red(tmp_temp) == R && get_blue(tmp_temp) == B) {
-                temperature = tmp_temp;
+static gamma_client *fetch_client(const char *display, const char *xauth) {
+    gamma_client *cl = calloc(1, sizeof(gamma_client));
+    if (cl) {
+        cl->fd = -1;
+        cl->display = strdup(display);
+        int ret = xorg_get_handler(cl, xauth);
+        if (ret == WRONG_PLUGIN) {
+            ret = wl_get_handler(cl);
+            if (ret == WRONG_PLUGIN) {
+                ret = drm_get_handler(cl);
             }
         }
-    }
-    
-    return temperature;
-}
-
-static int set_gamma(int temp, Display *dpy) {
-    int screen = DefaultScreen(dpy);
-    Window root = RootWindow(dpy, screen);
-
-    XRRScreenResources *res = XRRGetScreenResourcesCurrent(dpy, root);
-    if (!res) {
-        return -ENOENT;
-    }
-    
-    double red = get_red(temp) / (double)255;
-    double green = get_green(temp) / (double)255;
-    double blue = get_blue(temp) / (double)255;
-        
-    for (int i = 0; i < res->ncrtc; i++) {
-        const int crtcxid = res->crtcs[i];
-        const int size = XRRGetCrtcGammaSize(dpy, crtcxid);
-        XRRCrtcGamma *crtc_gamma = XRRAllocGamma(size);
-        for (int j = 0; j < size; j++) {
-            const double g = 65535.0 * j / size;
-            crtc_gamma->red[j] = g * red;
-            crtc_gamma->green[j] = g * green;
-            crtc_gamma->blue[j] = g * blue;
+        if (ret != 0) {
+            client_dtor(cl);
+            cl = NULL;
+        } else {
+            cl->current_temp = cl->handler.get(cl);
         }
-        XRRSetCrtcGamma(dpy, crtcxid, crtc_gamma);
-        XFree(crtc_gamma);
     }
-    XRRFreeScreenResources(res);
-    return temp;
+    return cl;
 }
 
-static int get_gamma(Display *dpy) {
-    int temp = -1;
-    int screen = DefaultScreen(dpy);
-    Window root = RootWindow(dpy, screen);
-    XRRScreenResources *res = XRRGetScreenResourcesCurrent(dpy, root);
-    if (res->ncrtc > 0) {
-        XRRCrtcGamma *crtc_gamma = XRRGetCrtcGamma(dpy, res->crtcs[0]);
-        const int size = crtc_gamma->size;
-        const int g = (65535.0 * (size - 1) / size) / 255;
-        temp = get_temp(clamp(crtc_gamma->red[size - 1] / g, 255), clamp(crtc_gamma->blue[size - 1] / g, 255));
-        XFree(crtc_gamma);
+static int start_client(gamma_client *cl, int temp, int smooth_step, int smooth_wait, int is_smooth) {
+    cl->target_temp = temp;
+    cl->smooth_step = smooth_step;
+    cl->smooth_wait = smooth_wait;
+    cl->is_smooth = is_smooth;
+    
+    if (cl->fd == -1) {
+        cl->fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+        m_register_fd(cl->fd, true, cl);
     }
-    XRRFreeScreenResources(res);
-    return temp;
+            
+    // start transitioning right now
+    struct itimerspec timerValue = {{0}};
+    timerValue.it_value.tv_nsec = 1;
+    timerfd_settime(cl->fd, 0, &timerValue, NULL);
+    return map_put(clients, cl->display, cl);
 }
 
 #endif

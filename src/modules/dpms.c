@@ -3,7 +3,8 @@
 #include <commons.h>
 #include <polkit.h>
 #include "dpms_plugins/xorg.h"
-#include "dpms_plugins/tty.h"
+#include "dpms_plugins/wl.h"
+#include "dpms_plugins/drm.h"
 
 static int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
@@ -14,7 +15,7 @@ static const sd_bus_vtable vtable[] = {
     SD_BUS_VTABLE_START(0),
     SD_BUS_METHOD("Get", "ss", "i", method_getdpms, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("Set", "ssi", "i", method_setdpms, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_SIGNAL("Changed", "sb", 0),
+    SD_BUS_SIGNAL("Changed", "si", 0),
     SD_BUS_VTABLE_END
 };
 
@@ -49,8 +50,7 @@ static void receive(const msg_t *msg, const void *userdata) {
 }
 
 static void destroy(void) {
-    xorg_close();
-    tty_close();
+    
 }
 
 static int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
@@ -63,14 +63,15 @@ static int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
         return r;
     }
     
-    int dpms_state = 0;
-    if (display && strlen(display)) {
-        dpms_state = xorg_get_dpms_state(display, xauthority);
-    } else {
-        dpms_state = tty_get_dpms_state(); 
+    int dpms_state = xorg_get_dpms_state(display, xauthority);
+    if (dpms_state == WRONG_PLUGIN) {
+        dpms_state = wl_get_dpms_state(display);
+        if (dpms_state == WRONG_PLUGIN) {
+            dpms_state = drm_get_dpms_state(display);
+        }
     }
     if (dpms_state < 0) {
-        sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Failed to set dpms.");
+        sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Failed to get dpms.");
         return dpms_state;
     }
     
@@ -97,13 +98,12 @@ static int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
         return -EINVAL;
     }
     
-    int err = 0;
-    if (display && strlen(display)) {
-        /* Xorg */
-        err = xorg_set_dpms_state(display, xauthority, level);
-    } else {
-        /* tty */
-        err = tty_set_dpms_state(level);
+    int err = xorg_set_dpms_state(display, xauthority, level);
+    if (err == WRONG_PLUGIN) {
+        err = wl_set_dpms_state(display, level);
+        if (err == WRONG_PLUGIN) {
+            err = drm_set_dpms_state(display, level);
+        }
     }
     if (err) {
         sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Failed to set dpms level.");
@@ -111,7 +111,7 @@ static int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
     }
     
     m_log("New dpms state: %d.\n", level);
-    sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "sb", display, level > 0);
+    sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "si", display, level);
     return sd_bus_reply_method_return(m, "i", level);
 }
 
