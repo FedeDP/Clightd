@@ -9,6 +9,7 @@
 #### wl
 - [x] Add support for wayland (dpms-client-protocol)
 - [ ] test
+- [ ] Fix wl_display_dispatch blocking
 - [ ] memleaks
 
 #### drm 
@@ -22,7 +23,8 @@
 #### wl
 - [x] Add gamma support on wayland (wlr-gamma-control-unstable-v1)
 - [ ] Test
-- [ ] memleaks
+- [ ] Fix wl_display_dispatch blocking
+- [x] memleaks
 
 #### drm
 - [x] Add gamma support on tty through libdrm (??)

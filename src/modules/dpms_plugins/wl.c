@@ -136,9 +136,15 @@ static void wl_deinit(void) {
     wl_list_for_each_safe(output, tmp_output, &outputs, link) {
         destroy_node(output);
     }
-    wl_registry_destroy(dpms_registry);
-    org_kde_kwin_dpms_manager_destroy(dpms_control_manager);
-    wl_display_disconnect(dpy);
+    if (dpms_registry) {
+        wl_registry_destroy(dpms_registry);
+    }
+    if (dpms_control_manager) {
+        org_kde_kwin_dpms_manager_destroy(dpms_control_manager);
+    }
+    if (dpy) {
+        wl_display_disconnect(dpy);
+    }
 }
 
 static void destroy_node(struct output *output) {
@@ -171,7 +177,7 @@ int wl_set_dpms_state(const char *display, const char *env, int level) {
         }
         
         while (wl_display_dispatch(dpy) != -1) {
-            // This space is intentionnally left blank
+
         }
         wl_deinit();
     }

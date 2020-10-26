@@ -205,8 +205,8 @@ err:
 
 static int wl_dtor(gamma_client *cl) {
     wlr_gamma_priv *priv = (wlr_gamma_priv *)cl->handler.priv;
-    struct output *output;
-    wl_list_for_each(output, &priv->outputs, link) {
+    struct output *output, *tmp_output;
+    wl_list_for_each_safe(output, tmp_output, &priv->outputs, link) {
         wl_list_remove(&output->link);
         destroy_output(output);
     }
@@ -227,8 +227,9 @@ static int wl_set_gamma(gamma_client *cl, const int temp) {
     }
 
     while (wl_display_dispatch(priv->dpy) != -1) {
-        // This space is intentionnally left blank
+        
     }
+    
     return 0;
 }
 
