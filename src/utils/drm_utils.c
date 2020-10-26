@@ -1,3 +1,5 @@
+#if defined GAMMA_PRESENT || defined DPMS_PRESENT
+
 #include "drm_utils.h"
 #include "commons.h"
 
@@ -12,3 +14,5 @@ int drm_open_card(const char *card_num) {
     }
     return fd;
 }
+
+#endif
