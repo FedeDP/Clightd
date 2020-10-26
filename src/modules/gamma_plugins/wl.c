@@ -94,7 +94,7 @@ static void destroy_output(struct output *output) {
     size_t table_size = output->ramp_size * 3 * sizeof(uint16_t);
     munmap(output->table, table_size);
     close(output->table_fd);
-      // TODO?? output->wl_output
+    wl_output_destroy(output->wl_output);
     zwlr_gamma_control_v1_destroy(output->gamma_control);
     free(output);
 }

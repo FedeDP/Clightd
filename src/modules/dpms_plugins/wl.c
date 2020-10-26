@@ -144,7 +144,7 @@ static void wl_deinit(void) {
 static void destroy_node(struct output *output) {
     wl_list_remove(&output->link);
     org_kde_kwin_dpms_destroy(output->dpms_control);
-    // TODO?? output->wl_output ?
+    wl_output_destroy(output->wl_output);
     free(output);
 }
 
