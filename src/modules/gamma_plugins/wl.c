@@ -92,10 +92,18 @@ static int create_gamma_table(uint32_t ramp_size, uint16_t **table) {
 
 static void destroy_output(struct output *output) {
     size_t table_size = output->ramp_size * 3 * sizeof(uint16_t);
-    munmap(output->table, table_size);
-    close(output->table_fd);
-    wl_output_destroy(output->wl_output);
-    zwlr_gamma_control_v1_destroy(output->gamma_control);
+    if (output->table) {
+        munmap(output->table, table_size);
+    }
+    if (output->table_fd != -1) {
+        close(output->table_fd);
+    }
+    if (output->wl_output) {
+        wl_output_destroy(output->wl_output);
+    }
+    if (output->gamma_control) {
+        zwlr_gamma_control_v1_destroy(output->gamma_control);
+    }
     free(output);
 }
 
@@ -210,9 +218,15 @@ static int wl_dtor(gamma_client *cl) {
         wl_list_remove(&output->link);
         destroy_output(output);
     }
-    wl_registry_destroy(priv->registry);
-    zwlr_gamma_control_manager_v1_destroy(priv->gamma_control_manager);
-    wl_display_disconnect(priv->dpy);
+    if (priv->registry) {
+        wl_registry_destroy(priv->registry);
+    }
+    if (priv->gamma_control_manager) {
+        zwlr_gamma_control_manager_v1_destroy(priv->gamma_control_manager);
+    }
+    if (priv->dpy) {
+        wl_display_disconnect(priv->dpy);
+    }
     return 0;
 }
 

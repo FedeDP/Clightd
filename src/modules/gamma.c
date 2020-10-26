@@ -137,8 +137,8 @@ static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
     if (error) {
         if (error == EINVAL) {
             sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Temperature value should be between 1000 and 10000.");
-        } else if (error == ENXIO) {
-            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Could not open X screen.");
+        } else {
+            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Failed to open display handler plugin.");
         }
         return -error;
     }

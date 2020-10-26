@@ -42,7 +42,7 @@ static const struct org_kde_kwin_dpms_listener dpms_listener = {
 
 static void registry_handle_global(void *data, struct wl_registry *registry,
                                    uint32_t name, const char *interface, uint32_t version) {
-    if (strcmp(interface, org_kde_kwin_dpms_interface.name) == 0) {
+    if (strcmp(interface, wl_output_interface.name) == 0) {
         struct output *output = calloc(1, sizeof(struct output));
         output->wl_output = wl_registry_bind(registry, name, &wl_output_interface, 1);
         wl_list_insert(&outputs, &output->link);
@@ -85,7 +85,7 @@ static int wl_init(const char *display, const char *env) {
     dpms_registry = wl_display_get_registry(dpy);
     wl_registry_add_listener(dpms_registry, &registry_listener, NULL);
     wl_display_roundtrip(dpy);
-    
+
      if (dpms_control_manager == NULL) {
         fprintf(stderr, "compositor doesn't support org_kde_kwin_dpms\n");
         ret = UNSUPPORTED;
@@ -164,7 +164,7 @@ int wl_get_dpms_state(const char *display, const char *env) {
             break;
         }
         wl_deinit();
-    }
+    }    
     return ret;
 }
 

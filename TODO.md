@@ -8,9 +8,9 @@
 
 #### wl
 - [x] Add support for wayland (dpms-client-protocol)
-- [ ] test
+- [x] test -> Get working, Set freeze (see below)
 - [ ] Fix wl_display_dispatch blocking
-- [ ] memleaks
+- [x] memleaks
 
 #### drm 
 - [x] Switch to drm for dpms on tty
@@ -24,6 +24,7 @@
 - [x] Add gamma support on wayland (wlr-gamma-control-unstable-v1)
 - [ ] Test
 - [ ] Fix wl_display_dispatch blocking
+- [x] fiX "compositor doesn't support wlr-gamma-control-unstable-v1" freeze
 - [x] memleaks
 
 #### drm
