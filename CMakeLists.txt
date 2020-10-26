@@ -41,7 +41,7 @@ if(ENABLE_GAMMA)
     WAYLAND_ADD_PROTOCOL_CLIENT(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/protocol/wlr-gamma-control-unstable-v1.xml" wlr-gamma-control-unstable-v1)
 endif()
 if(ENABLE_DPMS)
-    WAYLAND_ADD_PROTOCOL_CLIENT(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/protocol/dpms.xml" dpms)
+    WAYLAND_ADD_PROTOCOL_CLIENT(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/protocol/org_kde_kwin_dpms.xml" org_kde_kwin_dpms)
 endif()
 
 add_executable(${PROJECT_NAME} ${SOURCES})
