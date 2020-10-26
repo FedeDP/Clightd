@@ -6,6 +6,8 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 include(GNUInstallDirs)
 find_package(PkgConfig)
+
+# Only needed if building wayland protocols (ie: when ENABLE_GAMMA or ENABLE_DPMS are true)
 find_program(WAYLAND_SCANNER_EXECUTABLE NAMES wayland-scanner)
 
 # wayland_add_protocol_client(outfiles inputfile basename)
@@ -34,8 +36,13 @@ endfunction()
 # Create program target
 file(GLOB_RECURSE SOURCES src/*.c)
 
-WAYLAND_ADD_PROTOCOL_CLIENT(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/protocol/wlr-gamma-control-unstable-v1.xml" wlr-gamma-control-unstable-v1)
-WAYLAND_ADD_PROTOCOL_CLIENT(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/protocol/dpms.xml" dpms)
+# Build wayland protocols if needed
+if(ENABLE_GAMMA)
+    WAYLAND_ADD_PROTOCOL_CLIENT(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/protocol/wlr-gamma-control-unstable-v1.xml" wlr-gamma-control-unstable-v1)
+endif()
+if(ENABLE_DPMS)
+    WAYLAND_ADD_PROTOCOL_CLIENT(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/protocol/dpms.xml" dpms)
+endif()
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 target_include_directories(${PROJECT_NAME} PRIVATE
