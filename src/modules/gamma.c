@@ -106,14 +106,14 @@ static void client_dtor(void *c) {
 
 static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     int temp, error = 0;
-    const char *display = NULL, *xauthority = NULL;
+    const char *display = NULL, *env = NULL;
     const int is_smooth;
     const unsigned int smooth_step, smooth_wait;
     
     ASSERT_AUTH();
     
     /* Read the parameters */
-    int r = sd_bus_message_read(m, "ssi(buu)", &display, &xauthority, &temp, 
+    int r = sd_bus_message_read(m, "ssi(buu)", &display, &env, &temp, 
                                 &is_smooth, &smooth_step, &smooth_wait);
     if (r < 0) {
         m_log("Failed to parse parameters: %s\n", strerror(-r));
@@ -125,7 +125,7 @@ static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
     } else {
         gamma_client *sc = map_get(clients, display);
         if (!sc) {
-            sc = fetch_client(display, xauthority);
+            sc = fetch_client(display, env);
         }
         if (sc) {
             error = start_client(sc, temp, smooth_step, smooth_wait, is_smooth);
@@ -149,10 +149,10 @@ static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
 
 static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     int error = 0, temp = -1;
-    const char *display = NULL, *xauthority = NULL;
+    const char *display = NULL, *env = NULL;
     
     /* Read the parameters */
-    int r = sd_bus_message_read(m, "ss", &display, &xauthority);
+    int r = sd_bus_message_read(m, "ss", &display, &env);
     if (r < 0) {
         m_log("Failed to parse parameters: %s\n", strerror(-r));
         return r;
@@ -162,7 +162,7 @@ static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
     if (cl) {
         temp = cl->current_temp;
     } else {
-        cl = fetch_client(display, xauthority);
+        cl = fetch_client(display, env);
         if (cl) {
             temp = cl->current_temp;
             client_dtor(cl);
@@ -180,14 +180,14 @@ static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
     return sd_bus_reply_method_return(m, "i", temp);
 }
 
-static gamma_client *fetch_client(const char *display, const char *xauth) {
+static gamma_client *fetch_client(const char *display, const char *env) {
     gamma_client *cl = calloc(1, sizeof(gamma_client));
     if (cl) {
         cl->fd = -1;
         cl->display = strdup(display);
-        int ret = xorg_get_handler(cl, xauth);
+        int ret = xorg_get_handler(cl, env);
         if (ret == WRONG_PLUGIN) {
-            ret = wl_get_handler(cl);
+            ret = wl_get_handler(cl, env);
             if (ret == WRONG_PLUGIN) {
                 ret = drm_get_handler(cl);
             }

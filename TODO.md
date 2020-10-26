@@ -1,9 +1,5 @@
 ## 4.3
 
-### Gamma
-- [x] Add a Gamma.Changed signal
-- [x] Allow concurrent changes on different x displays
-
 ### DPMS
 - [x] Add a Dpms.Changed signal
 - [x] Switch to "si" for dpms changed
@@ -13,16 +9,15 @@
 #### wl
 - [x] Add support for wayland (dpms-client-protocol)
 - [ ] test
+- [ ] memleaks
 
 #### drm 
 - [x] Switch to drm for dpms on tty
-- [ ] test
-- [ ] Document that only card number should be passed
-- [ ] Document that on empty string, card0 will be tried
 
 ### Gamma
+- [x] Add a Gamma.Changed signal
+- [x] Allow concurrent changes on different x displays
 - [x] Split gamma api like dpms: for X, wlr and tty. On tty, use libdrm
-- [ ] Document drm param (cardnumber) and default
 
 #### wl
 - [x] Add gamma support on wayland (wlr-gamma-control-unstable-v1)
@@ -31,8 +26,6 @@
 
 #### drm
 - [x] Add gamma support on tty through libdrm (??)
-- [ ] Document that only card number should be passed
-- [ ] Document that on empty string, card0 will be tried
 
 ### Sensor
 
@@ -42,11 +35,13 @@
 #### Yoctolight
 - [x] Fix Yoctolight Sensor
 - [x] Avoid infinite loops in yoctolight sensor
-- [ ] Document new yoctolight sensor
 
 ### Generic
 - [x] Add new deps to pkgbuild and build.yaml
- 
+- [ ] Document drm param (cardnumber) and default for gamma and dpms
+- [ ] Document xauthority naming switch to "env" and its use with XDG_RUNTIME_DIR for wayland for both gamma and dpms
+- [ ] Document new yoctolight sensor
+
 ## 4.X
 - [ ] Keep it up to date with possible ddcutil/libmodule api changes
 

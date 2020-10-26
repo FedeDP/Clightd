@@ -120,6 +120,7 @@ static void registry_handle_global(void *data, struct wl_registry *registry,
             &wl_output_interface, 1);
         wl_list_insert(&priv->outputs, &output->link);
     } else if (strcmp(interface, zwlr_gamma_control_manager_v1_interface.name) == 0) {
+        
         priv->gamma_control_manager = wl_registry_bind(registry, name, &zwlr_gamma_control_manager_v1_interface, 1);
     }
 }
@@ -141,8 +142,11 @@ static void fill_gamma_table(uint16_t *table, uint32_t ramp_size, double gamma) 
     }
 }
 
-int wl_get_handler(gamma_client *cl) {
+int wl_get_handler(gamma_client *cl, const char *env) {
+    /* Required for wl_display_connect */
+    setenv("XDG_RUNTIME_DIR", env, 1);
     struct wl_display *display = wl_display_connect(cl->display);
+    unsetenv("XDG_RUNTIME_DIR");
     if (display == NULL) {
         return WRONG_PLUGIN;
     }
@@ -155,6 +159,7 @@ int wl_get_handler(gamma_client *cl) {
         return -ENOMEM;
     }
     
+    wl_list_init(&priv->outputs);
     priv->registry = wl_display_get_registry(display);
     wl_registry_add_listener(priv->registry, &registry_listener, priv);
     wl_display_roundtrip(display);

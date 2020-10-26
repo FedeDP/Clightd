@@ -20,8 +20,8 @@ static void dpms_control_handle_supported(void *data, struct org_kde_kwin_dpms *
 static void dpms_control_handle_mode(void *data, struct org_kde_kwin_dpms *org_kde_kwin_dpms, uint32_t mode);
 static void dpms_control_handle_done(void *data, struct org_kde_kwin_dpms *org_kde_kwin_dpms);
 
-static int wl_init(const char *display);
-static int wl_deinit(void);
+static int wl_init(const char *display, const char *env);
+static void wl_deinit(void);
 static void destroy_node(struct output *output);
 
 static struct wl_display *dpy;
@@ -71,9 +71,11 @@ static void dpms_control_handle_done(void *data, struct org_kde_kwin_dpms *org_k
     output->done = true;
 }
 
-static int wl_init(const char *display) {
+static int wl_init(const char *display, const char *env) {
     int ret = 0;
+    setenv("XDG_RUNTIME_DIR", env, 1);
     dpy = wl_display_connect(display);
+    unsetenv("XDG_RUNTIME_DIR");
     if (dpy == NULL) {
         ret = WRONG_PLUGIN;
         return ret;
@@ -128,13 +130,12 @@ err:
     return ret;
 }
 
-static int wl_deinit(void) {
+static void wl_deinit(void) {
     struct output *output;
     struct output *tmp_output;
     wl_list_for_each_safe(output, tmp_output, &outputs, link) {
         destroy_node(output);
     }
-    wl_list_remove(&outputs);
     wl_registry_destroy(dpms_registry);
     org_kde_kwin_dpms_manager_destroy(dpms_control_manager);
     wl_display_disconnect(dpy);
@@ -147,8 +148,8 @@ static void destroy_node(struct output *output) {
     free(output);
 }
 
-int wl_get_dpms_state(const char *display) {
-    int ret = wl_init(display);
+int wl_get_dpms_state(const char *display, const char *env) {
+    int ret = wl_init(display, env);
     if (ret == 0) {
         struct output *output;
          wl_list_for_each(output, &outputs, link) {
@@ -161,8 +162,8 @@ int wl_get_dpms_state(const char *display) {
     return ret;
 }
 
-int wl_set_dpms_state(const char *display, int level) {
-    int ret = wl_init(display);
+int wl_set_dpms_state(const char *display, const char *env, int level) {
+    int ret = wl_init(display, env);
      if (ret == 0) {
         struct output *output;
         wl_list_for_each(output, &outputs, link) {

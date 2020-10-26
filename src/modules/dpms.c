@@ -54,18 +54,18 @@ static void destroy(void) {
 }
 
 static int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    const char *display = NULL, *xauthority = NULL;
+    const char *display = NULL, *env = NULL;
     
     /* Read the parameters */
-    int r = sd_bus_message_read(m, "ss", &display, &xauthority);
+    int r = sd_bus_message_read(m, "ss", &display, &env);
     if (r < 0) {
         m_log("Failed to parse parameters: %s\n", strerror(-r));
         return r;
     }
     
-    int dpms_state = xorg_get_dpms_state(display, xauthority);
+    int dpms_state = xorg_get_dpms_state(display, env);
     if (dpms_state == WRONG_PLUGIN) {
-        dpms_state = wl_get_dpms_state(display);
+        dpms_state = wl_get_dpms_state(display, env);
         if (dpms_state == WRONG_PLUGIN) {
             dpms_state = drm_get_dpms_state(display);
         }
@@ -80,13 +80,13 @@ static int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
 }
 
 static int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    const char *display = NULL, *xauthority = NULL;
+    const char *display = NULL, *env = NULL;
     int level;
     
    ASSERT_AUTH();
     
     /* Read the parameters */
-    int r = sd_bus_message_read(m, "ssi", &display, &xauthority, &level);
+    int r = sd_bus_message_read(m, "ssi", &display, &env, &level);
     if (r < 0) {
         m_log("Failed to parse parameters: %s\n", strerror(-r));
         return r;
@@ -98,9 +98,9 @@ static int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
         return -EINVAL;
     }
     
-    int err = xorg_set_dpms_state(display, xauthority, level);
+    int err = xorg_set_dpms_state(display, env, level);
     if (err == WRONG_PLUGIN) {
-        err = wl_set_dpms_state(display, level);
+        err = wl_set_dpms_state(display, env, level);
         if (err == WRONG_PLUGIN) {
             err = drm_set_dpms_state(display, level);
         }
