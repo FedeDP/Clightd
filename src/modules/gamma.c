@@ -16,14 +16,14 @@ static void client_dtor(void *c);
 static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static gamma_client *fetch_client(const char *display, const char *xauth, int *err);
-static int start_client(gamma_client *sc, int temp, int smooth_step, int smooth_wait, int is_smooth);
+static int start_client(gamma_client *sc, int temp, unsigned int smooth_step, unsigned int smooth_wait);
 
 static map_t *clients;
 static const char object_path[] = "/org/clightd/clightd/Gamma";
 static const char bus_interface[] = "org.clightd.clightd.Gamma";
 static const sd_bus_vtable vtable[] = {
     SD_BUS_VTABLE_START(0),
-    SD_BUS_METHOD("Set", "ssi(buu)", "b", method_setgamma, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("Set", "ssi(uu)", "b", method_setgamma, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("Get", "ss", "i", method_getgamma, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_SIGNAL("Changed", "si", 0),
     SD_BUS_VTABLE_END
@@ -107,14 +107,12 @@ static void client_dtor(void *c) {
 static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     int temp, error = 0;
     const char *display = NULL, *env = NULL;
-    const int is_smooth;
     const unsigned int smooth_step, smooth_wait;
     
     ASSERT_AUTH();
     
     /* Read the parameters */
-    int r = sd_bus_message_read(m, "ssi(buu)", &display, &env, &temp, 
-                                &is_smooth, &smooth_step, &smooth_wait);
+    int r = sd_bus_message_read(m, "ssi(uu)", &display, &env, &temp, &smooth_step, &smooth_wait);
     if (r < 0) {
         m_log("Failed to parse parameters: %s\n", strerror(-r));
         return r;
@@ -128,7 +126,7 @@ static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
             sc = fetch_client(display, env, &error);
         }
         if (sc) {
-            error = start_client(sc, temp, smooth_step, smooth_wait, is_smooth);
+            error = start_client(sc, temp, smooth_step, smooth_wait);
         }
     }
     
@@ -143,7 +141,7 @@ static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
         return -EACCES;
     }
     
-    m_log("Temperature target value set (smooth %d): %d.\n", is_smooth, temp);
+    m_log("Temperature target value set: %d.\n", temp);
     return sd_bus_reply_method_return(m, "b", !error);
 }
 
@@ -204,11 +202,11 @@ static gamma_client *fetch_client(const char *display, const char *env, int *err
     return cl;
 }
 
-static int start_client(gamma_client *cl, int temp, int smooth_step, int smooth_wait, int is_smooth) {
+static int start_client(gamma_client *cl, int temp, unsigned int smooth_step, unsigned int smooth_wait) {
     cl->target_temp = temp;
     cl->smooth_step = smooth_step;
     cl->smooth_wait = smooth_wait;
-    cl->is_smooth = is_smooth;
+    cl->is_smooth = smooth_step && smooth_wait;
     
     if (cl->fd == -1) {
         cl->fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);

@@ -2,6 +2,7 @@
 
 #include "build/org_kde_kwin_dpms-client-protocol.h"
 #include "commons.h"
+#include "wl_utils.h"
 
 struct output {
     struct wl_output *wl_output;
@@ -73,9 +74,7 @@ static void dpms_control_handle_done(void *data, struct org_kde_kwin_dpms *org_k
 
 static int wl_init(const char *display, const char *env) {
     int ret = 0;
-    setenv("XDG_RUNTIME_DIR", env, 1);
-    dpy = wl_display_connect(display);
-    unsetenv("XDG_RUNTIME_DIR");
+    struct wl_display *dpy = fetch_wl_display(display, env);
     if (dpy == NULL) {
         ret = WRONG_PLUGIN;
         return ret;
@@ -142,9 +141,9 @@ static void wl_deinit(void) {
     if (dpms_control_manager) {
         org_kde_kwin_dpms_manager_destroy(dpms_control_manager);
     }
-    if (dpy) {
-        wl_display_disconnect(dpy);
-    }
+    // NOTE: dpy is disconnected on program exit to workaround
+    // gamma protocol limitation that resets gamma as soon as display is disconnected.
+    // See wl_utils.c
 }
 
 static void destroy_node(struct output *output) {

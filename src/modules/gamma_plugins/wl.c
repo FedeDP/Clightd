@@ -1,12 +1,10 @@
 #ifdef GAMMA_PRESENT
 
-#include <wayland-client.h>
 #include <sys/mman.h>
 #include "../build/wlr-gamma-control-unstable-v1-client-protocol.h"
 #include "commons.h"
 #include "utils.h"
-
-#define WLR_TEMP_MAX 10000
+#include "wl_utils.h"
 
 struct output {
     struct wl_output *wl_output;
@@ -137,17 +135,13 @@ static void registry_handle_global_remove(void *data,
     
 }
 
-int wl_get_handler(gamma_client *cl, const char *env) {
-    int ret = UNSUPPORTED;
-    
-    /* Required for wl_display_connect */
-    setenv("XDG_RUNTIME_DIR", env, 1);
-    struct wl_display *display = wl_display_connect(cl->display);
-    unsetenv("XDG_RUNTIME_DIR");
+int wl_get_handler(gamma_client *cl, const char *env) {    
+    struct wl_display *display = fetch_wl_display(cl->display, env);
     if (display == NULL) {
         return WRONG_PLUGIN;
     }
 
+    int ret = UNSUPPORTED;
     /* init private data */
     cl->handler.priv = calloc(1, sizeof(wlr_gamma_priv));
     wlr_gamma_priv *priv = (wlr_gamma_priv *)cl->handler.priv;
@@ -214,17 +208,12 @@ static int wl_dtor(gamma_client *cl) {
     if (priv->gamma_control_manager) {
         zwlr_gamma_control_manager_v1_destroy(priv->gamma_control_manager);
     }
-    if (priv->dpy) {
-        wl_display_disconnect(priv->dpy);
-    }
+    // NOTE: dpy is disconnected on program exit to workaround
+    // gamma protocol limitation that resets gamma as soon as display is disconnected.
+    // See wl_utils.c
     return 0;
 }
 
-// https://gitlab.com/chinstrap/gammastep/-/blob/master/src/gamma-wl.c
-// https://git.sr.ht/~kennylevinsen/wlsunset/tree/master/main.c
-// https://github.com/swaywm/wlroots/issues/2429
-// https://github.com/swaywm/wlroots/blob/master/types/wlr_gamma_control_v1.c#L24 resetted when output gets destroyed
-// https://gitlab.com/chinstrap/gammastep/-/blob/master/src/redshift.c#L1145
 static int wl_set_gamma(gamma_client *cl, const int temp) {
     wlr_gamma_priv *priv = (wlr_gamma_priv *)cl->handler.priv;
 

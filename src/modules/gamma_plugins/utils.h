@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stdbool.h>
 
 struct _gamma_cl;
 
@@ -13,7 +14,7 @@ typedef struct {
 
 typedef struct _gamma_cl {
     unsigned int target_temp;
-    unsigned int is_smooth;
+    bool is_smooth;
     unsigned int smooth_step;
     unsigned int smooth_wait;
     unsigned int current_temp;
