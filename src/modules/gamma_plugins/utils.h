@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 struct _gamma_cl;
 
 typedef struct {
@@ -21,7 +23,5 @@ typedef struct _gamma_cl {
 } gamma_client;
 
 double clamp(double x, double min, double max);
-unsigned short get_red(int temp);
-unsigned short get_green(int temp);
-unsigned short get_blue(int temp);
 int get_temp(const unsigned short R, const unsigned short B);
+void fill_gamma_table(uint16_t *r, uint16_t *g, uint16_t *b, uint32_t ramp_size, int temp);

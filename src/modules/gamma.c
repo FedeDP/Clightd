@@ -15,7 +15,7 @@
 static void client_dtor(void *c);
 static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
-static gamma_client *fetch_client(const char *display, const char *xauth);
+static gamma_client *fetch_client(const char *display, const char *xauth, int *err);
 static int start_client(gamma_client *sc, int temp, int smooth_step, int smooth_wait, int is_smooth);
 
 static map_t *clients;
@@ -125,22 +125,22 @@ static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
     } else {
         gamma_client *sc = map_get(clients, display);
         if (!sc) {
-            sc = fetch_client(display, env);
+            sc = fetch_client(display, env, &error);
         }
         if (sc) {
             error = start_client(sc, temp, smooth_step, smooth_wait, is_smooth);
-        } else {
-            error = -EACCES;
         }
     }
     
     if (error) {
         if (error == EINVAL) {
             sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Temperature value should be between 1000 and 10000.");
+        } else if (error == COMPOSITOR_NO_PROTOCOL) {
+            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Compositor does not support wayland protocol.");
         } else {
             sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Failed to open display handler plugin.");
         }
-        return -error;
+        return -EACCES;
     }
     
     m_log("Temperature target value set (smooth %d): %d.\n", is_smooth, temp);
@@ -162,37 +162,39 @@ static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
     if (cl) {
         temp = cl->current_temp;
     } else {
-        cl = fetch_client(display, env);
+        cl = fetch_client(display, env, &error);
         if (cl) {
             temp = cl->current_temp;
             client_dtor(cl);
-        } else {
-            error = -EACCES;
         }
     }
     
     if (error || temp == -1) {
-        sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Failed to get screen temperature.");
-        return -error;
+        if (error == COMPOSITOR_NO_PROTOCOL) {
+            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Compositor does not support wayland protocol.");
+        } else {
+            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Failed to get screen temperature.");
+        }
+        return -EACCES;
     }
     
     m_log("Current gamma value: %d.\n", temp);
     return sd_bus_reply_method_return(m, "i", temp);
 }
 
-static gamma_client *fetch_client(const char *display, const char *env) {
+static gamma_client *fetch_client(const char *display, const char *env, int *err) {
     gamma_client *cl = calloc(1, sizeof(gamma_client));
     if (cl) {
         cl->fd = -1;
         cl->display = strdup(display);
-        int ret = xorg_get_handler(cl, env);
-        if (ret == WRONG_PLUGIN) {
-            ret = wl_get_handler(cl, env);
-            if (ret == WRONG_PLUGIN) {
-                ret = drm_get_handler(cl);
+        *err = xorg_get_handler(cl, env);
+        if (*err == WRONG_PLUGIN) {
+            *err = wl_get_handler(cl, env);
+            if (*err == WRONG_PLUGIN) {
+                *err = drm_get_handler(cl);
             }
         }
-        if (ret != 0) {
+        if (*err != 0) {
             client_dtor(cl);
             cl = NULL;
         } else {

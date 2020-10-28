@@ -88,7 +88,7 @@ static int wl_init(const char *display, const char *env) {
 
      if (dpms_control_manager == NULL) {
         fprintf(stderr, "compositor doesn't support org_kde_kwin_dpms\n");
-        ret = UNSUPPORTED;
+        ret = COMPOSITOR_NO_PROTOCOL;
         goto err;
     }
 
@@ -164,7 +164,7 @@ int wl_get_dpms_state(const char *display, const char *env) {
             break;
         }
         wl_deinit();
-    }    
+    }
     return ret;
 }
 
@@ -175,10 +175,7 @@ int wl_set_dpms_state(const char *display, const char *env, int level) {
         wl_list_for_each(output, &outputs, link) {
             org_kde_kwin_dpms_set(output->dpms_control, level);
         }
-        
-        while (wl_display_dispatch(dpy) != -1) {
-
-        }
+        wl_display_roundtrip(dpy);
         wl_deinit();
     }
     return ret;

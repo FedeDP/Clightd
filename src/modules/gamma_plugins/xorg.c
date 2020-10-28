@@ -49,21 +49,12 @@ static int xorg_dtor(gamma_client *cl) {
 
 static int xorg_set_gamma(gamma_client *cl, const int temp) {
     xorg_gamma_priv *priv = (xorg_gamma_priv *)cl->handler.priv;
-        
-    double red = get_red(temp) / (double)255;
-    double green = get_green(temp) / (double)255;
-    double blue = get_blue(temp) / (double)255;
             
     for (int i = 0; i < priv->res->ncrtc; i++) {
         const int crtcxid = priv->res->crtcs[i];
         const int size = XRRGetCrtcGammaSize(priv->dpy, crtcxid);
         XRRCrtcGamma *crtc_gamma = XRRAllocGamma(size);
-        for (int j = 0; j < size; j++) {
-            const double g = 65535.0 * j / size;
-            crtc_gamma->red[j] = g * red;
-            crtc_gamma->green[j] = g * green;
-            crtc_gamma->blue[j] = g * blue;
-        }
+        fill_gamma_table(crtc_gamma->red, crtc_gamma->green, crtc_gamma->blue, size, temp);
         XRRSetCrtcGamma(priv->dpy, crtcxid, crtc_gamma);
         XFree(crtc_gamma);
     }

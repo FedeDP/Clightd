@@ -1,4 +1,9 @@
 #include <math.h>
+#include "utils.h"
+
+static unsigned short get_red(int temp);
+static unsigned short get_green(int temp);
+static unsigned short get_blue(int temp);
 
 double clamp(double x, double min, double max) {
     if (x < min) {
@@ -10,7 +15,7 @@ double clamp(double x, double min, double max) {
     return x;
 }
 
-unsigned short get_red(int temp) {
+static unsigned short get_red(int temp) {
     if (temp <= 6500) {
         return 255;
     }
@@ -22,7 +27,7 @@ unsigned short get_red(int temp) {
     return clamp(a + b * new_temp + c * log(new_temp), 0, 255);
 }
 
-unsigned short get_green(int temp) {
+static unsigned short get_green(int temp) {
     double a, b, c;
     double new_temp;
     if (temp <= 6500) {
@@ -39,7 +44,7 @@ unsigned short get_green(int temp) {
     return clamp(a + b * new_temp + c * log(new_temp), 0, 255);
 }
 
-unsigned short get_blue(int temp) {
+static unsigned short get_blue(int temp) {
     if (temp <= 1900) {
         return 0;
     }
@@ -91,4 +96,17 @@ int get_temp(const unsigned short R, const unsigned short B) {
     }
     
     return temperature;
+}
+
+void fill_gamma_table(uint16_t *r, uint16_t *g, uint16_t *b, uint32_t ramp_size, int temp) {
+    const double red = get_red(temp) / (double)UINT8_MAX;
+    const double green = get_green(temp) / (double)UINT8_MAX;
+    const double blue = get_blue(temp) / (double)UINT8_MAX;
+    
+    for (uint32_t i = 0; i < ramp_size; ++i) {
+        const double val = UINT16_MAX * i / ramp_size;
+        r[i] = val * red;
+        g[i] = val * green;
+        b[i] = val * blue;
+    }
 }

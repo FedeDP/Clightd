@@ -65,33 +65,23 @@ static int drm_set_gamma(gamma_client *cl, const int temp) {
         ret = -errno;
         goto end;
     }
-        
-    const double red = get_red(temp) / (double)255;
-    const double green = get_green(temp) / (double)255;
-    const double blue = get_blue(temp) / (double)255;
     
     for (int i = 0; i < priv->res->count_crtcs && !ret; i++) {
         int id = priv->res->crtcs[i];
         drmModeCrtc *crtc_info = drmModeGetCrtc(priv->fd, id);
         int ramp_size = crtc_info->gamma_size;
-
-        uint16_t *r_gamma = calloc(ramp_size, sizeof(uint16_t));
-        uint16_t *g_gamma = calloc(ramp_size, sizeof(uint16_t));
-        uint16_t *b_gamma = calloc(ramp_size, sizeof(uint16_t));
-        for (int j = 0; j < ramp_size; j++) {
-            const double g = 65535.0 * j / ramp_size;
-            r_gamma[j] = g * red;
-            g_gamma[j] = g * green;
-            b_gamma[j] = g * blue;
-        }
-        int r = drmModeCrtcSetGamma(priv->fd, id, ramp_size, r_gamma, g_gamma, b_gamma);
-        if (r) {
+        uint16_t *r = calloc(ramp_size, sizeof(uint16_t));
+        uint16_t *g = calloc(ramp_size, sizeof(uint16_t));
+        uint16_t *b = calloc(ramp_size, sizeof(uint16_t));
+        fill_gamma_table(r, g, b, ramp_size, temp);
+        ret = drmModeCrtcSetGamma(priv->fd, id, ramp_size, r, g, b);
+        if (ret) {
             ret = -errno;
             perror("drmModeCrtcSetGamma");
         }
-        free(r_gamma);
-        free(g_gamma);
-        free(b_gamma);
+        free(r);
+        free(g);
+        free(b);
         drmModeFreeCrtc(crtc_info);
     }
 

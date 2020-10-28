@@ -14,7 +14,7 @@ static const char bus_interface[] = "org.clightd.clightd.Dpms";
 static const sd_bus_vtable vtable[] = {
     SD_BUS_VTABLE_START(0),
     SD_BUS_METHOD("Get", "ss", "i", method_getdpms, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("Set", "ssi", "i", method_setdpms, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("Set", "ssi", "b", method_setdpms, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_SIGNAL("Changed", "si", 0),
     SD_BUS_VTABLE_END
 };
@@ -71,8 +71,12 @@ static int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
         }
     }
     if (dpms_state < 0) {
-        sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Failed to get dpms.");
-        return dpms_state;
+        if (dpms_state == COMPOSITOR_NO_PROTOCOL) {
+            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Compositor does not support wayland protocol.");
+        } else {
+            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Failed to get dpms level.");
+        }
+        return -EACCES;
     }
     
     m_log("Current dpms state: %d.\n", dpms_state);
@@ -106,13 +110,17 @@ static int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
         }
     }
     if (err) {
-        sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Failed to set dpms level.");
-        return err;
+        if (err == COMPOSITOR_NO_PROTOCOL) {
+            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Compositor does not support wayland protocol.");
+        } else {
+            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Failed to set dpms level.");
+        }
+        return -EACCES;
     }
     
     m_log("New dpms state: %d.\n", level);
     sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "si", display, level);
-    return sd_bus_reply_method_return(m, "i", level);
+    return sd_bus_reply_method_return(m, "b", true);
 }
 
 #endif

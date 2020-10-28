@@ -20,8 +20,9 @@
 #define _dtor_     __attribute__((destructor (101)))  // Used for libusb dtor
 
 /* Used by dpms and gamma */
-#define UNSUPPORTED    -1 
-#define WRONG_PLUGIN   -2
+#define UNSUPPORTED             -1 
+#define WRONG_PLUGIN            -2
+#define COMPOSITOR_NO_PROTOCOL  -3
 
 extern sd_bus *bus;
 extern struct udev *udev;

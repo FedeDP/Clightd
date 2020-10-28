@@ -5,11 +5,10 @@
 - [x] Switch to "si" for dpms changed
 - [x] Update clight with new interface (to be committed when on master)
 - [x] Same as Xorg: try Xorg, wlr and finally drm
+- [x] Return "b" in Set method, like gamma and backlight Set
 
 #### wl
 - [x] Add support for wayland (dpms-client-protocol)
-- [x] test -> Get working, Set freeze (see below)
-- [ ] Fix wl_display_dispatch blocking
 - [x] memleaks
 
 #### drm 
@@ -22,8 +21,7 @@
 
 #### wl
 - [x] Add gamma support on wayland (wlr-gamma-control-unstable-v1)
-- [ ] Test
-- [ ] Fix wl_display_dispatch blocking
+- [ ] Fix: wl_display_disconnect() resets state (add a wl_utils::fetch_display() that internally keeps a map of opened displays and disconnects with map dtor at end of program?)
 - [x] fiX "compositor doesn't support wlr-gamma-control-unstable-v1" freeze
 - [x] memleaks
 
@@ -43,7 +41,13 @@
 - [x] Add new deps to pkgbuild and build.yaml
 - [ ] Document drm param (cardnumber) and default for gamma and dpms
 - [ ] Document xauthority naming switch to "env" and its use with XDG_RUNTIME_DIR for wayland for both gamma and dpms
-- [ ] Document new yoctolight sensor
+- [x] Document new yoctolight sensor
+- [ ] Update API docs (DPMS breaks API)
+- [ ] Add Gamma/Xorg, Gamma/Wl, Gamma/Drm, same for DPMS, object paths to force a certain backend
+- [ ] Check how to port SCREEN on wl and tty too?
+- [ ] Drop is_smooth param from both gamma and backlight?
+- [ ] Bump Clightd to 5.0
+- [ ] Add new deps to wiki (libwayland-dev on ubuntu, wayland on arch and wayland-devel on fedora)
 
 ## 4.X
 - [ ] Keep it up to date with possible ddcutil/libmodule api changes

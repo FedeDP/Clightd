@@ -38,7 +38,6 @@ static void registry_handle_global(void *data, struct wl_registry *registry,
                                    uint32_t name, const char *interface, uint32_t version);
 static void registry_handle_global_remove(void *data,
                                           struct wl_registry *registry, uint32_t name);
-static void fill_gamma_table(uint16_t *table, uint32_t ramp_size, double gamma);
 
 static const struct zwlr_gamma_control_v1_listener gamma_control_listener = {
     .gamma_size = gamma_control_handle_gamma_size,
@@ -138,19 +137,9 @@ static void registry_handle_global_remove(void *data,
     
 }
 
-static void fill_gamma_table(uint16_t *table, uint32_t ramp_size, double gamma) {
-    uint16_t *r = table;
-    uint16_t *g = table + ramp_size;
-    uint16_t *b = table + 2 * ramp_size;
-    for (uint32_t i = 0; i < ramp_size; ++i) {
-        double val = (double)i / (ramp_size - 1);
-        val = pow(val, 1.0 / gamma);
-        val = clamp(val, 0.0, 1.0);
-        r[i] = g[i] = b[i] = (uint16_t)(UINT16_MAX * val);
-    }
-}
-
 int wl_get_handler(gamma_client *cl, const char *env) {
+    int ret = UNSUPPORTED;
+    
     /* Required for wl_display_connect */
     setenv("XDG_RUNTIME_DIR", env, 1);
     struct wl_display *display = wl_display_connect(cl->display);
@@ -174,6 +163,7 @@ int wl_get_handler(gamma_client *cl, const char *env) {
 
     if (priv->gamma_control_manager == NULL) {
         fprintf(stderr, "compositor doesn't support wlr-gamma-control-unstable-v1\n");
+        ret = COMPOSITOR_NO_PROTOCOL;
         goto err;
     }
 
@@ -208,7 +198,7 @@ int wl_get_handler(gamma_client *cl, const char *env) {
 
 err:
     wl_dtor(cl);
-    return UNSUPPORTED;
+    return ret;
 }
 
 static int wl_dtor(gamma_client *cl) {
@@ -230,20 +220,24 @@ static int wl_dtor(gamma_client *cl) {
     return 0;
 }
 
+// https://gitlab.com/chinstrap/gammastep/-/blob/master/src/gamma-wl.c
+// https://git.sr.ht/~kennylevinsen/wlsunset/tree/master/main.c
+// https://github.com/swaywm/wlroots/issues/2429
+// https://github.com/swaywm/wlroots/blob/master/types/wlr_gamma_control_v1.c#L24 resetted when output gets destroyed
+// https://gitlab.com/chinstrap/gammastep/-/blob/master/src/redshift.c#L1145
 static int wl_set_gamma(gamma_client *cl, const int temp) {
     wlr_gamma_priv *priv = (wlr_gamma_priv *)cl->handler.priv;
 
     struct output *output;
     wl_list_for_each(output, &priv->outputs, link) {
-        fill_gamma_table(output->table, output->ramp_size, (double)temp / WLR_TEMP_MAX);
+        uint16_t *r = output->table;
+        uint16_t *g = output->table + output->ramp_size;
+        uint16_t *b = output->table + 2 * output->ramp_size;
+        fill_gamma_table(r, g, b, output->ramp_size, temp);
         zwlr_gamma_control_v1_set_gamma(output->gamma_control,
             output->table_fd);
     }
-
-    while (wl_display_dispatch(priv->dpy) != -1) {
-        
-    }
-    
+    wl_display_roundtrip(priv->dpy);
     return 0;
 }
 
