@@ -1,9 +1,6 @@
-#ifdef GAMMA_PRESENT
-
 #include <sys/mman.h>
 #include "../build/wlr-gamma-control-unstable-v1-client-protocol.h"
-#include "commons.h"
-#include "utils.h"
+#include "gamma.h"
 #include "wl_utils.h"
 
 struct output {
@@ -24,6 +21,7 @@ typedef struct {
 
 static int wl_set_gamma(gamma_client *cl, const int temp);
 static int wl_get_gamma(gamma_client *cl);
+static void wl_validate(gamma_client *cl);
 static int wl_dtor(gamma_client *cl);
 static int create_anonymous_file(off_t size);
 static int create_gamma_table(uint32_t ramp_size, uint16_t **table);
@@ -47,9 +45,10 @@ static const struct wl_registry_listener registry_listener = {
     .global_remove = registry_handle_global_remove,
 };
 
+GAMMA("Wl");
+
 static int create_anonymous_file(off_t size) {
-    char template[] = "/tmp/clightd-gamma-wlr-XXXXXX";
-    int fd = mkstemp(template);
+    int fd = memfd_create("clightd-gamma-wlr", 0);
     if (fd < 0) {
         return -1;
     }
@@ -63,8 +62,6 @@ static int create_anonymous_file(off_t size) {
         close(fd);
         return -1;
     }
-
-    unlink(template);
     return fd;
 }
 
@@ -135,8 +132,8 @@ static void registry_handle_global_remove(void *data,
     
 }
 
-int wl_get_handler(gamma_client *cl, const char *env) {    
-    struct wl_display *display = fetch_wl_display(cl->display, env);
+static int get_handler(gamma_client *cl) {
+    struct wl_display *display = fetch_wl_display(cl->display, cl->env);
     if (display == NULL) {
         return WRONG_PLUGIN;
     }
@@ -187,6 +184,7 @@ int wl_get_handler(gamma_client *cl, const char *env) {
     cl->handler.set = wl_set_gamma;
     cl->handler.get = wl_get_gamma;
     cl->handler.dtor = wl_dtor;
+    cl->handler.validate = wl_validate;
     
     return 0;
 
@@ -226,7 +224,7 @@ static int wl_set_gamma(gamma_client *cl, const int temp) {
         zwlr_gamma_control_v1_set_gamma(output->gamma_control,
             output->table_fd);
     }
-    wl_display_roundtrip(priv->dpy);
+    wl_display_flush(priv->dpy);
     return 0;
 }
 
@@ -235,4 +233,10 @@ static int wl_get_gamma(gamma_client *cl) {
     return -1;
 }
 
-#endif
+// FIXME: smooth tranisitions do not work on wayland (at least on sway)
+static void wl_validate(gamma_client *cl) {
+    if (cl->is_smooth) {
+        fprintf(stderr, "Smooth transitions are not supported on wayland.\n");
+        cl->is_smooth = false;
+    }
+}

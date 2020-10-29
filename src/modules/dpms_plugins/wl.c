@@ -1,8 +1,6 @@
-#ifdef DPMS_PRESENT
-
 #include "build/org_kde_kwin_dpms-client-protocol.h"
-#include "commons.h"
 #include "wl_utils.h"
+#include "dpms.h"
 
 struct output {
     struct wl_output *wl_output;
@@ -40,6 +38,8 @@ static const struct org_kde_kwin_dpms_listener dpms_listener = {
     .mode = dpms_control_handle_mode,
     .done = dpms_control_handle_done,
 };
+
+DPMS("Wl");
 
 static void registry_handle_global(void *data, struct wl_registry *registry,
                                    uint32_t name, const char *interface, uint32_t version) {
@@ -153,7 +153,7 @@ static void destroy_node(struct output *output) {
     free(output);
 }
 
-int wl_get_dpms_state(const char *display, const char *env) {
+static int get(const char *display, const char *env) {
     int ret = wl_init(display, env);
     if (ret == 0) {
         struct output *output;
@@ -167,7 +167,7 @@ int wl_get_dpms_state(const char *display, const char *env) {
     return ret;
 }
 
-int wl_set_dpms_state(const char *display, const char *env, int level) {
+static int set(const char *display, const char *env, int level) {
     int ret = wl_init(display, env);
      if (ret == 0) {
         struct output *output;
@@ -179,5 +179,3 @@ int wl_set_dpms_state(const char *display, const char *env, int level) {
     }
     return ret;
 }
-
-#endif

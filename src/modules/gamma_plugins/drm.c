@@ -1,7 +1,5 @@
-#ifdef GAMMA_PRESENT
-
 #include <commons.h>
-#include "utils.h"
+#include "gamma.h"
 #include "drm_utils.h"
 
 static int drm_dtor(gamma_client *cl);
@@ -13,7 +11,9 @@ typedef struct {
     drmModeRes *res;
 } drm_gamma_priv;
 
-int drm_get_handler(gamma_client *cl) {
+GAMMA("Drm");
+
+static int get_handler(gamma_client *cl) {
     int ret = WRONG_PLUGIN;
     int fd = drm_open_card(cl->display);
     if (fd < 0) {
@@ -120,5 +120,3 @@ static int drm_get_gamma(gamma_client *cl) {
     drmModeFreeCrtc(crtc_info);
     return temp;
 }
-
-#endif

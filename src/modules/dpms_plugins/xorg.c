@@ -1,8 +1,8 @@
-#ifdef DPMS_PRESENT
-
-#include <commons.h>
 #include <X11/Xlib.h>
 #include <X11/extensions/dpms.h>
+#include "dpms.h"
+
+DPMS("Xorg");
 
 /*
  * info->power_level is one of:
@@ -12,7 +12,7 @@
  * 2     DPMSModeSuspend     Blanked, lower power
  * 3     DPMSModeOff         Shut off, awaiting activity
  */
-int xorg_get_dpms_state(const char *display, const char *xauthority) {
+static int get(const char *display, const char *xauthority) {
     BOOL onoff;
     CARD16 s;
     int ret = WRONG_PLUGIN;
@@ -30,7 +30,7 @@ int xorg_get_dpms_state(const char *display, const char *xauthority) {
     return ret;
 }
 
-int xorg_set_dpms_state(const char *display, const char *xauthority, int dpms_level) {
+static int set(const char *display, const char *xauthority, int dpms_level) {
     int ret = WRONG_PLUGIN;
     
     /* set xauthority cookie */
@@ -53,5 +53,3 @@ int xorg_set_dpms_state(const char *display, const char *xauthority, int dpms_le
     unsetenv("XAUTHORITY");
     return ret;
 }
-
-#endif

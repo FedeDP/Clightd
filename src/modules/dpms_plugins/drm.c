@@ -1,10 +1,10 @@
-#ifdef DPMS_PRESENT
-
-#include "commons.h"
+#include "dpms.h"
 #include "drm_utils.h"
  
 static drmModeConnectorPtr get_active_connector(int fd, int connector_id);
 static drmModePropertyPtr drm_get_prop(int fd, drmModeConnectorPtr connector, const char *name);
+
+DPMS("Drm");
 
 /*
  * state will be one of:
@@ -16,7 +16,7 @@ static drmModePropertyPtr drm_get_prop(int fd, drmModeConnectorPtr connector, co
  * 
  * Clightd returns -1 if dpms is disabled
  */
-int drm_get_dpms_state(const char *card) {
+static int get(const char *card, const char *env) {
     int state = -1;
     drmModeConnectorPtr connector;
     
@@ -48,7 +48,7 @@ int drm_get_dpms_state(const char *card) {
     return state;
 }
 
-int drm_set_dpms_state(const char *card, int level) {
+static int set(const char *card, const char *env, int level) {
     int err = 0;
     drmModeConnectorPtr connector;
     drmModePropertyPtr prop;
@@ -128,5 +128,3 @@ static drmModePropertyPtr drm_get_prop(int fd, drmModeConnectorPtr connector, co
     }
     return NULL;
 }
-
-#endif

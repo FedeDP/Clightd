@@ -1,7 +1,4 @@
-#ifdef GAMMA_PRESENT
-
-#include "xorg.h"
-#include "utils.h"
+#include "gamma.h"
 #include <commons.h>
 #include <X11/extensions/Xrandr.h>
 
@@ -14,9 +11,11 @@ typedef struct {
     XRRScreenResources *res;
 } xorg_gamma_priv;
 
-int xorg_get_handler(gamma_client *cl, const char *xauthority) {
+GAMMA("Xorg");
+
+static int get_handler(gamma_client *cl) {
     int ret = WRONG_PLUGIN;
-    setenv("XAUTHORITY", xauthority, 1);
+    setenv("XAUTHORITY", cl->env, 1);
     Display *dpy = XOpenDisplay(cl->display);
     if (dpy) {
         int screen = DefaultScreen(dpy);
@@ -74,5 +73,3 @@ static int xorg_get_gamma(gamma_client *cl) {
     }
     return temp;
 }
-
-#endif

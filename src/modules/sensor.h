@@ -27,13 +27,13 @@
     X(ALS, 0) \
     X(YOCTOLIGHT, 1) \
     X(CAMERA, 2) \
-    X(CUSTOM, 3) \
-    X(SENSOR_NUM, 4)
+    X(CUSTOM, 3)
 
 enum sensors { 
 #define X(name, val) name = val,
     _SENSORS
 #undef X
+    SENSOR_NUM
 };
 
 typedef struct _sensor {

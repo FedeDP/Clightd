@@ -34,14 +34,18 @@ function(WAYLAND_ADD_PROTOCOL_CLIENT _sources _protocol _basename)
 endfunction()
 
 # Create program target
-file(GLOB_RECURSE SOURCES src/*.c)
+file(GLOB SOURCES src/*.c src/utils/*.c src/modules/*.c src/modules/sensors/*.c)
 
 # Build wayland protocols if needed
 if(ENABLE_GAMMA)
     WAYLAND_ADD_PROTOCOL_CLIENT(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/protocol/wlr-gamma-control-unstable-v1.xml" wlr-gamma-control-unstable-v1)
+    file(GLOB GAMMA_PLUGINS gamma_plugins/*)
+    set(SOURCES ${SOURCES} ${GAMMA_PLUGINS})
 endif()
 if(ENABLE_DPMS)
     WAYLAND_ADD_PROTOCOL_CLIENT(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/protocol/org_kde_kwin_dpms.xml" org_kde_kwin_dpms)
+    file(GLOB DPMS_PLUGINS dpms_plugins/*)
+    set(SOURCES ${SOURCES} ${DPMS_PLUGINS})
 endif()
 
 add_executable(${PROJECT_NAME} ${SOURCES})
