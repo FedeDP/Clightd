@@ -13,24 +13,20 @@ typedef struct {
 
 GAMMA("Drm");
 
-static int get_handler(gamma_client *cl) {
+static int validate(const char *id, const char *env, void **priv_data) {
     int ret = WRONG_PLUGIN;
-    int fd = drm_open_card(cl->display);
+    int fd = drm_open_card(id);
     if (fd < 0) {
         return ret;
     }
     
     drmModeRes *res = drmModeGetResources(fd);
     if (res && res->count_crtcs > 0) {
-        cl->handler.priv = malloc(sizeof(drm_gamma_priv));
-        drm_gamma_priv *priv = (drm_gamma_priv *)cl->handler.priv;
+        *priv_data = malloc(sizeof(drm_gamma_priv));
+        drm_gamma_priv *priv = (drm_gamma_priv *)*priv_data;
         if (priv) {
             priv->fd = fd;
             priv->res = res;
-            
-            cl->handler.dtor = drm_dtor;
-            cl->handler.set = drm_set_gamma;
-            cl->handler.get = drm_get_gamma;
             ret = 0;
         } else {
             ret = -ENOMEM;
@@ -38,7 +34,7 @@ static int get_handler(gamma_client *cl) {
     } else {
         ret = UNSUPPORTED;
     }
-
+    
     if (ret != 0) {
         if (res) {
             drmModeFreeResources(res);
@@ -50,15 +46,9 @@ static int get_handler(gamma_client *cl) {
     return ret;
 }
 
-static int drm_dtor(gamma_client *cl) {
-     drm_gamma_priv *priv = (drm_gamma_priv *)cl->handler.priv;
-     drmModeFreeResources(priv->res);
-     return close(priv->fd);
-}
-
-static int drm_set_gamma(gamma_client *cl, const int temp) {   
-    drm_gamma_priv *priv = (drm_gamma_priv *)cl->handler.priv;
-        
+static int set(void *priv_data, const int temp) {
+    drm_gamma_priv *priv = (drm_gamma_priv *)priv_data;
+    
     int ret = 0;
     if (!drmIsMaster(priv->fd) && drmSetMaster(priv->fd)) {
         perror("SetMaster");
@@ -84,39 +74,45 @@ static int drm_set_gamma(gamma_client *cl, const int temp) {
         free(b);
         drmModeFreeCrtc(crtc_info);
     }
-
+    
     if (drmDropMaster(priv->fd)) {
         perror("DropMaster");
     }
-
-end:
+    
+    end:
     return ret;
 }
 
-static int drm_get_gamma(gamma_client *cl) {
-    drm_gamma_priv *priv = (drm_gamma_priv *)cl->handler.priv;
+static int get(void *priv_data) {
+    drm_gamma_priv *priv = (drm_gamma_priv *)priv_data;
     
     int temp = -1;
     
     int id = priv->res->crtcs[0];
     drmModeCrtc *crtc_info = drmModeGetCrtc(priv->fd, id);
     int ramp_size = crtc_info->gamma_size;
-        
+    
     uint16_t *red = calloc(ramp_size, sizeof(uint16_t));
     uint16_t *green = calloc(ramp_size, sizeof(uint16_t));
     uint16_t *blue = calloc(ramp_size, sizeof(uint16_t));
-        
+    
     int r = drmModeCrtcGetGamma(priv->fd, id, ramp_size, red, green, blue);
     if (r) {
         perror("drmModeCrtcSetGamma");
     } else {
         temp = get_temp(clamp(red[1], 0, 255), clamp(blue[1], 0, 255));
     }
-        
+    
     free(red);
     free(green);
     free(blue);
-        
+    
     drmModeFreeCrtc(crtc_info);
     return temp;
+}
+
+static int dtor(void *priv_data) {
+    drm_gamma_priv *priv = (drm_gamma_priv *)priv_data;
+    drmModeFreeResources(priv->res);
+    return close(priv->fd);
 }

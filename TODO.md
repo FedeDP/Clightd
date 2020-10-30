@@ -48,9 +48,8 @@
 - [ ] Document xauthority naming switch to "env" and its use with XDG_RUNTIME_DIR for wayland for both gamma and dpms
 - [x] Document new yoctolight sensor
 - [ ] Update API docs (API breaks)
-- [ ] Check how to port SCREEN on wl and tty too?
 - [x] Bump Clightd to 5.0
-- [ ] Add new deps to wiki (libwayland-dev on ubuntu, wayland on arch and wayland-devel on fedora)
+- [ ] Add new deps to wiki (libwayland-dev on ubuntu, wayland on arch and wayland-devel on fedora) + libdrm + libjpeg-turbo + libusb
 
 ## 4.X
 - [ ] Keep it up to date with possible ddcutil/libmodule api changes

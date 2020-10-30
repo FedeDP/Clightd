@@ -2,10 +2,6 @@
 #include <commons.h>
 #include <X11/extensions/Xrandr.h>
 
-static int xorg_dtor(gamma_client *cl);
-static int xorg_set_gamma(gamma_client *cl, const int temp);
-static int xorg_get_gamma(gamma_client *cl);
-
 typedef struct {
     Display *dpy;
     XRRScreenResources *res;
@@ -13,23 +9,19 @@ typedef struct {
 
 GAMMA("Xorg");
 
-static int get_handler(gamma_client *cl) {
+static int validate(const char *id, const char *env, void **priv_data) {
     int ret = WRONG_PLUGIN;
-    setenv("XAUTHORITY", cl->env, 1);
-    Display *dpy = XOpenDisplay(cl->display);
+    setenv("XAUTHORITY", env, 1);
+    Display *dpy = XOpenDisplay(id);
     if (dpy) {
         int screen = DefaultScreen(dpy);
         Window root = RootWindow(dpy, screen);
         XRRScreenResources *res = XRRGetScreenResourcesCurrent(dpy, root);
         if (res) {
-            cl->handler.priv = calloc(1, sizeof(xorg_gamma_priv));
-            xorg_gamma_priv *priv = (xorg_gamma_priv *)cl->handler.priv;
+            *priv_data = calloc(1, sizeof(xorg_gamma_priv));
+            xorg_gamma_priv *priv = (xorg_gamma_priv *)*priv_data;
             priv->dpy = dpy;
             priv->res = res;
-    
-            cl->handler.dtor = xorg_dtor;
-            cl->handler.set = xorg_set_gamma;
-            cl->handler.get = xorg_get_gamma;
             ret = 0;
         } else {
             ret = UNSUPPORTED;
@@ -40,15 +32,9 @@ static int get_handler(gamma_client *cl) {
     return ret;
 }
 
-static int xorg_dtor(gamma_client *cl) { 
-    xorg_gamma_priv *priv = (xorg_gamma_priv *)cl->handler.priv;
-    XRRFreeScreenResources(priv->res);
-    return XCloseDisplay(priv->dpy);
-}
-
-static int xorg_set_gamma(gamma_client *cl, const int temp) {
-    xorg_gamma_priv *priv = (xorg_gamma_priv *)cl->handler.priv;
-            
+static int set(void *priv_data, const int temp) {
+    xorg_gamma_priv *priv = (xorg_gamma_priv *)priv_data;
+    
     for (int i = 0; i < priv->res->ncrtc; i++) {
         const int crtcxid = priv->res->crtcs[i];
         const int size = XRRGetCrtcGammaSize(priv->dpy, crtcxid);
@@ -60,9 +46,9 @@ static int xorg_set_gamma(gamma_client *cl, const int temp) {
     return 0;
 }
 
-static int xorg_get_gamma(gamma_client *cl) {
-    xorg_gamma_priv *priv = (xorg_gamma_priv *)cl->handler.priv;
-         
+static int get(void *priv_data) {
+    xorg_gamma_priv *priv = (xorg_gamma_priv *)priv_data;
+    
     int temp = -1;
     if (priv->res && priv->res->ncrtc > 0) {
         XRRCrtcGamma *crtc_gamma = XRRGetCrtcGamma(priv->dpy, priv->res->crtcs[0]);
@@ -72,4 +58,10 @@ static int xorg_get_gamma(gamma_client *cl) {
         XFree(crtc_gamma);
     }
     return temp;
+}
+
+static int dtor(void *priv_data) {
+    xorg_gamma_priv *priv = (xorg_gamma_priv *)priv_data;
+    XRRFreeScreenResources(priv->res);
+    return XCloseDisplay(priv->dpy);
 }

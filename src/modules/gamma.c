@@ -91,7 +91,7 @@ static void receive(const msg_t *msg, const void *userdata) {
         
         sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "si", sc->display, sc->current_temp);
         
-        if (sc->handler.set(sc, sc->current_temp) == 0 && sc->current_temp == sc->target_temp) {
+        if (sc->plugin->set(sc->priv, sc->current_temp) == 0 && sc->current_temp == sc->target_temp) {
             m_log("Reached target temp: %d.\n", sc->target_temp);
             m_deregister_fd(sc->fd); // this will close fd
             map_remove(clients, sc->display); // this will free sc->display (used as key)
@@ -241,10 +241,10 @@ void fill_gamma_table(uint16_t *r, uint16_t *g, uint16_t *b, uint32_t ramp_size,
 static void client_dtor(void *c) {
     gamma_client *cl = (gamma_client *)c;
     
-    if (cl->handler.dtor) {
-        cl->handler.dtor(cl);
+    if (cl->plugin) {
+        cl->plugin->dtor(cl->priv);
     }
-    free(cl->handler.priv);
+    free(cl->priv);
     free(cl->display);
     free(cl->env);
     free(cl);
@@ -340,16 +340,18 @@ static gamma_client *fetch_client(gamma_plugin *plugin, const char *display, con
         if (!plugin) {
             *err = WRONG_PLUGIN;
             for (int i = 0; i < GAMMA_NUM && *err == WRONG_PLUGIN; i++) {
-                *err = plugins[i]->get_handler(cl);
+                plugin = plugins[i];
+                *err = plugin->validate(cl->display, cl->env, &cl->priv);
             }
         } else {
-            *err = plugin->get_handler(cl);
+            *err = plugin->validate(cl->display, cl->env, &cl->priv);
         }
         if (*err != 0) {
             client_dtor(cl);
             cl = NULL;
         } else {
-            cl->current_temp = cl->handler.get(cl);
+            cl->plugin = plugin;
+            cl->current_temp = cl->plugin->get(cl->priv);
         }
     }
     return cl;
@@ -361,8 +363,11 @@ static int start_client(gamma_client *cl, int temp, bool is_smooth, unsigned int
     cl->smooth_step = smooth_step;
     cl->smooth_wait = smooth_wait;
     
-    if (cl->handler.validate) {
-        cl->handler.validate(cl);
+    // NOTE: it seems like on wayland smooth transitions are not working.
+    // Forcefully disable them for now.
+    if (cl->is_smooth && cl->plugin == plugins[WL]) {
+        fprintf(stderr, "Smooth transitions are not supported on wayland.\n");
+        cl->is_smooth = false;
     }
     
     if (cl->fd == -1) {

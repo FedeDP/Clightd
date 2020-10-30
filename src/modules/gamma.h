@@ -16,13 +16,7 @@ enum gamma_plugins {
     GAMMA_NUM
 };
 
-typedef struct {
-    int (*set)(struct _gamma_cl *cl, const int temp);
-    int (*get)(struct _gamma_cl *cl);
-    int (*dtor)(struct _gamma_cl *cl);
-    void (*validate)(struct _gamma_cl *cl); 
-    void *priv;
-} gamma_handler;
+struct _gamma_plugin;
 
 typedef struct _gamma_cl {
     unsigned int target_temp;
@@ -33,19 +27,26 @@ typedef struct _gamma_cl {
     char *display;
     char *env;
     int fd;
-    gamma_handler handler;
+    struct _gamma_plugin *plugin;
+    void *priv;
 } gamma_client;
 
-typedef struct {
+typedef struct _gamma_plugin {
     const char *name;
-    int (*get_handler)(gamma_client *cl);
+    int (*validate)(const char *id, const char *env, void **priv_data);
+    int (*set)(void *priv_data, const int temp);
+    int (*get)(void *priv_data);
+    int (*dtor)(void *priv_data);
     char obj_path[100];
 } gamma_plugin;
 
 #define GAMMA(name) \
-    static int get_handler(gamma_client *cl); \
+    static int validate(const char *id, const char *env, void **priv_data); \
+    static int set(void *priv_data, const int temp); \
+    static int get(void *priv_data); \
+    static int dtor(void *priv_data); \
     static void _ctor_ register_gamma_plugin(void) { \
-        static gamma_plugin self = { name, get_handler }; \
+        static gamma_plugin self = { name, validate, set, get, dtor }; \
         gamma_register_new(&self); \
     }
 

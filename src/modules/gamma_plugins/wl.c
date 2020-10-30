@@ -132,16 +132,16 @@ static void registry_handle_global_remove(void *data,
     
 }
 
-static int get_handler(gamma_client *cl) {
-    struct wl_display *display = fetch_wl_display(cl->display, cl->env);
+static int validate(const char *id, const char *env,  void **priv_data) {
+    struct wl_display *display = fetch_wl_display(id, env);
     if (display == NULL) {
         return WRONG_PLUGIN;
     }
-
+    
     int ret = UNSUPPORTED;
     /* init private data */
-    cl->handler.priv = calloc(1, sizeof(wlr_gamma_priv));
-    wlr_gamma_priv *priv = (wlr_gamma_priv *)cl->handler.priv;
+    *priv_data = calloc(1, sizeof(wlr_gamma_priv));
+    wlr_gamma_priv *priv = (wlr_gamma_priv *)*priv_data;
     if (!priv) {
         wl_display_disconnect(display);
         return -ENOMEM;
@@ -151,20 +151,20 @@ static int get_handler(gamma_client *cl) {
     priv->registry = wl_display_get_registry(display);
     wl_registry_add_listener(priv->registry, &registry_listener, priv);
     wl_display_roundtrip(display);
-
+    
     if (priv->gamma_control_manager == NULL) {
         fprintf(stderr, "compositor doesn't support wlr-gamma-control-unstable-v1\n");
         ret = COMPOSITOR_NO_PROTOCOL;
         goto err;
     }
-
+    
     struct output *output;
     wl_list_for_each(output, &priv->outputs, link) {
         output->gamma_control = zwlr_gamma_control_manager_v1_get_gamma_control(
             priv->gamma_control_manager, output->wl_output);
         if (output->gamma_control) {
             zwlr_gamma_control_v1_add_listener(output->gamma_control,
-                                                &gamma_control_listener, output);
+                                               &gamma_control_listener, output);
         } else {
             fprintf(stderr, "failed to receive gamma control manager\n");
             goto err;
@@ -181,20 +181,36 @@ static int get_handler(gamma_client *cl) {
     }
     
     priv->dpy = display;
-    cl->handler.set = wl_set_gamma;
-    cl->handler.get = wl_get_gamma;
-    cl->handler.dtor = wl_dtor;
-    cl->handler.validate = wl_validate;
-    
     return 0;
-
+    
 err:
-    wl_dtor(cl);
+    dtor(priv);
     return ret;
 }
 
-static int wl_dtor(gamma_client *cl) {
-    wlr_gamma_priv *priv = (wlr_gamma_priv *)cl->handler.priv;
+static int set(void *priv_data, const int temp) {
+    wlr_gamma_priv *priv = (wlr_gamma_priv *)priv_data;
+    
+    struct output *output;
+    wl_list_for_each(output, &priv->outputs, link) {
+        uint16_t *r = output->table;
+        uint16_t *g = output->table + output->ramp_size;
+        uint16_t *b = output->table + 2 * output->ramp_size;
+        fill_gamma_table(r, g, b, output->ramp_size, temp);
+        zwlr_gamma_control_v1_set_gamma(output->gamma_control,
+                                        output->table_fd);
+    }
+    wl_display_flush(priv->dpy);
+    return 0;
+}
+
+static int get(void *priv_data) {
+    // Unsupported ?
+    return -1;
+}
+
+static int dtor(void *priv_data) {
+    wlr_gamma_priv *priv = (wlr_gamma_priv *)priv_data;
     struct output *output, *tmp_output;
     wl_list_for_each_safe(output, tmp_output, &priv->outputs, link) {
         wl_list_remove(&output->link);
@@ -210,33 +226,4 @@ static int wl_dtor(gamma_client *cl) {
     // gamma protocol limitation that resets gamma as soon as display is disconnected.
     // See wl_utils.c
     return 0;
-}
-
-static int wl_set_gamma(gamma_client *cl, const int temp) {
-    wlr_gamma_priv *priv = (wlr_gamma_priv *)cl->handler.priv;
-
-    struct output *output;
-    wl_list_for_each(output, &priv->outputs, link) {
-        uint16_t *r = output->table;
-        uint16_t *g = output->table + output->ramp_size;
-        uint16_t *b = output->table + 2 * output->ramp_size;
-        fill_gamma_table(r, g, b, output->ramp_size, temp);
-        zwlr_gamma_control_v1_set_gamma(output->gamma_control,
-            output->table_fd);
-    }
-    wl_display_flush(priv->dpy);
-    return 0;
-}
-
-static int wl_get_gamma(gamma_client *cl) {
-    // Unsupported ?
-    return -1;
-}
-
-// FIXME: smooth tranisitions do not work on wayland (at least on sway)
-static void wl_validate(gamma_client *cl) {
-    if (cl->is_smooth) {
-        fprintf(stderr, "Smooth transitions are not supported on wayland.\n");
-        cl->is_smooth = false;
-    }
 }
