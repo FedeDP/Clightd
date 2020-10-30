@@ -2,10 +2,6 @@
 #include "gamma.h"
 #include "drm_utils.h"
 
-static int drm_dtor(gamma_client *cl);
-static int drm_set_gamma(gamma_client *cl, const int temp);
-static int drm_get_gamma(gamma_client *cl);
-
 typedef struct {
     int fd;
     drmModeRes *res;
