@@ -7,34 +7,21 @@
 
 #include <commons.h>
 #include <polkit.h>
-#include <X11/extensions/Xrandr.h>
-#include <math.h>
 #include <module/map.h>
+#include <math.h>
+#include "gamma.h"
 
-static void client_dtor(void *c);
-static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
-static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
-static unsigned short clamp(double x, double max);
 static unsigned short get_red(int temp);
 static unsigned short get_green(int temp);
 static unsigned short get_blue(int temp);
-static int get_temp(const unsigned short R, const unsigned short B);
-static int set_gamma(int temp, Display *dpy);
-static int get_gamma(Display *dpy);
+static void client_dtor(void *c);
+static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
+static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
+static gamma_client *fetch_client(gamma_plugin *plugin, const char *display, const char *xauth, int *err);
+static int start_client(gamma_client *sc, int temp, bool is_smooth, unsigned int smooth_step, unsigned int smooth_wait);
 
-typedef struct {
-    unsigned int target_temp;
-    unsigned int is_smooth;
-    unsigned int smooth_step;
-    unsigned int smooth_wait;
-    unsigned int current_temp;
-    Display *dpy;
-    char *xauthority;
-    char *display;
-    int fd;
-} smooth_client;
-
-static map_t *smooth_clients;
+static map_t *clients;
+static gamma_plugin *plugins[GAMMA_NUM];
 static const char object_path[] = "/org/clightd/clightd/Gamma";
 static const char bus_interface[] = "org.clightd.clightd.Gamma";
 static const sd_bus_vtable vtable[] = {
@@ -46,10 +33,6 @@ static const sd_bus_vtable vtable[] = {
 };
 
 MODULE("GAMMA");
-
-static void module_pre_start(void) {
-    
-}
 
 static bool check(void) {
     return true;
@@ -66,10 +49,22 @@ static void init(void) {
                                      bus_interface,
                                      vtable,
                                      NULL);
+    
+     for (int i = 0; i < GAMMA_NUM && !r; i++) {
+        if (plugins[i]) {
+            snprintf(plugins[i]->obj_path, sizeof(plugins[i]->obj_path) - 1, "%s/%s", object_path, plugins[i]->name);
+            r += sd_bus_add_object_vtable(bus,
+                                        NULL,
+                                        plugins[i]->obj_path,
+                                        bus_interface,
+                                        vtable,
+                                        plugins[i]);
+        }
+    }
     if (r < 0) {
         m_log("Failed to issue method call: %s\n", strerror(-r));
     } else {
-        smooth_clients = map_new(true, client_dtor);
+        clients = map_new(false, client_dtor);
     }
 }
 
@@ -78,7 +73,7 @@ static void receive(const msg_t *msg, const void *userdata) {
         uint64_t t;
         // nonblocking mode!
         read(msg->fd_msg->fd, &t, sizeof(uint64_t));
-        smooth_client *sc = (smooth_client *)msg->fd_msg->userptr;
+        gamma_client *sc = (gamma_client *)msg->fd_msg->userptr;
             
         if (sc->is_smooth) {
             if (sc->target_temp < sc->current_temp) {
@@ -94,146 +89,54 @@ static void receive(const msg_t *msg, const void *userdata) {
             sc->current_temp = sc->target_temp;
         }
         
-        sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "si", DisplayString(sc->dpy), sc->current_temp);
+        /* Emit signal on both /Gamma objpath, and /Gamma/$Plugin */
+        sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "si", sc->display, sc->current_temp);
+        sd_bus_emit_signal(bus, sc->plugin->obj_path, bus_interface, "Changed", "si", sc->display, sc->current_temp);
         
-        struct itimerspec timerValue = {{0}};
-        setenv("XAUTHORITY", sc->xauthority, 1);
-        if (set_gamma(sc->current_temp, sc->dpy) == sc->target_temp) {
-            m_deregister_fd(sc->fd); // this will close fd
-            map_remove(smooth_clients, sc->display); // this will free sc->display (used as key)
+        if (sc->plugin->set(sc->priv, sc->current_temp) == 0 && sc->current_temp == sc->target_temp) {
             m_log("Reached target temp: %d.\n", sc->target_temp);
+            m_deregister_fd(sc->fd); // this will close fd
+            map_remove(clients, sc->display); // this will free sc->display (used as key)
         } else {
+            struct itimerspec timerValue = {{0}};
             timerValue.it_value.tv_sec = sc->smooth_wait / 1000; // in ms
             timerValue.it_value.tv_nsec = 1000 * 1000 * (sc->smooth_wait % 1000); // ms
+            timerfd_settime(sc->fd, 0, &timerValue, NULL);
         }
-        unsetenv("XAUTHORITY");
-        timerfd_settime(sc->fd, 0, &timerValue, NULL);
     }
 }
 
 static void destroy(void) {
-    map_free(smooth_clients);
+    map_free(clients);
 }
 
-static void client_dtor(void *c) {
-    smooth_client *sc = (smooth_client *)c;
-    XCloseDisplay(sc->dpy);
-    free(sc->xauthority);
-}
-
-static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    int temp, error = 0;
-    const char *display = NULL, *xauthority = NULL;
-    const int is_smooth;
-    const unsigned int smooth_step, smooth_wait;
+/** Exposed API in gamma.h **/
+void gamma_register_new(gamma_plugin *plugin) {
+    const char *plugins_names[] = {
+    #define X(name, val) #name,
+        _GAMMA_PLUGINS
+    #undef X
+    };
     
-    ASSERT_AUTH();
-    
-    /* Read the parameters */
-    int r = sd_bus_message_read(m, "ssi(buu)", &display, &xauthority, &temp, 
-                                &is_smooth, &smooth_step, &smooth_wait);
-    if (r < 0) {
-        m_log("Failed to parse parameters: %s\n", strerror(-r));
-        return r;
+    int i;
+    for (i = 0; i < GAMMA_NUM; i++) {
+        if (strcasestr(plugins_names[i], plugin->name)) {
+            break;
+        }
     }
-
-    if (temp < 1000 || temp > 10000) {
-        error = EINVAL;
+    
+    if (i < GAMMA_NUM) {
+        plugins[i] = plugin;
+        printf("Registered '%s' gamma plugin.\n", plugin->name);
     } else {
-        Display *dpy = NULL;
-        smooth_client *sc = map_get(smooth_clients, display);
-        if (!sc) {
-            setenv("XAUTHORITY", xauthority, 1);
-            dpy = XOpenDisplay(display);
-            if (dpy == NULL) {
-                m_log("XopenDisplay");
-                error = ENXIO;
-            } else {
-                sc = calloc(1, sizeof(smooth_client));
-                if (!sc) {
-                    error = ENOMEM;
-                } else {
-                    sc->fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
-                    m_register_fd(sc->fd, true, sc);
-                    sc->dpy = dpy;
-                    sc->current_temp = get_gamma(sc->dpy);
-                    sc->xauthority = strdup(xauthority);
-                    sc->display = strdup(display);
-                }
-            }
-            unsetenv("XAUTHORITY");
-        }
-        
-        if (sc) {
-            sc->target_temp = temp;
-            sc->smooth_step = smooth_step;
-            sc->smooth_wait = smooth_wait;
-            sc->is_smooth = is_smooth;
-            
-            // start transitioning right now
-            struct itimerspec timerValue = {{0}};
-            timerValue.it_value.tv_nsec = 1;
-            timerfd_settime(sc->fd, 0, &timerValue, NULL);
-            map_put(smooth_clients, sc->display, sc);
-            m_log("Temperature target value set (smooth %d): %d.\n", is_smooth, temp);
-        }
+        printf("Gamma plugin '%s' not recognized. Not registering.\n", plugin->name);
     }
-    
-    if (error) {
-        if (error == EINVAL) {
-            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Temperature value should be between 1000 and 10000.");
-        } else if (error == ENXIO) {
-            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Could not open X screen.");
-        }
-        return -error;
-    }
-    
-    return sd_bus_reply_method_return(m, "b", !error);
 }
 
-static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    int error = 0, temp;
-    const char *display = NULL, *xauthority = NULL;
-    
-    /* Read the parameters */
-    int r = sd_bus_message_read(m, "ss", &display, &xauthority);
-    if (r < 0) {
-        m_log("Failed to parse parameters: %s\n", strerror(-r));
-        return r;
+double clamp(double x, double min, double max) {
+    if (x < min) {
+        return min;
     }
-    
-    smooth_client *sc = map_get(smooth_clients, display);
-    if (sc) {
-        temp = sc->current_temp;
-    } else {
-         /* set xauthority cookie */
-        setenv("XAUTHORITY", xauthority, 1);
-        Display *dpy = XOpenDisplay(display);
-        if (dpy == NULL) {
-            m_log("XopenDisplay");
-            error = ENXIO;
-        } else {
-            temp = get_gamma(dpy);
-            XCloseDisplay(dpy);
-        }
-        /* Drop xauthority cookie */
-        unsetenv("XAUTHORITY");
-    }
-    
-    if (error) {
-        if (error == ENXIO) {
-            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Could not open X screen.");
-        } else {
-            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Failed to get screen temperature.");
-        }
-        return -error;
-    }
-    
-    m_log("Current gamma value: %d.\n", temp);
-    return sd_bus_reply_method_return(m, "i", temp);
-}
-
-static unsigned short clamp(double x, double max) {
     if (x > max) {
         return max;
     }
@@ -249,7 +152,7 @@ static unsigned short get_red(int temp) {
     const double c = -40.25366309332127;
     const double new_temp = ((double)temp / 100) - 55;
     
-    return clamp(a + b * new_temp + c * log(new_temp), 255);
+    return clamp(a + b * new_temp + c * log(new_temp), 0, 255);
 }
 
 static unsigned short get_green(int temp) {
@@ -266,7 +169,7 @@ static unsigned short get_green(int temp) {
         c = -28.0852963507957;
         new_temp = ((double)temp / 100) - 50;
     }
-    return clamp(a + b * new_temp + c * log(new_temp), 255);
+    return clamp(a + b * new_temp + c * log(new_temp), 0, 255);
 }
 
 static unsigned short get_blue(int temp) {
@@ -280,13 +183,13 @@ static unsigned short get_blue(int temp) {
         const double b = 0.8274096064007395;
         const double c = 115.67994401066147;
         
-        return clamp(a + b * new_temp + c * log(new_temp), 255);
+        return clamp(a + b * new_temp + c * log(new_temp), 0, 255);
     }
     return 255;
 }
 
 /* Thanks to: https://github.com/neilbartlett/color-temperature/blob/master/index.js */
-static int get_temp(const unsigned short R, const unsigned short B) {
+int get_temp(const unsigned short R, const unsigned short B) {
     int temperature;
     int min_temp = B == 255 ? 6500 : 1000; // lower bound
     int max_temp = R == 255 ? 6500 : 10000; // upper bound
@@ -323,50 +226,162 @@ static int get_temp(const unsigned short R, const unsigned short B) {
     return temperature;
 }
 
-static int set_gamma(int temp, Display *dpy) {
-    int screen = DefaultScreen(dpy);
-    Window root = RootWindow(dpy, screen);
-
-    XRRScreenResources *res = XRRGetScreenResourcesCurrent(dpy, root);
-    if (!res) {
-        return -ENOENT;
-    }
+void fill_gamma_table(uint16_t *r, uint16_t *g, uint16_t *b, uint32_t ramp_size, int temp) {
+    const double red = get_red(temp) / (double)UINT8_MAX;
+    const double green = get_green(temp) / (double)UINT8_MAX;
+    const double blue = get_blue(temp) / (double)UINT8_MAX;
     
-    double red = get_red(temp) / (double)255;
-    double green = get_green(temp) / (double)255;
-    double blue = get_blue(temp) / (double)255;
-        
-    for (int i = 0; i < res->ncrtc; i++) {
-        const int crtcxid = res->crtcs[i];
-        const int size = XRRGetCrtcGammaSize(dpy, crtcxid);
-        XRRCrtcGamma *crtc_gamma = XRRAllocGamma(size);
-        for (int j = 0; j < size; j++) {
-            const double g = 65535.0 * j / size;
-            crtc_gamma->red[j] = g * red;
-            crtc_gamma->green[j] = g * green;
-            crtc_gamma->blue[j] = g * blue;
-        }
-        XRRSetCrtcGamma(dpy, crtcxid, crtc_gamma);
-        XFree(crtc_gamma);
+    for (uint32_t i = 0; i < ramp_size; ++i) {
+        const double val = UINT16_MAX * i / ramp_size;
+        r[i] = val * red;
+        g[i] = val * green;
+        b[i] = val * blue;
     }
-    XRRFreeScreenResources(res);
-    return temp;
+}
+/** **/
+
+static void client_dtor(void *c) {
+    gamma_client *cl = (gamma_client *)c;
+    
+    if (cl->plugin) {
+        cl->plugin->dtor(cl->priv);
+    }
+    free(cl->priv);
+    free(cl->display);
+    free(cl->env);
+    free(cl);
 }
 
-static int get_gamma(Display *dpy) {
-    int temp = -1;
-    int screen = DefaultScreen(dpy);
-    Window root = RootWindow(dpy, screen);
-    XRRScreenResources *res = XRRGetScreenResourcesCurrent(dpy, root);
-    if (res->ncrtc > 0) {
-        XRRCrtcGamma *crtc_gamma = XRRGetCrtcGamma(dpy, res->crtcs[0]);
-        const int size = crtc_gamma->size;
-        const int g = (65535.0 * (size - 1) / size) / 255;
-        temp = get_temp(clamp(crtc_gamma->red[size - 1] / g, 255), clamp(crtc_gamma->blue[size - 1] / g, 255));
-        XFree(crtc_gamma);
+static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+    int temp, error = 0;
+    const char *display = NULL, *env = NULL;
+    const int is_smooth;
+    const unsigned int smooth_step, smooth_wait;
+    
+    ASSERT_AUTH();
+    
+    /* Read the parameters */
+    int r = sd_bus_message_read(m, "ssi(buu)", &display, &env, &temp, &is_smooth, &smooth_step, &smooth_wait);
+    if (r < 0) {
+        m_log("Failed to parse parameters: %s\n", strerror(-r));
+        return r;
     }
-    XRRFreeScreenResources(res);
-    return temp;
+
+    if (temp < 1000 || temp > 10000) {
+        error = EINVAL;
+    } else {
+        gamma_client *sc = map_get(clients, display);
+        if (!sc) {
+            sc = fetch_client(userdata, display, env, &error);
+        }
+        if (sc) {
+            error = start_client(sc, temp, is_smooth, smooth_step, smooth_wait);
+        }
+    }
+    
+    if (error) {
+        if (error == EINVAL) {
+            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Temperature value should be between 1000 and 10000.");
+        } else if (error == COMPOSITOR_NO_PROTOCOL) {
+            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Compositor does not support wayland protocol.");
+        } else if (error == WRONG_PLUGIN) {
+            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "No plugin available for your configuration.");
+        } else {
+            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Failed to open display handler plugin.");
+        }
+        return -EACCES;
+    }
+    
+    m_log("Temperature target value set: %d.\n", temp);
+    return sd_bus_reply_method_return(m, "b", !error);
+}
+
+static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+    int error = 0, temp = -1;
+    const char *display = NULL, *env = NULL;
+    
+    /* Read the parameters */
+    int r = sd_bus_message_read(m, "ss", &display, &env);
+    if (r < 0) {
+        m_log("Failed to parse parameters: %s\n", strerror(-r));
+        return r;
+    }
+    
+    gamma_client *cl = map_get(clients, display);
+    if (cl) {
+        temp = cl->current_temp;
+    } else {
+        cl = fetch_client(userdata, display, env, &error);
+        if (cl) {
+            temp = cl->current_temp;
+            client_dtor(cl);
+        }
+    }
+    
+    if (error || temp == -1) {
+        if (error == COMPOSITOR_NO_PROTOCOL) {
+            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Compositor does not support wayland protocol.");
+        } else if (error == WRONG_PLUGIN) {
+            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "No plugin available for your configuration.");
+        } else {
+            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Failed to get screen temperature.");
+        }
+        return -EACCES;
+    }
+    
+    m_log("Current gamma value: %d.\n", temp);
+    return sd_bus_reply_method_return(m, "i", temp);
+}
+
+static gamma_client *fetch_client(gamma_plugin *plugin, const char *display, const char *env, int *err) {
+    gamma_client *cl = calloc(1, sizeof(gamma_client));
+    if (cl) {
+        cl->fd = -1;
+        cl->display = strdup(display);
+        cl->env = strdup(env);
+        if (!plugin) {
+            *err = WRONG_PLUGIN;
+            for (int i = 0; i < GAMMA_NUM && *err == WRONG_PLUGIN; i++) {
+                plugin = plugins[i];
+                *err = plugin->validate(cl->display, cl->env, &cl->priv);
+            }
+        } else {
+            *err = plugin->validate(cl->display, cl->env, &cl->priv);
+        }
+        if (*err != 0) {
+            client_dtor(cl);
+            cl = NULL;
+        } else {
+            cl->plugin = plugin;
+            cl->current_temp = cl->plugin->get(cl->priv);
+        }
+    }
+    return cl;
+}
+
+static int start_client(gamma_client *cl, int temp, bool is_smooth, unsigned int smooth_step, unsigned int smooth_wait) {
+    cl->target_temp = temp;
+    cl->is_smooth = is_smooth && smooth_step && smooth_wait;
+    cl->smooth_step = smooth_step;
+    cl->smooth_wait = smooth_wait;
+    
+    // NOTE: it seems like on wayland smooth transitions are not working.
+    // Forcefully disable them for now.
+    if (cl->is_smooth && cl->plugin == plugins[WL]) {
+        fprintf(stderr, "Smooth transitions are not supported on wayland.\n");
+        cl->is_smooth = false;
+    }
+    
+    if (cl->fd == -1) {
+        cl->fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+        m_register_fd(cl->fd, true, cl);
+    }
+            
+    // start transitioning right now
+    struct itimerspec timerValue = {{0}};
+    timerValue.it_value.tv_nsec = 1;
+    timerfd_settime(cl->fd, 0, &timerValue, NULL);
+    return map_put(clients, cl->display, cl);
 }
 
 #endif

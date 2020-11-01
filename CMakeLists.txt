@@ -1,14 +1,53 @@
 cmake_minimum_required(VERSION 3.5)
 
-project(clightd VERSION 4.3 LANGUAGES C)
+project(clightd VERSION 5.0 LANGUAGES C)
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 include(GNUInstallDirs)
 find_package(PkgConfig)
 
+# Only needed if building wayland protocols (ie: when ENABLE_GAMMA or ENABLE_DPMS are true)
+find_program(WAYLAND_SCANNER_EXECUTABLE NAMES wayland-scanner)
+
+# wayland_add_protocol_client(outfiles inputfile basename)
+# Stolen from: https://github.com/giucam/orbital/blob/512c1b3b20a32cf67ba326e8acce3c1c32e11fa2/cmake/Wayland.cmake, thanks!
+function(WAYLAND_ADD_PROTOCOL_CLIENT _sources _protocol _basename)
+    if(NOT WAYLAND_SCANNER_EXECUTABLE)
+        message(FATAL "The wayland-scanner executable has not been found on your system. You must install it.")
+    endif()
+
+    get_filename_component(_infile ${_protocol} ABSOLUTE)
+    set(_client_header "${CMAKE_CURRENT_BINARY_DIR}/${_basename}-client-protocol.h")
+    set(_code "${CMAKE_CURRENT_BINARY_DIR}/${_basename}-protocol.c")
+
+    add_custom_command(OUTPUT "${_client_header}"
+        COMMAND ${WAYLAND_SCANNER_EXECUTABLE} client-header < ${_infile} > ${_client_header}
+        DEPENDS ${_infile} VERBATIM)
+
+    add_custom_command(OUTPUT "${_code}"
+        COMMAND ${WAYLAND_SCANNER_EXECUTABLE} private-code < ${_infile} > ${_code}
+        DEPENDS ${_infile} VERBATIM)
+
+    list(APPEND ${_sources} "${_client_header}" "${_code}")
+    set(${_sources} ${${_sources}} PARENT_SCOPE)
+endfunction()
+
 # Create program target
-file(GLOB_RECURSE SOURCES src/*.c)
+file(GLOB SOURCES src/*.c src/utils/*.c src/modules/*.c src/modules/sensors/*.c)
+
+# Build wayland protocols if needed
+if(ENABLE_GAMMA)
+    WAYLAND_ADD_PROTOCOL_CLIENT(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/protocol/wlr-gamma-control-unstable-v1.xml" wlr-gamma-control-unstable-v1)
+    file(GLOB GAMMA_PLUGINS src/modules/gamma_plugins/*)
+    set(SOURCES ${SOURCES} ${GAMMA_PLUGINS})
+endif()
+if(ENABLE_DPMS)
+    WAYLAND_ADD_PROTOCOL_CLIENT(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/protocol/org_kde_kwin_dpms.xml" org_kde_kwin_dpms)
+    file(GLOB DPMS_PLUGINS src/modules/dpms_plugins/*)
+    set(SOURCES ${SOURCES} ${DPMS_PLUGINS})
+endif()
+
 add_executable(${PROJECT_NAME} ${SOURCES})
 target_include_directories(${PROJECT_NAME} PRIVATE
                            # Internal headers
@@ -68,8 +107,8 @@ macro(optional_dep name modules description)
     endif()
 endmacro()
 
-optional_dep(GAMMA "x11;xrandr" "Gamma correction")
-optional_dep(DPMS "x11;xext" "DPMS")
+optional_dep(GAMMA "x11;xrandr;libdrm;wayland-client" "Gamma correction")
+optional_dep(DPMS "x11;xext;libdrm;wayland-client" "DPMS")
 optional_dep(SCREEN "x11" "screen emitted brightness")
 optional_dep(DDC "ddcutil>=0.9.5" "external monitor backlight")
 optional_dep(YOCTOLIGHT "libusb-1.0" "Yoctolight usb als devices support")
