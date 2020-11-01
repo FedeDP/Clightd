@@ -44,12 +44,12 @@
 
 ### Generic
 - [x] Add new deps to pkgbuild and build.yaml
-- [ ] Document drm param (cardnumber) and defaults for gamma and dpms
-- [ ] Document xauthority naming switch to "env" and its use with XDG_RUNTIME_DIR for wayland for both gamma and dpms
+- [x] Document drm param (cardnumber) and defaults for gamma and dpms
+- [x] Document xauthority naming switch to "env" and its use with XDG_RUNTIME_DIR for wayland for both gamma and dpms
 - [x] Document new yoctolight sensor
-- [ ] Update API docs (API breaks)
+- [x] Update API docs (API breaks)
 - [x] Bump Clightd to 5.0
-- [ ] Add new deps to wiki (libwayland-dev on ubuntu, wayland on arch and wayland-devel on fedora) + libdrm + libjpeg-turbo + libusb
+- [x] Add new deps to wiki (libwayland-dev on ubuntu, wayland on arch and wayland-devel on fedora) + libdrm + libjpeg-turbo + libusb
 
 ## 4.X
 - [ ] Keep it up to date with possible ddcutil/libmodule api changes

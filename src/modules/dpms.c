@@ -141,7 +141,8 @@ static int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
     int err = WRONG_PLUGIN;
     if (!plugin) {
         for (int i = 0; i < DPMS_NUM && err == WRONG_PLUGIN; i++) {
-            err = plugins[i]->set(display, env, level);
+            plugin = plugins[i];
+            err = plugin->set(display, env, level);
         }
     } else {
         err = plugin->set(display, env, level);
@@ -159,6 +160,7 @@ static int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
     
     m_log("New dpms state: %d.\n", level);
     sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "si", display, level);
+    sd_bus_emit_signal(bus, plugin->obj_path, bus_interface, "Changed", "si", display, level);
     return sd_bus_reply_method_return(m, "b", true);
 }
 

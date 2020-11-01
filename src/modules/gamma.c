@@ -89,7 +89,9 @@ static void receive(const msg_t *msg, const void *userdata) {
             sc->current_temp = sc->target_temp;
         }
         
+        /* Emit signal on both /Gamma objpath, and /Gamma/$Plugin */
         sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "si", sc->display, sc->current_temp);
+        sd_bus_emit_signal(bus, sc->plugin->obj_path, bus_interface, "Changed", "si", sc->display, sc->current_temp);
         
         if (sc->plugin->set(sc->priv, sc->current_temp) == 0 && sc->current_temp == sc->target_temp) {
             m_log("Reached target temp: %d.\n", sc->target_temp);
