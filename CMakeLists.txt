@@ -31,6 +31,7 @@ function(WAYLAND_ADD_PROTOCOL_CLIENT _sources _protocol _basename)
 
     list(APPEND ${_sources} "${_client_header}" "${_code}")
     set(${_sources} ${${_sources}} PARENT_SCOPE)
+    include_directories(${CMAKE_CURRENT_BINARY_DIR})
 endfunction()
 
 # Create program target
@@ -54,7 +55,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE
                            "${CMAKE_CURRENT_SOURCE_DIR}/src"
                            "${CMAKE_CURRENT_SOURCE_DIR}/src/utils"
                            "${CMAKE_CURRENT_SOURCE_DIR}/src/modules"
-                           "${CMAKE_CURRENT_SOURCE_DIR}/src/dpms_plugins"
 )
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     -D_GNU_SOURCE

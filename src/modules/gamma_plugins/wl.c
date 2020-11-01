@@ -1,5 +1,5 @@
 #include <sys/mman.h>
-#include "../build/wlr-gamma-control-unstable-v1-client-protocol.h"
+#include "wlr-gamma-control-unstable-v1-client-protocol.h"
 #include "gamma.h"
 #include "wl_utils.h"
 
