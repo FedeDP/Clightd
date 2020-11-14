@@ -101,9 +101,9 @@ void sensor_register_new(sensor_t *sensor) {
     
     if (s < SENSOR_NUM) {
         sensors[s] = sensor;
-        printf("Registered '%s' sensor.\n", sensor->name);
+        printf("Registered '%s' sensor plugin.\n", sensor->name);
     } else {
-        printf("Sensor '%s' not recognized. Not registering.\n", sensor->name);
+        printf("Sensor plugin '%s' not recognized. Not registering.\n", sensor->name);
     }
 }
 
