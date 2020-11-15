@@ -37,6 +37,7 @@
 
 #### Camera
 - [x] Support mjpeg input format through libjpeg
+- [x] Avoid setting camera fmt during validation, as device validation should not change device status
 
 #### Yoctolight
 - [x] Fix Yoctolight Sensor

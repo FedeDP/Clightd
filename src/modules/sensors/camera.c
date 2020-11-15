@@ -30,6 +30,7 @@ static void set_v4l2_control_def(uint32_t id, const char *name);
 static void set_v4l2_control(uint32_t id, int32_t val, const char *name);
 static void set_camera_settings_def(void);
 static void set_camera_settings(void);
+static int set_camera_fmt(void);
 static int check_camera_caps(void);
 static void create_decoder(void);
 static int mjpeg_to_gray(uint8_t **img_data, int size);
@@ -122,7 +123,7 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
     state.settings = settings;
     int ctr = 0;
     
-    if (init_mmap() == 0 && start_stream() == 0) {
+    if (set_camera_fmt() == 0 && init_mmap() == 0 && start_stream() == 0) {
         set_camera_settings();
         create_decoder();
         for (int i = 0; i < num_captures; i++) {
@@ -200,6 +201,23 @@ static void set_camera_settings(void) {
     }
 }
 
+static int set_camera_fmt(void) {
+    struct v4l2_format fmt = {0};
+    fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    fmt.fmt.pix.width = 160;
+    fmt.fmt.pix.height = 120;
+    fmt.fmt.pix.field = V4L2_FIELD_INTERLACED;   
+    fmt.fmt.pix.pixelformat = state.pixelformat;
+    if (-1 == xioctl(VIDIOC_S_FMT, &fmt)) {
+        perror("Setting Pixel Format");
+        return -1;
+    }
+    
+    INFO("Image fmt: %s\n", (char *)&fmt.fmt.pix.pixelformat);
+    INFO("Image res: %d x %d\n", fmt.fmt.pix.width, fmt.fmt.pix.height);
+    return 0;
+}
+
 static int check_camera_caps(void) {
     struct v4l2_capability caps = {{0}};
     if (-1 == xioctl(VIDIOC_QUERYCAP, &caps)) {
@@ -237,7 +255,7 @@ static int check_camera_caps(void) {
     while (xioctl(VIDIOC_ENUM_FMT, &fmtdesc) == 0 && fmt.fmt.pix.pixelformat == 0) {
         for (int i = 0; i < SIZE(supported_fmts); i++) {
               if (fmtdesc.pixelformat == supported_fmts[i]) {
-                fmt.fmt.pix.pixelformat = supported_fmts[i];
+                state.pixelformat = supported_fmts[i];
                 break;
               }
         }
@@ -245,22 +263,10 @@ static int check_camera_caps(void) {
     }
     
     /* No supported formats found? */
-    if (fmt.fmt.pix.pixelformat == 0) {
+    if (state.pixelformat == 0) {
         perror("Device does not support neither GREY nor YUYV nor MJPEG pixelformats.");
         return -1;
     }
-        
-    /* Try to set desired formati */
-    if (-1 == xioctl(VIDIOC_S_FMT, &fmt)) {
-        perror("Setting Pixel Format");
-        return -1;
-    }
-    
-    INFO("Image fmt: %s\n", (char *)&fmt.fmt.pix.pixelformat);
-    INFO("Image res: %d x %d\n", fmt.fmt.pix.width, fmt.fmt.pix.height);
-    
-    /* Store format */
-    state.pixelformat = fmt.fmt.pix.pixelformat;
     return 0;
 }
 
