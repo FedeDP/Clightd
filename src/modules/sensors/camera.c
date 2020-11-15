@@ -252,12 +252,11 @@ static int check_camera_caps(void) {
     /* Check supported formats */
     struct v4l2_fmtdesc fmtdesc = {0};
     fmtdesc.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    while (xioctl(VIDIOC_ENUM_FMT, &fmtdesc) == 0 && fmt.fmt.pix.pixelformat == 0) {
+    while (xioctl(VIDIOC_ENUM_FMT, &fmtdesc) == 0 && state.pixelformat == 0) {
         for (int i = 0; i < SIZE(supported_fmts); i++) {
-              if (fmtdesc.pixelformat == supported_fmts[i]) {
+            if (fmtdesc.pixelformat == supported_fmts[i]) {
                 state.pixelformat = supported_fmts[i];
-                break;
-              }
+            }
         }
         fmtdesc.index++;
     }
