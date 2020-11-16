@@ -58,7 +58,7 @@ static int set(const char *card, const char *env, int level) {
         return WRONG_PLUGIN;
     }
     
-    if (!drmIsMaster(fd) && drmSetMaster(fd)) {
+    if (drmSetMaster(fd)) {
         perror("SetMaster");
         err = -errno;
         goto end;

@@ -46,7 +46,8 @@ static int set(void *priv_data, const int temp) {
     drm_gamma_priv *priv = (drm_gamma_priv *)priv_data;
     
     int ret = 0;
-    if (!drmIsMaster(priv->fd) && drmSetMaster(priv->fd)) {
+    
+    if (drmSetMaster(priv->fd)) {
         perror("SetMaster");
         ret = -errno;
         goto end;
