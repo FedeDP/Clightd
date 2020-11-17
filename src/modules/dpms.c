@@ -104,12 +104,16 @@ static int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
         dpms_state = plugin->get(display, env);
     }
     if (dpms_state < 0) {
-        if (dpms_state == COMPOSITOR_NO_PROTOCOL) {
+        switch (dpms_state) {
+        case COMPOSITOR_NO_PROTOCOL:
             sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Compositor does not support wayland protocol.");
-        } else if (dpms_state == WRONG_PLUGIN) {
+            break;
+        case WRONG_PLUGIN:
             sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "No plugin available for your configuration.");
-        } else {
+            break;
+        default:
             sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Failed to get dpms level.");
+            break;
         }
         return -EACCES;
     }
@@ -148,12 +152,16 @@ static int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
         err = plugin->set(display, env, level);
     }
     if (err) {
-        if (err == COMPOSITOR_NO_PROTOCOL) {
+        switch (err) {
+        case COMPOSITOR_NO_PROTOCOL:
             sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Compositor does not support wayland protocol.");
-        } else if (err == WRONG_PLUGIN) {
+            break;
+        case WRONG_PLUGIN:
             sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "No plugin available for your configuration.");
-        } else {
+            break;
+        default:
             sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Failed to set dpms level.");
+            break;
         }
         return -EACCES;
     }

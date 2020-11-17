@@ -33,6 +33,19 @@
 #### drm
 - [x] Add gamma support on tty through libdrm (??)
 
+### Screen
+- [x] Split screen api like dpms: for X, wlr...tty??
+- [x] Split Screen/Xorg, Screen/Wl, Screen/Drm
+- [x] Only build screen_plugins folder if screen is enabled
+- [x] Unify cycles to compute frame brightness
+- [ ] Update apidoc
+
+#### wl
+- [x] Add screen support on wayland (wlr-screencopy-unstable-v1)
+
+#### Fb
+- [x] https://github.com/GunnarMonell/fbgrab/blob/master/fbgrab.c ??
+
 ### Sensor
 
 #### Camera

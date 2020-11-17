@@ -1,4 +1,4 @@
-#if defined GAMMA_PRESENT || defined DPMS_PRESENT
+#if defined GAMMA_PRESENT || defined DPMS_PRESENT || defined SCREEN_PRESENT
 
 #include "wl_utils.h"
 #include "commons.h"
@@ -33,6 +33,24 @@ struct wl_display *fetch_wl_display(const char *display, const char *env) {
         }
     }
     return dpy;
+}
+
+int create_anonymous_file(off_t size, const char *filename) {
+    int fd = memfd_create(filename, 0);
+    if (fd < 0) {
+        return -1;
+    }
+
+    int ret;
+    do {
+        errno = 0;
+        ret = ftruncate(fd, size);
+    } while (errno == EINTR);
+    if (ret < 0) {
+        close(fd);
+        return -1;
+    }
+    return fd;
 }
 
 #endif

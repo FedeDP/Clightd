@@ -49,6 +49,12 @@ if(ENABLE_DPMS)
     set(SOURCES ${SOURCES} ${DPMS_PLUGINS})
 endif()
 
+if(ENABLE_SCREEN)
+    WAYLAND_ADD_PROTOCOL_CLIENT(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/protocol/wlr-screencopy-unstable-v1.xml" wlr-screencopy-unstable-v1)
+    file(GLOB SCREEN_PLUGINS src/modules/screen_plugins//*)
+    set(SOURCES ${SOURCES} ${SCREEN_PLUGINS})
+endif()
+
 add_executable(${PROJECT_NAME} ${SOURCES})
 target_include_directories(${PROJECT_NAME} PRIVATE
                            # Internal headers

@@ -280,14 +280,19 @@ static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
     }
     
     if (error) {
-        if (error == EINVAL) {
+        switch (error) {
+        case EINVAL:
             sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Temperature value should be between 1000 and 10000.");
-        } else if (error == COMPOSITOR_NO_PROTOCOL) {
+            break;
+        case COMPOSITOR_NO_PROTOCOL:
             sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Compositor does not support wayland protocol.");
-        } else if (error == WRONG_PLUGIN) {
+            break;
+        case WRONG_PLUGIN:
             sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "No plugin available for your configuration.");
-        } else {
+            break;
+        default:
             sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Failed to open display handler plugin.");
+            break;
         }
         return -EACCES;
     }
@@ -319,12 +324,16 @@ static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
     }
     
     if (error || temp == -1) {
-        if (error == COMPOSITOR_NO_PROTOCOL) {
+        switch (error) {
+        case COMPOSITOR_NO_PROTOCOL:
             sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Compositor does not support wayland protocol.");
-        } else if (error == WRONG_PLUGIN) {
+            break;
+        case WRONG_PLUGIN:
             sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "No plugin available for your configuration.");
-        } else {
+            break;
+        default:
             sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Failed to get screen temperature.");
+            break;
         }
         return -EACCES;
     }

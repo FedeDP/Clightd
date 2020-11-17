@@ -1,4 +1,3 @@
-#include <sys/mman.h>
 #include "wlr-gamma-control-unstable-v1-client-protocol.h"
 #include "gamma.h"
 #include "wl_utils.h"
@@ -19,7 +18,6 @@ typedef struct {
     struct zwlr_gamma_control_manager_v1 *gamma_control_manager;
 } wlr_gamma_priv;
 
-static int create_anonymous_file(off_t size);
 static int create_gamma_table(uint32_t ramp_size, uint16_t **table);
 static void destroy_output(struct output *output);
 static void gamma_control_handle_gamma_size(void *data, 
@@ -139,27 +137,9 @@ static int dtor(void *priv_data) {
     return 0;
 }
 
-static int create_anonymous_file(off_t size) {
-    int fd = memfd_create("clightd-gamma-wlr", 0);
-    if (fd < 0) {
-        return -1;
-    }
-
-    int ret;
-    do {
-        errno = 0;
-        ret = ftruncate(fd, size);
-    } while (errno == EINTR);
-    if (ret < 0) {
-        close(fd);
-        return -1;
-    }
-    return fd;
-}
-
 static int create_gamma_table(uint32_t ramp_size, uint16_t **table) {
     size_t table_size = ramp_size * 3 * sizeof(uint16_t);
-    int fd = create_anonymous_file(table_size);
+    int fd = create_anonymous_file(table_size, "clightd-gamma-wlr");
     if (fd < 0) {
         fprintf(stderr, "failed to create anonymous file\n");
         return -1;
