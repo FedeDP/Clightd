@@ -7,9 +7,6 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 include(GNUInstallDirs)
 find_package(PkgConfig)
 
-# Only needed if building wayland protocols (ie: when ENABLE_GAMMA or ENABLE_DPMS are true)
-find_program(WAYLAND_SCANNER_EXECUTABLE NAMES wayland-scanner)
-
 # wayland_add_protocol_client(outfiles inputfile basename)
 # Stolen from: https://github.com/giucam/orbital/blob/512c1b3b20a32cf67ba326e8acce3c1c32e11fa2/cmake/Wayland.cmake, thanks!
 function(WAYLAND_ADD_PROTOCOL_CLIENT _sources _protocol _basename)
@@ -37,7 +34,10 @@ endfunction()
 # Create program target
 file(GLOB SOURCES src/*.c src/utils/*.c src/modules/*.c src/modules/sensors/*.c)
 
-# Build wayland protocols if needed
+# Only used if building wayland protocols; no error if missing and no wayland protocol is built
+find_program(WAYLAND_SCANNER_EXECUTABLE NAMES wayland-scanner)
+
+# Build wayland protocols as needed
 if(ENABLE_GAMMA)
     WAYLAND_ADD_PROTOCOL_CLIENT(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/protocol/wlr-gamma-control-unstable-v1.xml" wlr-gamma-control-unstable-v1)
     file(GLOB GAMMA_PLUGINS src/modules/gamma_plugins/*)
@@ -48,7 +48,6 @@ if(ENABLE_DPMS)
     file(GLOB DPMS_PLUGINS src/modules/dpms_plugins/*)
     set(SOURCES ${SOURCES} ${DPMS_PLUGINS})
 endif()
-
 if(ENABLE_SCREEN)
     WAYLAND_ADD_PROTOCOL_CLIENT(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/protocol/wlr-screencopy-unstable-v1.xml" wlr-screencopy-unstable-v1)
     file(GLOB SCREEN_PLUGINS src/modules/screen_plugins//*)

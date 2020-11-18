@@ -23,10 +23,10 @@ static int get_frame_brightness(const char *id, const char *env) {
         return ret;
     }
     
+    ret = UNSUPPORTED;
     struct fb_var_screeninfo fb_varinfo = {0};
     struct fb_fix_screeninfo fb_fixedinfo = {0};
     if (get_framebufferdata(fd, &fb_varinfo, &fb_fixedinfo) != 0) {
-        ret = -EINVAL;
         goto err;
     }
     

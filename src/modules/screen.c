@@ -133,7 +133,7 @@ static int method_getbrightness(sd_bus_message* m, void* userdata, sd_bus_error*
             sd_bus_error_set_errno(ret_error, -br);
             break;
         case COMPOSITOR_NO_PROTOCOL:
-            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Compositor does not support wayland protocol.");
+            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Compositor does not support 'wlr-screencopy-unstable-v1' protocol.");
             break;
         case WRONG_PLUGIN:
             sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "No plugin available for your configuration.");

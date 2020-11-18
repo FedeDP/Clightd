@@ -16,10 +16,10 @@ static int get_frame_brightness(const char *id, const char *env) {
 static int getRootBrightness(const char *screen_name) {
     Display *dpy = XOpenDisplay(screen_name);
     if (!dpy) {
-        return -EINVAL;
+        return WRONG_PLUGIN;
     }
     
-    int ret = -EIO;
+    int ret = UNSUPPORTED;
     /* window frame size definition: 85% should be ok */
     const float pct = 0.85;
     int w = (int) (pct * XDisplayWidth(dpy, 0));

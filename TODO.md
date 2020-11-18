@@ -38,7 +38,7 @@
 - [x] Split Screen/Xorg, Screen/Wl, Screen/Drm
 - [x] Only build screen_plugins folder if screen is enabled
 - [x] Unify cycles to compute frame brightness
-- [ ] Update apidoc
+- [x] Update apidoc
 
 #### wl
 - [x] Add screen support on wayland (wlr-screencopy-unstable-v1)
@@ -58,7 +58,7 @@
 
 ### Generic
 - [x] Add new deps to pkgbuild and build.yaml
-- [x] Document drm param (cardnumber) and defaults for gamma and dpms
+- [x] Document drm param and defaults for gamma and dpms
 - [x] Document xauthority naming switch to "env" and its use with XDG_RUNTIME_DIR for wayland for both gamma and dpms
 - [x] Document new yoctolight sensor
 - [x] Update API docs (API breaks)

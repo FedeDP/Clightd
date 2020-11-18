@@ -326,7 +326,7 @@ static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
     if (error || temp == -1) {
         switch (error) {
         case COMPOSITOR_NO_PROTOCOL:
-            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Compositor does not support wayland protocol.");
+            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Compositor does not support 'wlr-gamma-control-unstable-v1' protocol.");
             break;
         case WRONG_PLUGIN:
             sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "No plugin available for your configuration.");

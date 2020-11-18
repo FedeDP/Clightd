@@ -17,6 +17,8 @@ static int get(const char *display, const char *xauthority) {
     CARD16 s;
     int ret = WRONG_PLUGIN;
     
+    setenv("XAUTHORITY", xauthority, 1);
+    
     Display *dpy = XOpenDisplay(display);
     if (dpy) {
         if (DPMSCapable(dpy)) {
@@ -27,6 +29,8 @@ static int get(const char *display, const char *xauthority) {
         }
         XCloseDisplay(dpy);
     }
+    
+    unsetenv("XAUTHORITY");
     return ret;
 }
 

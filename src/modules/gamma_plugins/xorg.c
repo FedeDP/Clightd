@@ -11,7 +11,9 @@ GAMMA("Xorg");
 
 static int validate(const char *id, const char *env, void **priv_data) {
     int ret = WRONG_PLUGIN;
+    
     setenv("XAUTHORITY", env, 1);
+    
     Display *dpy = XOpenDisplay(id);
     if (dpy) {
         int screen = DefaultScreen(dpy);
@@ -28,6 +30,7 @@ static int validate(const char *id, const char *env, void **priv_data) {
             XCloseDisplay(dpy);
         }
     }
+    
     unsetenv("XAUTHORITY");
     return ret;
 }
