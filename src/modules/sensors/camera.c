@@ -291,23 +291,22 @@ static int mjpeg_to_gray(uint8_t **img_data, int size) {
     state.decoder->cinfo.out_color_space = JCS_GRAYSCALE;
         
     jpeg_start_decompress(&state.decoder->cinfo);
-    int width = state.decoder->cinfo.output_width;
-    int  height = state.decoder->cinfo.output_height;
-    int pixel_size = state.decoder->cinfo.output_components;
-
-    int bmp_size = width * height * pixel_size;
+    const int width = state.decoder->cinfo.output_width;
+    const int height = state.decoder->cinfo.output_height;
+    const int pixel_size = state.decoder->cinfo.output_components;
+    const int row_stride = width * pixel_size;
+    const int bmp_size = row_stride * height;
+    
     *img_data = malloc(bmp_size);
-
-    // The row_stride is the total number of bytes it takes to store an
-    // entire scanline (row). 
-    int row_stride = width * pixel_size;
-    while (state.decoder->cinfo.output_scanline < state.decoder->cinfo.output_height) {
-        unsigned char *buffer_array[1];
-        buffer_array[0] = *img_data + state.decoder->cinfo.output_scanline * row_stride;
-        jpeg_read_scanlines(&state.decoder->cinfo, buffer_array, 1);
+    if (*img_data) {
+        while (state.decoder->cinfo.output_scanline < height) {
+            unsigned char *buffer_array = *img_data + state.decoder->cinfo.output_scanline * row_stride;
+            jpeg_read_scanlines(&state.decoder->cinfo, &buffer_array, 1);
+        }
+        jpeg_finish_decompress(&state.decoder->cinfo);
+        return bmp_size;
     }
-    jpeg_finish_decompress(&state.decoder->cinfo);
-    return bmp_size;
+    return -ENOMEM;
 }
 
 static void destroy_decoder(void) {
@@ -410,6 +409,9 @@ static double compute_brightness(unsigned int size) {
     uint8_t *img_data = state.buf.start;
     if (state.decoder) {
         size = state.decoder->dec_cb(&img_data, size);
+        if (size < 0) {
+            return brightness;
+        }
     }
     
     /*

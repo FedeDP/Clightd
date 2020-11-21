@@ -4,35 +4,62 @@
 #include "commons.h"
 #include <module/map.h>
 
-static void display_dtor(void *data);
+typedef struct {
+    struct wl_display *dpy;
+    char *env;
+} wl_info;
+
+static void wl_info_dtor(void *data);
 
 static map_t *wl_map;
 
 static void _ctor_ init_wl_map(void) {
-    wl_map = map_new(true, display_dtor);
+    wl_map = map_new(true, wl_info_dtor);
 }
 
 static void _dtor_ dtor_wl_map(void) {
     map_free(wl_map);
 }
 
-static void display_dtor(void *data) {
-    wl_display_disconnect(data);
+static void wl_info_dtor(void *data) {
+    wl_info *info = (wl_info *)data;
+    wl_display_disconnect(info->dpy);
+    free(info->env);
+    free(info);
 }
 
 struct wl_display *fetch_wl_display(const char *display, const char *env) {
-    struct wl_display *dpy = map_get(wl_map, display);
-    if (!dpy) {
-        /* Required for wl_display_connect */
-        setenv("XDG_RUNTIME_DIR", env, 1);
-        dpy = wl_display_connect(display);
-        unsetenv("XDG_RUNTIME_DIR");
-        
-        if (dpy) {
-            map_put(wl_map, display, dpy);
+    if (env) {
+        wl_info *info = map_get(wl_map, display);
+        if (!info) {
+            /* Required for wl_display_connect */
+            setenv("XDG_RUNTIME_DIR", env, 1);
+            struct wl_display *dpy = wl_display_connect(display);
+            unsetenv("XDG_RUNTIME_DIR");
+            
+            if (dpy) {
+                info = malloc(sizeof(wl_info));
+                if (info) {
+                    info->dpy = dpy;
+                    info->env = strdup(env);
+                    map_put(wl_map, display, info);
+                } else {
+                    fprintf(stderr, "Failed to malloc.\n");
+                    wl_display_disconnect(dpy);
+                }
+            }
+        }
+
+        /* 
+        * Actually check that env passed is the same that
+        * was stored when wl_display connection was created
+        */
+        if (info && !strcmp(info->env, env)) {
+            return info->dpy;
         }
     }
-    return dpy;
+    return NULL;
+
 }
 
 int create_anonymous_file(off_t size, const char *filename) {

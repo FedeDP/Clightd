@@ -64,6 +64,7 @@
 - [x] Update API docs (API breaks)
 - [x] Bump Clightd to 5.0
 - [x] Add new deps to wiki (libwayland-dev on ubuntu, wayland on arch and wayland-devel on fedora) + libdrm + libjpeg-turbo + libusb
+- [x] Fix: second call to get an open wl_display does not need XDG_RUNTIME_DIR properly set
 
 ## 4.X
 - [ ] Keep it up to date with possible ddcutil/libmodule api changes
