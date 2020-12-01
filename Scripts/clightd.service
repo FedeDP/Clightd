@@ -6,7 +6,7 @@ Requires=@POLKIT_NAME@.service
 Type=dbus
 BusName=org.clightd.clightd
 User=root
-ExecStart=@DAEMON_DIR@/clightd
+ExecStart=@CMAKE_INSTALL_FULL_LIBEXECDIR@/clightd
 Restart=on-failure
 RestartSec=5
 
