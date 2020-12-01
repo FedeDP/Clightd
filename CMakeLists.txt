@@ -129,11 +129,11 @@ set_target_properties(
 
 # Installation of targets (must be before file configuration to work)
 install(TARGETS ${PROJECT_NAME}
-        RUNTIME DESTINATION "${CMAKE_INSTALL_LIBDIR}/${PROJECT_NAME}")
+        RUNTIME DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}")
 
 # Configure files with install paths
 set(SCRIPT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Scripts")
-set(DAEMON_DIR "${CMAKE_INSTALL_FULL_LIBDIR}/${PROJECT_NAME}")
+set(DAEMON_DIR "${CMAKE_INSTALL_FULL_LIBEXECDIR}")
 
 configure_file(${SCRIPT_DIR}/org.clightd.clightd.service
                org.clightd.clightd.service
