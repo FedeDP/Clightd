@@ -6,13 +6,14 @@
 #include <sensor.h>
 #include <udev.h>
 #include <jpeglib.h>
+#include <module/map.h>
 
 #define CAMERA_NAME                 "Camera"
 #define CAMERA_ILL_MAX              255
 #define CAMERA_SUBSYSTEM            "video4linux"
 #define HISTOGRAM_STEPS             40
 
-#define SET_V4L2(id, val)           set_v4l2_control(id, val, #id)
+#define SET_V4L2(id, val)           set_v4l2_control(id, val, #id, true)
 #define SET_V4L2_DEF(id)            set_v4l2_control_def(id, #id)
 #ifndef NDEBUG
     #define INFO(fmt, ...)          printf(fmt, ##__VA_ARGS__);
@@ -27,9 +28,10 @@ static const __u32 supported_fmts[] = {
 };
 
 static void set_v4l2_control_def(uint32_t id, const char *name);
-static void set_v4l2_control(uint32_t id, int32_t val, const char *name);
+static void set_v4l2_control(uint32_t id, int32_t val, const char *name, bool store);
 static void set_camera_settings_def(void);
 static void set_camera_settings(void);
+static void restore_camera_settings(void);
 static int set_camera_fmt(void);
 static int check_camera_caps(void);
 static void create_decoder(void);
@@ -67,6 +69,7 @@ struct state {
     struct histogram hist[HISTOGRAM_STEPS];
     char *settings;
     struct mjpeg_dec *decoder;
+    map_t *stored_values;
 };
 
 static struct state state;
@@ -102,6 +105,7 @@ static void destroy_dev(void *dev) {
     if (state.device_fd >= 0) {
         close(state.device_fd);
     }
+    map_free(state.stored_values);
     /* reset state */
     memset(&state, 0, sizeof(struct state));
     state.device_fd = -1;
@@ -121,6 +125,7 @@ static void destroy_monitor(void) {
 
 static int capture(void *dev, double *pct, const int num_captures, char *settings) {
     state.settings = settings;
+    state.stored_values = map_new(true, free);
     int ctr = 0;
     
     if (set_camera_fmt() == 0 && init_mmap() == 0 && start_stream() == 0) {
@@ -136,6 +141,7 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
         }
         destroy_decoder();
         stop_stream();
+        restore_camera_settings();
     }
     destroy_mmap();
     return ctr;
@@ -148,18 +154,34 @@ static void set_v4l2_control_def(uint32_t id, const char *name) {
         INFO("%s unsupported\n", name);
     } else {
         INFO("%s (%u) default val: %d\n", name, id, arg.default_value);
-        set_v4l2_control(id, arg.default_value, name);
+        set_v4l2_control(id, arg.default_value, name, true);
     }
 }
 
-static void set_v4l2_control(uint32_t id, int32_t val, const char *name) {
-    struct v4l2_control ctrl ={0};
-    ctrl.id = id;
-    ctrl.value = val;
-    if (-1 == xioctl(VIDIOC_S_CTRL, &ctrl)) {
-        INFO("%s unsupported\n", name);
+static void set_v4l2_control(uint32_t id, int32_t val, const char *name, bool store) {
+    struct v4l2_control *old_ctrl = calloc(1, sizeof(struct v4l2_control));
+    old_ctrl->id = id;
+    /* Store initial value, if set. */
+    if (-1 == xioctl(VIDIOC_G_CTRL, old_ctrl)) {
+        INFO("'%s' unsupported\n", name);
+        return;
+    }
+    
+    if (old_ctrl->value != val) {
+        struct v4l2_control ctrl ={0};
+        ctrl.id = id;
+        ctrl.value = val;
+        if (-1 == xioctl(VIDIOC_S_CTRL, &ctrl)) {
+            INFO("%s unsupported\n", name);
+        } else {
+            INFO("Set '%s' val: %d\n", name, val);
+            if (store) {
+                INFO("Storing initial setting for '%s': %d\n", name, val);
+                map_put(state.stored_values, name, old_ctrl);
+            }
+        }
     } else {
-        INFO("Set %u val: %d\n", id, val);
+        INFO("Value %d for '%s' already set.\n", val, name);
     }
 }
 
@@ -195,9 +217,18 @@ static void set_camera_settings(void) {
             if (sscanf(token, "%u=%d", &v4l2_op, &v4l2_val) == 2) {
                 SET_V4L2(v4l2_op, v4l2_val);
             } else {
-                fprintf(stderr, "Expected a=b format.\n");
+                fprintf(stderr, "Expected a=b format in '%s' token.\n", token);
             }
         }
+    }
+}
+
+static void restore_camera_settings(void) {
+    for (map_itr_t *itr = map_itr_new(state.stored_values); itr; itr = map_itr_next(itr)) {
+        struct v4l2_control *old_ctrl = map_itr_get_data(itr);
+        const char *ctrl_name = map_itr_get_key(itr); 
+        INFO("Restoring setting for '%s'\n", ctrl_name)
+        set_v4l2_control(old_ctrl->id, old_ctrl->value, ctrl_name, false);
     }
 }
 
