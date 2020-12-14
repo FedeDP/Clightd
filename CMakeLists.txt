@@ -7,52 +7,8 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 include(GNUInstallDirs)
 find_package(PkgConfig)
 
-# wayland_add_protocol_client(outfiles inputfile basename)
-# Stolen from: https://github.com/giucam/orbital/blob/512c1b3b20a32cf67ba326e8acce3c1c32e11fa2/cmake/Wayland.cmake, thanks!
-function(WAYLAND_ADD_PROTOCOL_CLIENT _sources _protocol _basename)
-    if(NOT WAYLAND_SCANNER_EXECUTABLE)
-        message(FATAL "The wayland-scanner executable has not been found on your system. You must install it.")
-    endif()
-
-    get_filename_component(_infile ${_protocol} ABSOLUTE)
-    set(_client_header "${CMAKE_CURRENT_BINARY_DIR}/${_basename}-client-protocol.h")
-    set(_code "${CMAKE_CURRENT_BINARY_DIR}/${_basename}-protocol.c")
-
-    add_custom_command(OUTPUT "${_client_header}"
-        COMMAND ${WAYLAND_SCANNER_EXECUTABLE} client-header < ${_infile} > ${_client_header}
-        DEPENDS ${_infile} VERBATIM)
-
-    add_custom_command(OUTPUT "${_code}"
-        COMMAND ${WAYLAND_SCANNER_EXECUTABLE} private-code < ${_infile} > ${_code}
-        DEPENDS ${_infile} VERBATIM)
-
-    list(APPEND ${_sources} "${_client_header}" "${_code}")
-    set(${_sources} ${${_sources}} PARENT_SCOPE)
-    include_directories(${CMAKE_CURRENT_BINARY_DIR})
-endfunction()
-
 # Create program target
 file(GLOB SOURCES src/*.c src/utils/*.c src/modules/*.c src/modules/sensors/*.c)
-
-# Only used if building wayland protocols; no error if missing and no wayland protocol is built
-find_program(WAYLAND_SCANNER_EXECUTABLE NAMES wayland-scanner)
-
-# Build wayland protocols as needed
-if(ENABLE_GAMMA)
-    WAYLAND_ADD_PROTOCOL_CLIENT(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/protocol/wlr-gamma-control-unstable-v1.xml" wlr-gamma-control-unstable-v1)
-    file(GLOB GAMMA_PLUGINS src/modules/gamma_plugins/*)
-    set(SOURCES ${SOURCES} ${GAMMA_PLUGINS})
-endif()
-if(ENABLE_DPMS)
-    WAYLAND_ADD_PROTOCOL_CLIENT(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/protocol/org_kde_kwin_dpms.xml" org_kde_kwin_dpms)
-    file(GLOB DPMS_PLUGINS src/modules/dpms_plugins/*)
-    set(SOURCES ${SOURCES} ${DPMS_PLUGINS})
-endif()
-if(ENABLE_SCREEN)
-    WAYLAND_ADD_PROTOCOL_CLIENT(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/protocol/wlr-screencopy-unstable-v1.xml" wlr-screencopy-unstable-v1)
-    file(GLOB SCREEN_PLUGINS src/modules/screen_plugins//*)
-    set(SOURCES ${SOURCES} ${SCREEN_PLUGINS})
-endif()
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -85,6 +41,9 @@ list(APPEND COMBINED_LDFLAGS ${LOGIN_LIBS_LDFLAGS})
 
 # Optional dependencies
 
+# Needed to eventually build wayland protocols
+add_subdirectory(protocol)
+
 # Helper macro for dealing correctly with optional pkg-config dependencies.
 # There are a number of issues when using pkg-config with cmake (as compared to
 # using the native dependency handling in CMake).
@@ -107,14 +66,29 @@ macro(optional_dep name modules description)
                                    PRIVATE
                                    ${${name}_LIBS_INCLUDE_DIRS})
         set(WITH_${name} 1)
+        
+        # Check if optional parameters for wayland protocols were passed
+        set(extra_macro_args ${ARGN})
+        list(LENGTH extra_macro_args num_extra_args)
+        if (${num_extra_args} GREATER 0)
+            # Generate protocol source and header files
+            # and add them to target_sources + target_include_directories(
+            list(GET extra_macro_args 0 wl_proto)
+            WAYLAND_ADD_PROTOCOL_CLIENT(${wl_proto})
+            
+            # Add various plugins
+            list(GET extra_macro_args 1 src_proto)
+            file(GLOB EXTRA_SRCS ${src_proto}/*)
+            target_sources(${PROJECT_NAME} PRIVATE ${EXTRA_SRCS})
+        endif()
     else()
         message(STATUS "${name} support disabled")
     endif()
 endmacro()
 
-optional_dep(GAMMA "x11;xrandr;libdrm;wayland-client" "Gamma correction")
-optional_dep(DPMS "x11;xext;libdrm;wayland-client" "DPMS")
-optional_dep(SCREEN "x11" "screen emitted brightness")
+optional_dep(GAMMA "x11;xrandr;libdrm;wayland-client" "Gamma correction" protocol/wlr-gamma-control-unstable-v1.xml src/modules/gamma_plugins)
+optional_dep(DPMS "x11;xext;libdrm;wayland-client" "DPMS" protocol/org_kde_kwin_dpms.xml src/modules/dpms_plugins)
+optional_dep(SCREEN "x11" "screen emitted brightness" protocol/wlr-screencopy-unstable-v1.xml src/modules/screen_plugins)
 optional_dep(DDC "ddcutil>=0.9.5" "external monitor backlight")
 optional_dep(YOCTOLIGHT "libusb-1.0" "Yoctolight usb als devices support")
 
