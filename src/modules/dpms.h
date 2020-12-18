@@ -12,16 +12,20 @@ enum dpms_plugins {
     DPMS_NUM
 };
 
+/* 
+ * set() and get() take double pointer as 
+ * drm plugin may override id.
+ */
 typedef struct {
     const char *name;
-    int (*set)(const char *id, const char *env, int level);
-    int (*get)(const char *id, const char *env);
+    int (*set)(const char **id, const char *env, int level);
+    int (*get)(const char **id, const char *env);
     char obj_path[100];
 } dpms_plugin;
 
 #define DPMS(name) \
-    static int get(const char *id, const char *env); \
-    static int set(const char *id, const char *env, int level); \
+    static int get(const char **id, const char *env); \
+    static int set(const char **id, const char *env, int level); \
     static void _ctor_ register_gamma_plugin(void) { \
         static dpms_plugin self = { name, set, get }; \
         dpms_register_new(&self); \

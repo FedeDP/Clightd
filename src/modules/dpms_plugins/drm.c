@@ -16,7 +16,7 @@ DPMS("Drm");
  * 
  * Clightd returns -1 if dpms is disabled
  */
-static int get(const char *card, const char *env) {
+static int get(const char **card, const char *env) {
     int state = -1;
     drmModeConnectorPtr connector;
     
@@ -43,12 +43,14 @@ static int get(const char *card, const char *env) {
             }
         }
         drmModeFreeResources(res);
+    } else {
+        perror("dpms drmModeGetResources");
     }
     close(fd);
     return state;
 }
 
-static int set(const char *card, const char *env, int level) {
+static int set(const char **card, const char *env, int level) {
     int err = 0;
     drmModeConnectorPtr connector;
     drmModePropertyPtr prop;

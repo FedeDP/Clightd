@@ -67,6 +67,7 @@
 - [x] Add new deps to wiki (libwayland-dev on ubuntu, wayland on arch and wayland-devel on fedora) + libdrm + libjpeg-turbo + libusb
 - [x] Fix: second call to get an open wl_display does not need XDG_RUNTIME_DIR properly set
 - [x] Moved to LIBEXECDIR intead of LIBDIR (#52 PR #53)
+- [x] For DRM and FB plugins -> override empty display variable with one got through libudev, this way Changed signal is emitted on proper device -> eg:
 
 ## 4.X
 - [ ] Keep it up to date with possible ddcutil/libmodule api changes

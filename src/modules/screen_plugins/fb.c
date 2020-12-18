@@ -1,8 +1,9 @@
 #include "screen.h"
 #include <linux/fb.h> /* to handle framebuffer ioctls */
 #include <sys/ioctl.h>
+#include "udev.h"
 
-#define DEFAULT_FB "/dev/fb0"
+#define FB_SUBSYSTEM "graphics"
 
 static int get_framebufferdata(int fd, struct fb_var_screeninfo *fb_varinfo_p, struct fb_fix_screeninfo *fb_fixedinfo);
 static int read_framebuffer(int fd, size_t bytes, unsigned char *buf_p, int skip_bytes);
@@ -11,16 +12,23 @@ SCREEN("Fb")
 
 /* Many thanks to fbgrab utility: https://github.com/GunnarMonell/fbgrab/blob/master/fbgrab.c */
 static int get_frame_brightness(const char *id, const char *env) {
-     if (!id || !strlen(id)) {
-         id = DEFAULT_FB;
+    int ret = WRONG_PLUGIN;
+    
+    struct udev_device *dev = NULL;
+    if (!id || !strlen(id)) {
+        /* Fetch first matching device from udev */
+        get_udev_device(NULL, FB_SUBSYSTEM, NULL, NULL, &dev);
+        if (!dev) {
+            return ret;
+        }
+        id = udev_device_get_devnode(dev);
     }
     
-    int ret = WRONG_PLUGIN;
     unsigned char *buf_p = NULL;
     int fd = open(id, O_RDONLY);
     if (fd == -1) {
         fprintf(stderr, "Error: Couldn't open %s.\n", id);
-        return ret;
+        goto err;
     }
     
     ret = UNSUPPORTED;
@@ -61,6 +69,9 @@ err:
     free(buf_p);
     if (fd != -1) {
         close(fd);
+    }
+    if (dev) {
+        udev_device_unref(dev);
     }
     return ret;
 }

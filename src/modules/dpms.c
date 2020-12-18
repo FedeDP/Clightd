@@ -94,15 +94,22 @@ static int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
         return r;
     }
     
+    /*
+     * Note: this is freed by drm plugin if it is an empty string
+     * to get a default drm device.
+     */
+    const char *dpy = strdup(display);
     dpms_plugin *plugin = userdata;
     int dpms_state = WRONG_PLUGIN;
     if (!plugin) {
         for (int i = 0; i < DPMS_NUM && dpms_state == WRONG_PLUGIN; i++) {
-            dpms_state = plugins[i]->get(display, env);
+            dpms_state = plugins[i]->get(&dpy, env);
         }
     } else {
-        dpms_state = plugin->get(display, env);
+        dpms_state = plugin->get(&dpy, env);
     }
+    free((char *)dpy);
+    
     if (dpms_state < 0) {
         switch (dpms_state) {
         case COMPOSITOR_NO_PROTOCOL:
@@ -141,15 +148,20 @@ static int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
         return -EINVAL;
     }
     
+    /*
+     * Note: this is freed by drm plugin if it is an empty string
+     * to get a default drm device.
+     */
+    const char *dpy = strdup(display);
     dpms_plugin *plugin = userdata;
     int err = WRONG_PLUGIN;
     if (!plugin) {
         for (int i = 0; i < DPMS_NUM && err == WRONG_PLUGIN; i++) {
             plugin = plugins[i];
-            err = plugin->set(display, env, level);
+            err = plugin->set(&dpy, env, level);
         }
     } else {
-        err = plugin->set(display, env, level);
+        err = plugin->set(&dpy, env, level);
     }
     if (err) {
         switch (err) {
@@ -163,13 +175,15 @@ static int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
             sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Failed to set dpms level.");
             break;
         }
-        return -EACCES;
+        err = -EACCES;
+    } else {
+        m_log("New dpms state: %d.\n", level);
+        sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "si", dpy, level);
+        sd_bus_emit_signal(bus, plugin->obj_path, bus_interface, "Changed", "si", dpy, level);
+        err = sd_bus_reply_method_return(m, "b", true);
     }
-    
-    m_log("New dpms state: %d.\n", level);
-    sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "si", display, level);
-    sd_bus_emit_signal(bus, plugin->obj_path, bus_interface, "Changed", "si", display, level);
-    return sd_bus_reply_method_return(m, "b", true);
+    free((char *)dpy);
+    return err;
 }
 
 #endif

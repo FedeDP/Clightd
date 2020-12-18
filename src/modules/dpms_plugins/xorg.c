@@ -12,14 +12,14 @@ DPMS("Xorg");
  * 2     DPMSModeSuspend     Blanked, lower power
  * 3     DPMSModeOff         Shut off, awaiting activity
  */
-static int get(const char *display, const char *xauthority) {
+static int get(const char **display, const char *xauthority) {
     BOOL onoff;
     CARD16 s;
     int ret = WRONG_PLUGIN;
     
     setenv("XAUTHORITY", xauthority, 1);
     
-    Display *dpy = XOpenDisplay(display);
+    Display *dpy = XOpenDisplay(*display);
     if (dpy) {
         if (DPMSCapable(dpy)) {
             DPMSInfo(dpy, &s, &onoff);
@@ -34,13 +34,13 @@ static int get(const char *display, const char *xauthority) {
     return ret;
 }
 
-static int set(const char *display, const char *xauthority, int dpms_level) {
+static int set(const char **display, const char *xauthority, int dpms_level) {
     int ret = WRONG_PLUGIN;
     
     /* set xauthority cookie */
     setenv("XAUTHORITY", xauthority, 1);
     
-    Display *dpy = XOpenDisplay(display);
+    Display *dpy = XOpenDisplay(*display);
     if (dpy) {
         if (DPMSCapable(dpy)) {
             DPMSEnable(dpy);

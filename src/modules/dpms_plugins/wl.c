@@ -153,8 +153,8 @@ static void destroy_node(struct output *output) {
     free(output);
 }
 
-static int get(const char *display, const char *env) {
-    int ret = wl_init(display, env);
+static int get(const char **display, const char *env) {
+    int ret = wl_init(*display, env);
     if (ret == 0) {
         struct output *output;
          wl_list_for_each(output, &outputs, link) {
@@ -167,8 +167,8 @@ static int get(const char *display, const char *env) {
     return ret;
 }
 
-static int set(const char *display, const char *env, int level) {
-    int ret = wl_init(display, env);
+static int set(const char **display, const char *env, int level) {
+    int ret = wl_init(*display, env);
      if (ret == 0) {
         struct output *output;
         wl_list_for_each(output, &outputs, link) {

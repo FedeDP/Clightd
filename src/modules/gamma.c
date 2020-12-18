@@ -247,8 +247,8 @@ static void client_dtor(void *c) {
         cl->plugin->dtor(cl->priv);
     }
     free(cl->priv);
-    free(cl->display);
-    free(cl->env);
+    free((char *)cl->display);
+    free((char *)cl->env);
     free(cl);
 }
 
@@ -352,10 +352,10 @@ static gamma_client *fetch_client(gamma_plugin *plugin, const char *display, con
             *err = WRONG_PLUGIN;
             for (int i = 0; i < GAMMA_NUM && *err == WRONG_PLUGIN; i++) {
                 plugin = plugins[i];
-                *err = plugin->validate(cl->display, cl->env, &cl->priv);
+                *err = plugin->validate(&cl->display, cl->env, &cl->priv);
             }
         } else {
-            *err = plugin->validate(cl->display, cl->env, &cl->priv);
+            *err = plugin->validate(&cl->display, cl->env, &cl->priv);
         }
         if (*err != 0) {
             client_dtor(cl);

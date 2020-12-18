@@ -9,7 +9,7 @@ typedef struct {
 
 GAMMA("Drm");
 
-static int validate(const char *id, const char *env, void **priv_data) {
+static int validate(const char **id, const char *env, void **priv_data) {
     int ret = WRONG_PLUGIN;
     int fd = drm_open_card(id);
     if (fd < 0) {
@@ -28,6 +28,7 @@ static int validate(const char *id, const char *env, void **priv_data) {
             ret = -ENOMEM;
         }
     } else {
+        perror("gamma drmModeGetResources");
         ret = UNSUPPORTED;
     }
     

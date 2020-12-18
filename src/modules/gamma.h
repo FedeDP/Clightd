@@ -24,16 +24,20 @@ typedef struct _gamma_cl {
     unsigned int smooth_step;
     unsigned int smooth_wait;
     unsigned int current_temp;
-    char *display;
-    char *env;
+    const char *display;
+    const char *env;
     int fd;
     struct _gamma_plugin *plugin;
     void *priv;
 } gamma_client;
 
+/* 
+ * validate() takes double pointer as 
+ * drm plugin may override id.
+ */
 typedef struct _gamma_plugin {
     const char *name;
-    int (*validate)(const char *id, const char *env, void **priv_data);
+    int (*validate)(const char **id, const char *env, void **priv_data);
     int (*set)(void *priv_data, const int temp);
     int (*get)(void *priv_data);
     int (*dtor)(void *priv_data);
@@ -41,7 +45,7 @@ typedef struct _gamma_plugin {
 } gamma_plugin;
 
 #define GAMMA(name) \
-    static int validate(const char *id, const char *env, void **priv_data); \
+    static int validate(const char **id, const char *env, void **priv_data); \
     static int set(void *priv_data, const int temp); \
     static int get(void *priv_data); \
     static int dtor(void *priv_data); \

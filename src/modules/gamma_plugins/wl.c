@@ -41,8 +41,8 @@ static const struct wl_registry_listener registry_listener = {
 
 GAMMA("Wl");
 
-static int validate(const char *id, const char *env,  void **priv_data) {
-    struct wl_display *display = fetch_wl_display(id, env);
+static int validate(const char **id, const char *env,  void **priv_data) {
+    struct wl_display *display = fetch_wl_display(*id, env);
     if (display == NULL) {
         return WRONG_PLUGIN;
     }
