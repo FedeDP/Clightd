@@ -1,5 +1,5 @@
 [D-BUS Service]
 Name=org.clightd.clightd
-Exec=@DAEMON_DIR@/clightd
+Exec=@CMAKE_INSTALL_FULL_LIBEXECDIR@/clightd
 User=root
 SystemdService=clightd.service
