@@ -27,9 +27,6 @@ set_property(TARGET ${PROJECT_NAME} PROPERTY C_STANDARD 99)
 pkg_check_modules(REQ_LIBS REQUIRED libudev libmodule>=5.0.0 libjpeg)
 pkg_check_modules(POLKIT REQUIRED polkit-gobject-1)
 pkg_check_modules(DBUS REQUIRED dbus-1)
-if(WITH_DDC)
-   pkg_check_modules(SYSTEMD_BASE REQUIRED systemd)
-endif()
 pkg_search_module(LOGIN_LIBS REQUIRED libelogind libsystemd>=221)
 target_link_libraries(${PROJECT_NAME}
                       m
