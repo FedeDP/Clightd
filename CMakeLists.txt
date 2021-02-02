@@ -147,9 +147,13 @@ if(WITH_DDC)
                 DESTINATION "${MODULE_LOAD_DIR}")
     endif()
 endif()
-install(FILES ${SCRIPT_DIR}/org.clightd.clightd.conf
+if(DBUS_CONFIG_DIR)
+    install(FILES ${SCRIPT_DIR}/org.clightd.clightd.conf
+        DESTINATION ${DBUS_CONFIG_DIR})
+else()
+    install(FILES ${SCRIPT_DIR}/org.clightd.clightd.conf
         DESTINATION /etc/dbus-1/system.d/)
-        
+endif()
 #
 # Packaging support
 #
