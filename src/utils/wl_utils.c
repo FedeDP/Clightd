@@ -3,6 +3,7 @@
 #include "wl_utils.h"
 #include "commons.h"
 #include <module/map.h>
+#include <sys/syscall.h>
 
 typedef struct {
     struct wl_display *dpy;
@@ -62,8 +63,17 @@ struct wl_display *fetch_wl_display(const char *display, const char *env) {
 
 }
 
+/*
+ * Directly use syscall on old glibc:  
+ * > The memfd_create() system call first appeared in Linux 3.17;
+ * > glibc support was added in version 2.27.
+ */
 int create_anonymous_file(off_t size, const char *filename) {
+#if __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 27
     int fd = memfd_create(filename, 0);
+#else
+    int fd = syscall(SYS_memfd_create, filename, 0);
+#endif
     if (fd < 0) {
         return -1;
     }

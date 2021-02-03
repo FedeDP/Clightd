@@ -106,55 +106,73 @@ set_target_properties(
 install(TARGETS ${PROJECT_NAME}
         RUNTIME DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}")
 
-# Configure files with install paths
 set(SCRIPT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Scripts")
 
-configure_file(${SCRIPT_DIR}/org.clightd.clightd.service
-               org.clightd.clightd.service
-               @ONLY)
-
-# Installation of files
-pkg_get_variable(SYSTEM_BUS_DIR dbus-1 system_bus_services_dir)
-pkg_get_variable(POLKIT_ACTION_DIR polkit-gobject-1 actiondir)
+#### Installation of files ####
 
 # Only install systemd service in systemd environment
-pkg_check_modules(SYSTEMD libsystemd)
-if(SYSTEMD_FOUND)
+pkg_check_modules(SYSTEMD_BASE systemd)
+if(SYSTEMD_BASE_FOUND)
     # Use polkitd.service on ubuntu 16.04
     if(EXISTS /lib/systemd/system/polkitd.service)
         set(POLKIT_NAME "polkitd")
     else()
         set(POLKIT_NAME "polkit")
     endif()
+
     # Properly configure clightd systemd service to use correct dep on polkit.service
     configure_file(${SCRIPT_DIR}/clightd.service clightd.service @ONLY)
     
-    # This can be overridden bt cmdline
-    set(SYSTEMD_SERVICE_DIR ${CMAKE_INSTALL_LIBDIR}/systemd/system CACHE PATH
-        "Systemd services directory")
+    # This can be overridden by cmdline
+    if(NOT SYSTEMD_SERVICE_DIR)
+        # Fetch it from systemd
+        pkg_get_variable(SYSTEMD_SERVICE_DIR systemd systemdsystemconfdir)
+    endif()
 
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/clightd.service
         DESTINATION ${SYSTEMD_SERVICE_DIR})
 endif()
 
+# Install dbus service
+configure_file(${SCRIPT_DIR}/org.clightd.clightd.service
+               org.clightd.clightd.service
+               @ONLY)
+pkg_get_variable(SYSTEM_BUS_DIR dbus-1 system_bus_services_dir)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/org.clightd.clightd.service
         DESTINATION ${SYSTEM_BUS_DIR})
+
+# Install polkit policy
+pkg_get_variable(POLKIT_ACTION_DIR polkit-gobject-1 actiondir)
 install(FILES ${SCRIPT_DIR}/org.clightd.clightd.policy
         DESTINATION ${POLKIT_ACTION_DIR})
+        
+# When using DDC, try to install an i2c kernel module loading script
 if(WITH_DDC)
-    pkg_get_variable(MODULE_LOAD_DIR systemd modulesloaddir)
+    # Users can provide a MODULE_LOAD_DIR
+    if(NOT MODULE_LOAD_DIR)
+        if(SYSTEMD_BASE_FOUND)
+            # Fetch it from systemd
+            pkg_get_variable(MODULE_LOAD_DIR systemd modulesloaddir)
+        else()
+            # No luck.
+            message(WARNING "Automatic loading of i2c module disabled.")
+        endif()
+    endif()
     if(MODULE_LOAD_DIR)
         install(FILES ${SCRIPT_DIR}/i2c_clightd.conf
                 DESTINATION "${MODULE_LOAD_DIR}")
     endif()
 endif()
-if(DBUS_CONFIG_DIR)
-    install(FILES ${SCRIPT_DIR}/org.clightd.clightd.conf
-        DESTINATION ${DBUS_CONFIG_DIR})
-else()
-    install(FILES ${SCRIPT_DIR}/org.clightd.clightd.conf
-        DESTINATION /etc/dbus-1/system.d/)
+
+# Install dbus conf
+if(NOT DBUS_CONFIG_DIR)
+    pkg_get_variable(DBUS_SYSTEM_CONF_DIR dbus-1 sysconfdir)
+    set(DBUS_CONFIG_DIR "${DBUS_SYSTEM_CONF_DIR}/dbus-1/system.d/" CACHE PATH "dbus config directory")
+    message(STATUS "Using default value for dbus config dir: ${DBUS_CONFIG_DIR}")
 endif()
+install(FILES ${SCRIPT_DIR}/org.clightd.clightd.conf
+        DESTINATION ${DBUS_CONFIG_DIR})
+
 #
 # Packaging support
 #
@@ -178,7 +196,7 @@ set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Backlight-related bus API.")
 set(CPACK_RPM_PACKAGE_LICENSE "GPL")
 set(CPACK_RPM_PACKAGE_URL "https://github.com/FedeDP/Clightd")
 set(CPACK_RPM_PACKAGE_GROUP "System Environment/Daemons")
-set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/etc/dbus-1" "/etc/dbus-1/system.d" "${CMAKE_INSTALL_PREFIX}" "${CMAKE_INSTALL_LIBDIR}" "${SYSTEM_BUS_DIR}" "${POLKIT_ACTION_DIR}")
+set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "${DBUS_SYSTEM_CONF_DIR}/dbus-1" "${DBUS_CONFIG_DIR}" "${CMAKE_INSTALL_PREFIX}" "${CMAKE_INSTALL_LIBDIR}" "${SYSTEM_BUS_DIR}" "${POLKIT_ACTION_DIR}")
 set(CPACK_RPM_PACKAGE_DESCRIPTION ${CPACK_PACKAGE_DESCRIPTION})
 set(CPACK_RPM_PACKAGE_REQUIRES "libmodule >= 5.0.0")
 set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
