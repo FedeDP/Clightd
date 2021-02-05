@@ -76,13 +76,11 @@ end: \
                 case DDCA_IO_I2C:
                     snprintf(id, size, "/dev/i2c-%d", dinfo->path.path.i2c_busno);
                     break;
-                case DDCA_IO_ADL:
-                    snprintf(id, size, "%d.%d", dinfo->path.path.adlno.iAdapterIndex, dinfo->path.path.adlno.iDisplayIndex);
-                    break;
                 case DDCA_IO_USB:
                     snprintf(id, size, "/dev/usb/hiddev%d", dinfo->path.path.hiddev_devno);
                     break;
                 default:
+                    snprintf(id, size, "%d", dinfo->dispno);
                     break;
             }
         } else {
@@ -91,15 +89,15 @@ end: \
     }
     
     static DDCA_Status convert_sn_to_id(const char *sn, DDCA_Display_Identifier *pdid) {
-        int id1, id2;
+        int id1;
         if (sscanf(sn, "/dev/i2c-%d", &id1) == 1) {
             return ddca_create_busno_display_identifier(id1, pdid);
         }
         if (sscanf(sn, "/dev/usb/hiddev%d", &id1) == 1) {
             return ddca_create_usb_hiddev_display_identifier(id1, pdid);
         }
-        if (sscanf(sn, "%d.%d", &id1, &id2) == 2) {
-            return ddca_create_adlno_display_identifier(id1, id2, pdid);
+        if (sscanf(sn, "%d", &id1) == 1) {
+            return ddca_create_dispno_display_identifier(id1, pdid);
         }
         /* Ok it is a normal sn */
         return ddca_create_mfg_model_sn_display_identifier(NULL, NULL, sn, pdid);
@@ -235,11 +233,13 @@ static void receive(const msg_t *msg, const void *userdata) {
             /* From udev monitor, consume! */
             struct udev_device *dev = udev_monitor_receive_device(mon);
             if (dev) {
-                int val = atoi(udev_device_get_sysattr_value(dev, "brightness"));
-                int max = atoi(udev_device_get_sysattr_value(dev, "max_brightness"));
-                const double pct = (double)val / max;
-                
-                sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "sd", udev_device_get_sysname(dev), pct);
+                const char *action = udev_device_get_action(dev);
+                if (action && !strcmp(action, "change")) {
+                    int val = atoi(udev_device_get_sysattr_value(dev, "brightness"));
+                    int max = atoi(udev_device_get_sysattr_value(dev, "max_brightness"));
+                    const double pct = (double)val / max;
+                    sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "sd", udev_device_get_sysname(dev), pct);
+                }
                 udev_device_unref(dev);
             }
         }

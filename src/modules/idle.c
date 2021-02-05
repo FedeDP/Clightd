@@ -4,6 +4,7 @@
 #include <linux/limits.h>
 #include <math.h>
 #include <stddef.h>
+#include <polkit.h>
 
 #define BUF_LEN (sizeof(struct inotify_event) + NAME_MAX + 1)
 
@@ -193,6 +194,8 @@ static idle_client_t *validate_client(const char *path, sd_bus_message *m, sd_bu
 }
 
 static int method_get_client(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+    ASSERT_AUTH();
+
     idle_client_t *c = find_available_client();
     if (c) {
         c->in_use = true;
@@ -216,9 +219,10 @@ static int method_get_client(sd_bus_message *m, void *userdata, sd_bus_error *re
 }
 
 static int method_rm_client(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    const char *obj_path = NULL;
+    ASSERT_AUTH();
     
     /* Read the parameters */
+    const char *obj_path = NULL;
     int r = sd_bus_message_read(m, "o", &obj_path);
     if (r < 0) {
         m_log("Failed to parse parameters: %s\n", strerror(-r));
@@ -240,7 +244,7 @@ static int method_rm_client(sd_bus_message *m, void *userdata, sd_bus_error *ret
     return -sd_bus_error_get_errno(ret_error);
 }
 
-static int method_start_client(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+static int method_start_client(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {    
     idle_client_t *c = validate_client(sd_bus_message_get_path(m), m, ret_error);
     if (c) {
         /* You can only start not-started clients, that must have Timeout setted */
@@ -262,7 +266,7 @@ static int method_start_client(sd_bus_message *m, void *userdata, sd_bus_error *
     return -sd_bus_error_get_errno(ret_error);
 }
 
-static int method_stop_client(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
+static int method_stop_client(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {    
     idle_client_t *c = validate_client(sd_bus_message_get_path(m), m, ret_error);
     if (c) {
         /* You can only stop running clients */
@@ -289,15 +293,14 @@ static int method_stop_client(sd_bus_message *m, void *userdata, sd_bus_error *r
 }
 
 static int set_timeout(sd_bus *b, const char *path, const char *interface, const char *property, 
-                       sd_bus_message *value, void *userdata, sd_bus_error *error) {
-
-    idle_client_t *c = validate_client(path, value, error);
+                       sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {    
+    idle_client_t *c = validate_client(path, m, ret_error);
     if (!c) {
-        return -sd_bus_error_get_errno(error);
+        return -sd_bus_error_get_errno(ret_error);
     }
     
     int old_timer  = *(int *)userdata;
-    int r = sd_bus_message_read(value, "u", userdata);
+    int r = sd_bus_message_read(m, "u", userdata);
     if (r < 0) {
         m_log("Failed to set timeout.\n");
         return r;

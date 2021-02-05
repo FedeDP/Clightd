@@ -46,3 +46,34 @@ void get_udev_device(const char *interface, const char *subsystem, const udev_ma
         sd_bus_error_set_errno(*ret_error, ENODEV);
     }
 }
+
+void udev_devices_foreach(const char *subsystem, const udev_match *match,  
+                          int (*cb)(struct udev_device *dev, void *userdata), void *userdata) {
+
+    struct udev_enumerate *enumerate = udev_enumerate_new(udev);
+    udev_enumerate_add_match_subsystem(enumerate, subsystem);
+    if (match) {
+        if (match->sysattr_key) {
+            udev_enumerate_add_match_sysattr(enumerate, match->sysattr_key, match->sysattr_val);
+        }
+        if (match->sysname) {
+            udev_enumerate_add_match_sysname(enumerate, match->sysname);
+        }
+    }
+    udev_enumerate_scan_devices(enumerate);
+    struct udev_list_entry *devices = udev_enumerate_get_list_entry(enumerate);
+    if (devices) {
+        struct udev_list_entry *entry = NULL;
+        udev_list_entry_foreach(entry, devices) {
+            const char *path = udev_list_entry_get_name(entry);
+            struct udev_device *dev = udev_device_new_from_syspath(udev, path);
+            int ret = cb(dev, userdata);
+            udev_device_unref(dev);
+            if (ret < 0) {
+                break;
+            }
+        }
+    }
+     /* Free the enumerator object */
+    udev_enumerate_unref(enumerate);
+}

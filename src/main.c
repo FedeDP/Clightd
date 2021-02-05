@@ -32,7 +32,7 @@ extern void bl_store_vpcode(int code);
 
 static const char bus_interface[] = "org.clightd.clightd";
 
-/* Every module needs these; let's init them before any module */
+/* Every module needs it; let's init it before any module */
 void modules_pre_start(void) {
     udev = udev_new();
 } 
