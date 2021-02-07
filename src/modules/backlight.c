@@ -294,7 +294,7 @@ static void reset_backlight_struct(smooth_client *sc, double target_pct, double 
 }
 
 static int add_backlight_sn(double target_pct, bool is_smooth, double smooth_step, 
-                             unsigned int smooth_wait, int verse, const char *sn, int internal) {
+                            unsigned int smooth_wait, int verse, const char *sn, int internal) {
     bool ok = !internal; // for external monitor -> always ok
     struct udev_device *dev = NULL;
     char *sn_id = (sn && strlen(sn)) ? strdup(sn) : NULL;
@@ -328,6 +328,7 @@ static int add_backlight_sn(double target_pct, bool is_smooth, double smooth_ste
             });
         }
     }
+    /* When internal is false, initial_pct is set afterwards */
 
     if (ok) {
         smooth_client *sc = calloc(1, sizeof(smooth_client));
@@ -522,6 +523,12 @@ static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_err
         add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, backlight_interface, 1);
         DDCUTIL_LOOP({
             add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, id, 0);
+            smooth_client *sc = map_get(running_clients, id);
+            if (sc) {
+                const uint16_t max = VALREC_MAX_VAL(valrec);
+                const uint16_t curr = VALREC_CUR_VAL(valrec);
+                sc->curr_pct = (double)curr / max;
+            }
         });
         m_log("Target pct: %s%.2lf\n", verse > 0 ? "+" : (verse < 0 ? "-" : ""), target_pct);
         // Returns true if no errors happened; false if another client is already changing backlight
