@@ -221,6 +221,15 @@ static void receive(const msg_t *msg, const void *userdata) {
                     set_external_backlight(sc);
                 }
             }
+            
+            /*
+             * For external monitor: 
+             * Emit signal now as we will never receive them from udev monitor.
+             */
+            if (!sc->d.dev) {
+                sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "sd", sc->d.sn, sc->curr_pct);
+            }
+            
             if (!sc->d.reached_target) {
                 struct itimerspec timerValue = {{0}};
                 timerValue.it_value.tv_sec = sc->smooth_wait / 1000;
@@ -229,14 +238,6 @@ static void receive(const msg_t *msg, const void *userdata) {
             } else {
                 m_log("%s reached target backlight: %s%.2lf.\n", sc->d.sn, sc->verse > 0 ? "+" : (sc->verse < 0 ? "-" : ""), sc->target_pct);
                 map_remove(running_clients, sc->d.sn);
-            }
-            
-            /*
-             * For external monitor: 
-             * Emit signal now as we will never receive them from udev monitor.
-             */
-            if (!sc->d.dev) {
-                sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "sd", sc->d.sn, sc->curr_pct);
             }
         } else {
             /* From udev monitor, consume! */
