@@ -93,13 +93,13 @@ static void receive(const msg_t *msg, const void *userdata) {
     if (strstr(key, KBD_SYSNAME_MATCH)) {
         const char *action = udev_device_get_action(dev);
         if (action) {
-            if (!strcmp(action, "add")) {
+            if (!strcmp(action, UDEV_ACTION_ADD)) {
                 // Register new interface
                 kbd_new(dev, NULL);
-            } else if (!strcmp(action, "remove")) {
+            } else if (!strcmp(action, UDEV_ACTION_RM)) {
                 // Remove the interface
                 map_remove(kbds, key);
-            } else if (!strcmp(action, "change")) {
+            } else if (!strcmp(action, UDEV_ACTION_CHANGE)) {
                 // Changed event!
                 /* Note: it seems like "change" udev signal is never triggered for kbd backlight though */                
                 kbd_t *k = map_get(kbds, key);

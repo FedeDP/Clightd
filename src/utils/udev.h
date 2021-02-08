@@ -1,6 +1,8 @@
 #include <commons.h>
 
-#define UDEV_RM_ACTION "remove"
+#define UDEV_ACTION_ADD     "add"
+#define UDEV_ACTION_RM      "remove"
+#define UDEV_ACTION_CHANGE  "change"
 
 typedef struct {
     const char *sysattr_key;

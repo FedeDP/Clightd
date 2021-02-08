@@ -138,7 +138,7 @@ static bool validate_dev(void *dev) {
         }
         /* Always return true if action is "remove", ie: when called by udev monitor */
         const char *action = udev_device_get_action(dev);
-        return action && !strcmp(action, UDEV_RM_ACTION);
+        return action && !strcmp(action, UDEV_ACTION_RM);
     }
     return false;
 }

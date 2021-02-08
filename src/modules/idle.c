@@ -218,9 +218,7 @@ static int method_get_client(sd_bus_message *m, void *userdata, sd_bus_error *re
     return -ENOMEM;
 }
 
-static int method_rm_client(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    ASSERT_AUTH();
-    
+static int method_rm_client(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {    
     /* Read the parameters */
     const char *obj_path = NULL;
     int r = sd_bus_message_read(m, "o", &obj_path);

@@ -214,10 +214,9 @@ static void receive(const msg_t *msg, const void *userdata) {
             smooth_client *sc = (smooth_client *)msg->fd_msg->userptr;
             read(sc->smooth_fd, &t, sizeof(uint64_t));
             if (!sc->d.reached_target) {
-                int ret = set_internal_backlight(sc);
-                // error: it was not an internal backlight interface
-                if (ret == -1) {
-                    // try to use it as external backlight sn
+                if (sc->d.dev) {
+                    set_internal_backlight(sc);
+                } else {
                     set_external_backlight(sc);
                 }
             }
@@ -244,7 +243,7 @@ static void receive(const msg_t *msg, const void *userdata) {
             struct udev_device *dev = udev_monitor_receive_device(mon);
             if (dev) {
                 const char *action = udev_device_get_action(dev);
-                if (action && !strcmp(action, "change")) {
+                if (action && !strcmp(action, UDEV_ACTION_CHANGE)) {
                     int val = atoi(udev_device_get_sysattr_value(dev, "brightness"));
                     int max = atoi(udev_device_get_sysattr_value(dev, "max_brightness"));
                     const double pct = (double)val / max;
