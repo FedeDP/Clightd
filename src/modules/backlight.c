@@ -103,6 +103,7 @@ end: \
         if (sscanf(sn, "%d", &id) == 1) {
             return ddca_create_dispno_display_identifier(id, pdid);
         }
+        return -ENOENT;
     }
 
 #else
