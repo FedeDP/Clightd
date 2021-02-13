@@ -113,6 +113,7 @@ static int wl_init(const char *display, const char *env) {
             break;
         }
         if (!output->supported) {
+            wl_list_remove(&output->link);
             destroy_node(output);
         }
     }
@@ -133,6 +134,7 @@ static void wl_deinit(void) {
     struct output *output;
     struct output *tmp_output;
     wl_list_for_each_safe(output, tmp_output, &outputs, link) {
+        wl_list_remove(&output->link);
         destroy_node(output);
     }
     if (dpms_registry) {
@@ -147,9 +149,12 @@ static void wl_deinit(void) {
 }
 
 static void destroy_node(struct output *output) {
-    wl_list_remove(&output->link);
-    org_kde_kwin_dpms_destroy(output->dpms_control);
-    wl_output_destroy(output->wl_output);
+    if (output->wl_output) {
+        wl_output_destroy(output->wl_output);
+    }
+    if (output->dpms_control) {
+        org_kde_kwin_dpms_destroy(output->dpms_control);
+    }
     free(output);
 }
 

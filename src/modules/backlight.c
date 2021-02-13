@@ -214,10 +214,14 @@ static void receive(const msg_t *msg, const void *userdata) {
             smooth_client *sc = (smooth_client *)msg->fd_msg->userptr;
             read(sc->smooth_fd, &t, sizeof(uint64_t));
             if (!sc->d.reached_target) {
+                int ret;
                 if (sc->d.dev) {
-                    set_internal_backlight(sc);
+                    ret = set_internal_backlight(sc);
                 } else {
-                    set_external_backlight(sc);
+                    ret = set_external_backlight(sc);
+                }
+                if (ret != 0) {
+                    m_log("failed to set backlight for %s\n", sc->d.sn);
                 }
             }
             

@@ -92,7 +92,7 @@ static int validate(const char **id, const char *env,  void **priv_data) {
     priv->dpy = display;
     return 0;
     
-    err:
+err:
     dtor(priv);
     return ret;
 }
