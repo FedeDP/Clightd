@@ -3,12 +3,13 @@
 ### Backlight
 - [x] Support ddcutil 1.0.0
 - [x] Emit Backlight.Changed for external monitors
+- [x] Improve external monitors ddc handling
 
 ### Keyboard
 - [x] Add a keyboard backlight module
 
 ### Idle
-- [x] Check auth in GetClient/DestroyClient
+- [x] Check auth in GetClient
 
 ## 5.X
 - [ ] Keep it up to date with possible ddcutil/libmodule api changes

@@ -20,7 +20,7 @@ static void bl_load_vpcode(void) {
     }
 }
 
-#define DDCUTIL_LOOP(func) \
+#define DDCUTIL_LOOP(keep_ref, func) \
     DDCA_Display_Info_List *dlist = NULL; \
     ddca_get_display_info_list2(false, &dlist); \
     if (dlist) { \
@@ -39,12 +39,14 @@ static void bl_load_vpcode(void) {
                 func; \
                 ddca_free_any_vcp_value(valrec); \
             } \
-            ddca_close_display(dh); \
+            if (!keep_ref) { \
+                ddca_close_display(dh); \
+            } \
         } \
         ddca_free_display_info_list(dlist); \
     }
 
-#define DDCUTIL_FUNC(sn, func) \
+#define DDCUTIL_FUNC(keep_ref, sn, func) \
     DDCA_Display_Identifier pdid = NULL; \
     DDCA_Display_Ref dref = NULL; \
     DDCA_Display_Handle dh = NULL; \
@@ -64,7 +66,9 @@ static void bl_load_vpcode(void) {
     } \
 end: \
     if (dh) { \
-        ddca_close_display(dh); \
+        if (!keep_ref) { \
+                ddca_close_display(dh); \
+        } \
     } \
     if (pdid) { \
         ddca_free_display_identifier(pdid); \
@@ -105,27 +109,38 @@ end: \
 
 #else
 
-#define DDCUTIL_LOOP(func) do {} while(0)
-#define DDCUTIL_FUNC(sn, func) do {} while(0)
+#define DDCUTIL_LOOP(keep_ref, func) do {} while(0)
+#define DDCUTIL_FUNC(keep_ref, sn, func) do {} while(0)
 
 #endif
 
 #define BL_SUBSYSTEM        "backlight"
 
 typedef struct {
-    struct udev_device *dev;
+    bool is_internal;
+    union {
+        struct udev_device *internal_dev;
+#ifdef DDC_PRESENT
+        DDCA_Display_Handle external_dev;
+#endif
+    };
     char *sn;
-    bool reached_target;
-} device;
+    int max;
+} device_t;
+
+typedef struct {
+    double step;
+    unsigned int wait;
+    int fd;
+} smooth_t;
 
 typedef struct {
     double curr_pct;
     double target_pct;
-    double smooth_step;
-    unsigned int smooth_wait;
-    int smooth_fd;
-    device d;
-    double verse;
+    smooth_t smooth;
+    device_t d;
+    int verse;
+    bool reached_target;
 } smooth_client;
 
 /* Helpers */
@@ -136,7 +151,7 @@ static int add_backlight_sn(double target_pct, bool is_smooth, double smooth_ste
                             unsigned int smooth_wait, int verse, const char *sn, int internal);
 static void sanitize_target_step(double *target_pct, double *smooth_step);
 static int get_all_brightness(sd_bus_message *m, sd_bus_message **reply, sd_bus_error *ret_error);
-static void next_backlight_level(smooth_client *sc);
+static int next_backlight_level(smooth_client *sc);
 static int set_internal_backlight(smooth_client *sc);
 static int set_external_backlight(smooth_client *sc);
 static int set_single_serial(double target_pct, bool is_smooth, double smooth_step, const unsigned int smooth_wait,
@@ -144,6 +159,7 @@ static int set_single_serial(double target_pct, bool is_smooth, double smooth_st
 static void append_backlight(sd_bus_message *reply, const char *name, const double pct);
 static int append_internal_backlight(sd_bus_message *reply, const char *path);
 static int append_external_backlight(sd_bus_message *reply, const char *sn, bool first_found);
+static int append_running_backlight(sd_bus_message *reply, const char *sn);
 
 /* Exposed */
 static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
@@ -212,16 +228,22 @@ static void receive(const msg_t *msg, const void *userdata) {
         if (msg->fd_msg->userptr) {
             /* From smooth client */
             smooth_client *sc = (smooth_client *)msg->fd_msg->userptr;
-            read(sc->smooth_fd, &t, sizeof(uint64_t));
-            if (!sc->d.reached_target) {
+            read(sc->smooth.fd, &t, sizeof(uint64_t));
+            if (!sc->reached_target) {
                 int ret;
-                if (sc->d.dev) {
+                if (sc->d.is_internal) {
                     ret = set_internal_backlight(sc);
                 } else {
                     ret = set_external_backlight(sc);
                 }
                 if (ret != 0) {
                     m_log("failed to set backlight for %s\n", sc->d.sn);
+                    /* 
+                     * failed to set backlight; stop right now to avoid endless loop:
+                     * some external monitors report the capability to mange backlight
+                     * but they fail instead, leaving us to an infinite loop.
+                     */
+                    sc->reached_target = true;
                 }
             }
             
@@ -229,15 +251,15 @@ static void receive(const msg_t *msg, const void *userdata) {
              * For external monitor: 
              * Emit signal now as we will never receive them from udev monitor.
              */
-            if (!sc->d.dev) {
+            if (!sc->d.is_internal) {
                 sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "sd", sc->d.sn, sc->curr_pct);
             }
             
-            if (!sc->d.reached_target) {
+            if (!sc->reached_target) {
                 struct itimerspec timerValue = {{0}};
-                timerValue.it_value.tv_sec = sc->smooth_wait / 1000;
-                timerValue.it_value.tv_nsec = 1000 * 1000 * (sc->smooth_wait % 1000); // ms
-                timerfd_settime(sc->smooth_fd, 0, &timerValue, NULL);
+                timerValue.it_value.tv_sec = sc->smooth.wait / 1000;
+                timerValue.it_value.tv_nsec = 1000 * 1000 * (sc->smooth.wait % 1000); // ms
+                timerfd_settime(sc->smooth.fd, 0, &timerValue, NULL);
             } else {
                 m_log("%s reached target backlight: %s%.2lf.\n", sc->d.sn, sc->verse > 0 ? "+" : (sc->verse < 0 ? "-" : ""), sc->target_pct);
                 map_remove(running_clients, sc->d.sn);
@@ -267,42 +289,49 @@ static void destroy(void) {
 static void dtor_client(void *client) {
     smooth_client *sc = (smooth_client *)client;
     /* Free all resources */
-    m_deregister_fd(sc->smooth_fd); // this will automatically close it!
+    m_deregister_fd(sc->smooth.fd); // this will automatically close it!
     free(sc->d.sn);
-    if (sc->d.dev) {
-        udev_device_unref(sc->d.dev);
+    if (sc->d.is_internal) {
+        udev_device_unref(sc->d.internal_dev);
+    } else {
+#ifdef DDC_PRESENT
+        ddca_close_display(sc->d.external_dev);
+#endif
     }
     free(sc);
 }
 
 static void reset_backlight_struct(smooth_client *sc, double target_pct, double initial_pct, bool is_smooth, 
                                    double smooth_step, unsigned int smooth_wait, int verse) {
-    sc->smooth_step = is_smooth ? smooth_step : 0.0;
-    sc->smooth_wait = is_smooth ? smooth_wait : 0;
+    sc->smooth.step = is_smooth ? smooth_step : 0.0;
+    sc->smooth.wait = is_smooth ? smooth_wait : 0;
     sc->target_pct = target_pct;
+    sc->reached_target = false;
     if (initial_pct != -1) {
         sc->curr_pct = initial_pct;
     }
     sc->verse = verse;
     
     /* Only if not already there */
-    if (sc->smooth_fd == 0) {
-        sc->smooth_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
-        m_register_fd(sc->smooth_fd, true, sc);
+    if (sc->smooth.fd == 0) {
+        sc->smooth.fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+        m_register_fd(sc->smooth.fd, true, sc);
     }
     
     struct itimerspec timerValue = {{0}};
     timerValue.it_value.tv_sec = 0;
     timerValue.it_value.tv_nsec = 1; // immediately
-    timerfd_settime(sc->smooth_fd, 0, &timerValue, NULL);
+    timerfd_settime(sc->smooth.fd, 0, &timerValue, NULL);
 }
 
 static int add_backlight_sn(double target_pct, bool is_smooth, double smooth_step, 
                             unsigned int smooth_wait, int verse, const char *sn, int internal) {
     bool ok = !internal; // for external monitor -> always ok
     struct udev_device *dev = NULL;
+    void *device = NULL;
     char *sn_id = (sn && strlen(sn)) ? strdup(sn) : NULL;
     double initial_pct = 0.0;
+    int max = -1;
     
     /* Properly check internal interface exists before adding it */
     if (internal) {
@@ -312,34 +341,50 @@ static int add_backlight_sn(double target_pct, bool is_smooth, double smooth_ste
             if (!sn_id) {
                 sn_id = strdup(udev_device_get_sysname(dev));
             }
-            int max = atoi(udev_device_get_sysattr_value(dev, "max_brightness"));
+            max = atoi(udev_device_get_sysattr_value(dev, "max_brightness"));
             int curr = atoi(udev_device_get_sysattr_value(dev, "brightness"));
             initial_pct = (double) curr / max;
+            internal = 1;
+            device = dev;
         }
 
         if (internal == -1 && !ok) {
-            DDCUTIL_LOOP({
-                if (!sn_id) {
-                    sn_id = strdup(id);
-                }
-                if (!strcmp(sn_id, id)) {
+            if (sn_id) {
+                // find display with given id
+                DDCUTIL_FUNC(true, sn_id, {
                     ok = true;
-                    leave = true; // loop variable defined in DDCUTIL_LOOP
-                    const uint16_t max = VALREC_MAX_VAL(valrec);
+                    max = VALREC_MAX_VAL(valrec);
                     const uint16_t curr = VALREC_CUR_VAL(valrec);
                     initial_pct = (double)curr / max;
-                }
-            });
+                    internal = 0;
+                    device = dh;
+                });
+            } else {
+                // Find first display available
+                DDCUTIL_LOOP(true, {
+                    sn_id = strdup(id);
+                    ok = true;
+                    leave = true; // loop variable defined in DDCUTIL_LOOP
+                    max = VALREC_MAX_VAL(valrec);
+                    const uint16_t curr = VALREC_CUR_VAL(valrec);
+                    initial_pct = (double)curr / max;
+                    internal = 0;
+                    device = dh;
+                });
+            }
         }
     }
-    /* When internal is false, initial_pct is set afterwards */
+    /* When internal argument was 0, initial_pct is set afterwards */
 
     if (ok) {
         smooth_client *sc = calloc(1, sizeof(smooth_client));
         reset_backlight_struct(sc, target_pct, initial_pct, is_smooth, smooth_step, smooth_wait, verse);
-        sc->d.dev = dev;
+        sc->d.is_internal = internal;
+        // device is internal or external, it does not matter because is inside an union
+        // thus sharing memory space.
+        sc->d.internal_dev = device;
         sc->d.sn = sn_id;
-        sc->d.reached_target = false;
+        sc->d.max = max;
 
         map_put(running_clients, sc->d.sn, sc);
     } else {
@@ -385,19 +430,19 @@ static int get_all_brightness(sd_bus_message *m, sd_bus_message **reply, sd_bus_
     return r;
 }
 
-static void next_backlight_level(smooth_client *sc) {
+static int next_backlight_level(smooth_client *sc) {
     double target_pct = sc->target_pct;
     if (sc->verse != 0) {
         target_pct = sc->curr_pct + (sc->verse * sc->target_pct);
         sanitize_target_step(&target_pct, NULL);
     } 
-    if (sc->smooth_step > 0) {
+    if (sc->smooth.step > 0) {
         if (target_pct < sc->curr_pct) {
-            sc->curr_pct = (sc->curr_pct - sc->smooth_step < target_pct) ? 
-            target_pct : sc->curr_pct - sc->smooth_step;
+            sc->curr_pct = (sc->curr_pct - sc->smooth.step < target_pct) ? 
+            target_pct : sc->curr_pct - sc->smooth.step;
         } else if (target_pct > sc->curr_pct) {
-            sc->curr_pct = (sc->curr_pct + sc->smooth_step) > target_pct ? 
-            target_pct : sc->curr_pct + sc->smooth_step;
+            sc->curr_pct = (sc->curr_pct + sc->smooth.step) > target_pct ? 
+            target_pct : sc->curr_pct + sc->smooth.step;
         } else {
             sc->curr_pct = -1.0f; // useless
         }
@@ -406,40 +451,38 @@ static void next_backlight_level(smooth_client *sc) {
     }
 
     if (sc->curr_pct == target_pct || sc->curr_pct == -1.0f) {
-        sc->d.reached_target = true;
+        sc->reached_target = true;
     }
+    return sc->d.max * sc->curr_pct;
 }
 
 static int set_internal_backlight(smooth_client *sc) {
     int r = -1;
 
-    if (sc->d.dev) {
-        int max = atoi(udev_device_get_sysattr_value(sc->d.dev, "max_brightness"));
-        next_backlight_level(sc);
-        int value = sc->curr_pct * max;
-        /* Check if next_backlight_level returned -1 */
-        if (value >= 0) {
-            char val[15] = {0};
-            snprintf(val, sizeof(val) - 1, "%d", value);
-            r = udev_device_set_sysattr_value(sc->d.dev, "brightness", val);
-        }
+    int value = next_backlight_level(sc);
+    /* Check if next_backlight_level returned -1 */
+    if (value >= 0) {
+        char val[15] = {0};
+        snprintf(val, sizeof(val) - 1, "%d", value);
+        r = udev_device_set_sysattr_value(sc->d.internal_dev, "brightness", val);
     }
     return r;
 }
 
 static int set_external_backlight(smooth_client *sc) {
     int ret = -1;
-
-    DDCUTIL_FUNC(sc->d.sn, {
-        const uint16_t max = VALREC_MAX_VAL(valrec);
-        next_backlight_level(sc);
-        int16_t new_value = sc->curr_pct * max;
-        int8_t new_sh = new_value >> 8;
-        int8_t new_sl = new_value & 0xff;
-        if (new_value >= 0 && ddca_set_non_table_vcp_value(dh, br_code, new_sh, new_sl) == 0) {
-            ret = 0;
+#ifdef DDC_PRESENT
+    DDCA_Any_Vcp_Value *valrec;
+    if (!ddca_get_any_vcp_value_using_explicit_type(sc->d.external_dev, br_code, DDCA_NON_TABLE_VCP_VALUE, &valrec)) {
+        int new_value = next_backlight_level(sc);
+        if (new_value >= 0) {
+            int8_t new_sh = (new_value >> 8) & 0xff;
+            int8_t new_sl = new_value & 0xff;
+            ret = ddca_set_non_table_vcp_value(sc->d.external_dev, br_code, new_sh, new_sl);
         }
-    });
+        ddca_free_any_vcp_value(valrec);
+    }
+#endif
     return ret;
 }
 
@@ -488,20 +531,63 @@ static int append_internal_backlight(sd_bus_message *reply, const char *path) {
 static int append_external_backlight(sd_bus_message *reply, const char *sn, bool first_found) {
     int ret = -1;
     if (sn && strlen(sn)) {
-        DDCUTIL_FUNC(sn, {
+        DDCUTIL_FUNC(false, sn, {
             ret = 0;
             append_backlight(reply, sn, (double)VALREC_CUR_VAL(valrec) / VALREC_MAX_VAL(valrec));
         });
     } else {
-        DDCUTIL_LOOP({
+        DDCUTIL_LOOP(false, {
             ret = 0;
             append_backlight(reply, id, (double)VALREC_CUR_VAL(valrec) / VALREC_MAX_VAL(valrec));
-            if (first_found) {
-                leave = true; // loop variable defined in DDCUTIL_LOOP
-            }
+            leave = first_found; // loop variable defined in DDCUTIL_LOOP
         });
     }
     return ret;
+}
+
+static int append_running_backlight(sd_bus_message *reply, const char *sn) {
+    if (!sn || !strlen(sn)) {
+        return -1;
+    }
+     
+    smooth_client *sc = map_get(running_clients, sn);
+    if (sc) {
+        append_backlight(reply, sn, sc->curr_pct);
+        return 0;
+    } else {
+#ifdef DDC_PRESENT
+        /* 
+         * For external monitors, check that user
+         * did not provide different display id in Get request
+         * (ie: the map key is different from sn)
+         */
+        DDCA_Display_Identifier pdid = NULL;
+        if (convert_sn_to_id(sn, &pdid)) {
+            return -1;
+        }
+        DDCA_Display_Ref ref = NULL;
+        if (ddca_get_display_ref(pdid, &ref) != 0) {
+            ddca_free_display_identifier(pdid);
+            return -1;
+        }
+        
+        map_itr_t *itr = NULL;
+        for (itr = map_itr_new(running_clients); itr; itr = map_itr_next(itr)) {
+            sc = (smooth_client *)map_itr_get_data(itr);
+            if (!sc->d.is_internal) {
+                DDCA_Display_Ref cl_ref = ddca_display_ref_from_handle(sc->d.external_dev);
+                if (cl_ref == ref) {
+                    append_backlight(reply, sn, sc->curr_pct);
+                    break;
+                }
+            }
+        }
+        free(itr);
+        ddca_free_display_identifier(pdid);
+        return 0;
+#endif
+    }
+    return -1;
 }
 
 static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
@@ -525,13 +611,14 @@ static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_err
         /* Clear map */
         map_clear(running_clients);
         add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, backlight_interface, 1);
-        DDCUTIL_LOOP({
+        DDCUTIL_LOOP(true, {
             add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, id, 0);
             smooth_client *sc = map_get(running_clients, id);
             if (sc) {
-                const uint16_t max = VALREC_MAX_VAL(valrec);
+                sc->d.external_dev = dh;
+                sc->d.max = VALREC_MAX_VAL(valrec);
                 const uint16_t curr = VALREC_CUR_VAL(valrec);
-                sc->curr_pct = (double)curr / max;
+                sc->curr_pct = (double)curr / sc->d.max;
             }
         });
         m_log("Target pct: %s%.2lf\n", verse > 0 ? "+" : (verse < 0 ? "-" : ""), target_pct);
@@ -588,6 +675,7 @@ static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error 
             // Returns true if no errors happened;
             r = sd_bus_reply_method_return(m, "b", true);
         }
+        m_log("Target pct: %s%.2lf\n", verse > 0 ? "+" : (verse < 0 ? "-" : ""), target_pct);
     }
     return r;
 }
@@ -598,13 +686,18 @@ static int method_getbrightness(sd_bus_message *m, void *userdata, sd_bus_error 
     if (r >= 0) {
         sd_bus_message *reply = NULL;
         sd_bus_message_new_method_return(m, &reply);
-        r = 0;
-        if (append_internal_backlight(reply, sn) == -1) {
-            if (append_external_backlight(reply, sn, true) == -1) {
-                sd_bus_error_set_errno(ret_error, ENODEV);
-                r = -ENODEV;
+        
+        r = append_running_backlight(reply, sn);
+        if (r != 0) {
+            r = 0;
+            if (append_internal_backlight(reply, sn) == -1) {
+                if (append_external_backlight(reply, sn, true) == -1) {
+                    sd_bus_error_set_errno(ret_error, ENODEV);
+                    r = -ENODEV;
+                }
             }
         }
+        
         if (!r) {
             r = sd_bus_send(NULL, reply, NULL);
         }
