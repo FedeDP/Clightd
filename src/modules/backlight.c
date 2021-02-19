@@ -93,18 +93,21 @@ end: \
     }
     
     static DDCA_Status convert_sn_to_id(const char *sn, DDCA_Display_Identifier *pdid) {
-        int id1;
-        if (sscanf(sn, "/dev/i2c-%d", &id1) == 1) {
-            return ddca_create_busno_display_identifier(id1, pdid);
+        int rc = ddca_create_mfg_model_sn_display_identifier(NULL, NULL, sn, pdid);
+        if (rc == 0) {
+            return rc;
         }
-        if (sscanf(sn, "/dev/usb/hiddev%d", &id1) == 1) {
-            return ddca_create_usb_hiddev_display_identifier(id1, pdid);
+        int id;
+        if (sscanf(sn, "/dev/i2c-%d", &id) == 1) {
+            return ddca_create_busno_display_identifier(id, pdid);
         }
-        if (sscanf(sn, "%d", &id1) == 1) {
-            return ddca_create_dispno_display_identifier(id1, pdid);
+        if (sscanf(sn, "/dev/usb/hiddev%d", &id) == 1) {
+            return ddca_create_usb_hiddev_display_identifier(id, pdid);
         }
-        /* Ok it is a normal sn */
-        return ddca_create_mfg_model_sn_display_identifier(NULL, NULL, sn, pdid);
+        if (sscanf(sn, "%d", &id) == 1) {
+            return ddca_create_dispno_display_identifier(id, pdid);
+        }
+        return -ENOENT;
     }
 
 #else
