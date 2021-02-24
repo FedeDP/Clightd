@@ -19,7 +19,7 @@
 ### Backlight
 - [ ] Create new object paths for each detected display
 - [ ] Drop "Set/Get" methods, and add a Set method on each object path
-- [ ] SetAll will call Set on each object path (renamed to Set)
+- [ ] SetAll will call Set on each object path (and will be renamed to Set)
 - [ ] Drop GetAll method: you can only call Get on each object
 - [ ] Follow Keyboard API
 

@@ -121,12 +121,7 @@ end: \
 
 typedef struct {
     bool is_internal;
-    union {
-        struct udev_device *internal_dev;
-#ifdef DDC_PRESENT
-        DDCA_Display_Handle external_dev;
-#endif
-    };
+    void *dev;
     char *sn;
     int max;
 } device_t;
@@ -159,6 +154,7 @@ static int set_internal_backlight(smooth_client *sc);
 static int set_external_backlight(smooth_client *sc);
 static int set_single_serial(double target_pct, bool is_smooth, double smooth_step, const unsigned int smooth_wait,
                              const char *serial, int verse);
+static smooth_client *fetch_running_client(const char *sn);
 static void append_backlight(sd_bus_message *reply, const char *name, const double pct);
 static int append_internal_backlight(sd_bus_message *reply, const char *path);
 static int append_external_backlight(sd_bus_message *reply, const char *sn, bool first_found);
@@ -295,10 +291,10 @@ static void dtor_client(void *client) {
     m_deregister_fd(sc->smooth.fd); // this will automatically close it!
     free(sc->d.sn);
     if (sc->d.is_internal) {
-        udev_device_unref(sc->d.internal_dev);
+        udev_device_unref(sc->d.dev);
     } else {
 #ifdef DDC_PRESENT
-        ddca_close_display(sc->d.external_dev);
+        ddca_close_display(sc->d.dev);
 #endif
     }
     free(sc);
@@ -310,9 +306,7 @@ static void reset_backlight_struct(smooth_client *sc, double target_pct, double 
     sc->smooth.wait = is_smooth ? smooth_wait : 0;
     sc->target_pct = target_pct;
     sc->reached_target = false;
-    if (initial_pct != -1) {
-        sc->curr_pct = initial_pct;
-    }
+    sc->curr_pct = initial_pct;
     sc->verse = verse;
     
     /* Only if not already there */
@@ -385,7 +379,7 @@ static int add_backlight_sn(double target_pct, bool is_smooth, double smooth_ste
         sc->d.is_internal = internal;
         // device is internal or external, it does not matter because is inside an union
         // thus sharing memory space.
-        sc->d.internal_dev = device;
+        sc->d.dev = device;
         sc->d.sn = sn_id;
         sc->d.max = max;
 
@@ -467,7 +461,7 @@ static int set_internal_backlight(smooth_client *sc) {
     if (value >= 0) {
         char val[15] = {0};
         snprintf(val, sizeof(val) - 1, "%d", value);
-        r = udev_device_set_sysattr_value(sc->d.internal_dev, "brightness", val);
+        r = udev_device_set_sysattr_value(sc->d.dev, "brightness", val);
     }
     return r;
 }
@@ -475,15 +469,11 @@ static int set_internal_backlight(smooth_client *sc) {
 static int set_external_backlight(smooth_client *sc) {
     int ret = -1;
 #ifdef DDC_PRESENT
-    DDCA_Any_Vcp_Value *valrec;
-    if (!ddca_get_any_vcp_value_using_explicit_type(sc->d.external_dev, br_code, DDCA_NON_TABLE_VCP_VALUE, &valrec)) {
-        int new_value = next_backlight_level(sc);
-        if (new_value >= 0) {
-            int8_t new_sh = (new_value >> 8) & 0xff;
-            int8_t new_sl = new_value & 0xff;
-            ret = ddca_set_non_table_vcp_value(sc->d.external_dev, br_code, new_sh, new_sl);
-        }
-        ddca_free_any_vcp_value(valrec);
+    int new_value = next_backlight_level(sc);
+    if (new_value >= 0) {
+        int8_t new_sh = (new_value >> 8) & 0xff;
+        int8_t new_sl = new_value & 0xff;
+        ret = ddca_set_non_table_vcp_value(sc->d.dev, br_code, new_sh, new_sl);
     }
 #endif
     return ret;
@@ -496,16 +486,57 @@ static int set_single_serial(double target_pct, bool is_smooth, double smooth_st
 
     smooth_client *sc = NULL;
     if (serial && strlen(serial)) {
-        sc = map_get(running_clients, serial);
-        r = 0;
+        sc = fetch_running_client(serial);
     }
     if (!sc) {
         // we do not know if this is an internal backlight, check both (-1)
         r = add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, serial, -1);
     } else {
-        reset_backlight_struct(sc, target_pct, -1, is_smooth, smooth_step, smooth_wait, verse);
+        r = 0;
+        reset_backlight_struct(sc, target_pct, sc->curr_pct, is_smooth, smooth_step, smooth_wait, verse);
     }
     return r;
+}
+
+static smooth_client *fetch_running_client(const char *sn) {
+    smooth_client *sc = map_get(running_clients, sn);
+    if (sc) {
+        return sc;
+    }
+#ifdef DDC_PRESENT
+    /* 
+     * For external monitors, check that user
+     * did not provide different display id in Get request
+     * (ie: the map key is different from sn)
+     */
+    DDCA_Display_Identifier pdid = NULL;
+    if (convert_sn_to_id(sn, &pdid)) {
+        return NULL;
+    }
+    DDCA_Display_Ref ref = NULL;
+    if (ddca_get_display_ref(pdid, &ref) != 0) {
+        ddca_free_display_identifier(pdid);
+        return NULL;
+    }
+        
+    bool found = false;
+    map_itr_t *itr = NULL;
+    for (itr = map_itr_new(running_clients); itr && !found; itr = map_itr_next(itr)) {
+        sc = (smooth_client *)map_itr_get_data(itr);
+        if (!sc->d.is_internal) {
+            DDCA_Display_Ref cl_ref = ddca_display_ref_from_handle(sc->d.dev);
+            if (cl_ref == ref) {
+                found = true;
+            }
+        }
+    }
+    free(itr);
+    ddca_free_display_identifier(pdid);
+    if (found) {
+        return sc;
+    }
+#endif
+    return NULL;
 }
 
 static void append_backlight(sd_bus_message *reply, const char *name, const double pct) {
@@ -553,42 +584,10 @@ static int append_running_backlight(sd_bus_message *reply, const char *sn) {
         return -1;
     }
      
-    smooth_client *sc = map_get(running_clients, sn);
+    smooth_client *sc = fetch_running_client(sn);
     if (sc) {
         append_backlight(reply, sn, sc->curr_pct);
         return 0;
-    } else {
-#ifdef DDC_PRESENT
-        /* 
-         * For external monitors, check that user
-         * did not provide different display id in Get request
-         * (ie: the map key is different from sn)
-         */
-        DDCA_Display_Identifier pdid = NULL;
-        if (convert_sn_to_id(sn, &pdid)) {
-            return -1;
-        }
-        DDCA_Display_Ref ref = NULL;
-        if (ddca_get_display_ref(pdid, &ref) != 0) {
-            ddca_free_display_identifier(pdid);
-            return -1;
-        }
-        
-        map_itr_t *itr = NULL;
-        for (itr = map_itr_new(running_clients); itr; itr = map_itr_next(itr)) {
-            sc = (smooth_client *)map_itr_get_data(itr);
-            if (!sc->d.is_internal) {
-                DDCA_Display_Ref cl_ref = ddca_display_ref_from_handle(sc->d.external_dev);
-                if (cl_ref == ref) {
-                    append_backlight(reply, sn, sc->curr_pct);
-                    break;
-                }
-            }
-        }
-        free(itr);
-        ddca_free_display_identifier(pdid);
-        return 0;
-#endif
     }
     return -1;
 }
@@ -618,7 +617,7 @@ static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_err
             add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, id, 0);
             smooth_client *sc = map_get(running_clients, id);
             if (sc) {
-                sc->d.external_dev = dh;
+                sc->d.dev = dh;
                 sc->d.max = VALREC_MAX_VAL(valrec);
                 const uint16_t curr = VALREC_CUR_VAL(valrec);
                 sc->curr_pct = (double)curr / sc->d.max;
