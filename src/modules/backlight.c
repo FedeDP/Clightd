@@ -108,8 +108,8 @@ end: \
 
 #else
 
-#define DDCUTIL_LOOP(keep_ref, func) do {} while(0)
-#define DDCUTIL_FUNC(keep_ref, sn, func) do {} while(0)
+#define DDCUTIL_LOOP(func) do {} while(0)
+#define DDCUTIL_FUNC(sn, func) do {} while(0)
 
 #endif
 
