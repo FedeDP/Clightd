@@ -20,7 +20,7 @@ static void bl_load_vpcode(void) {
     }
 }
 
-#define DDCUTIL_LOOP(keep_ref, func) \
+#define DDCUTIL_LOOP(func) \
     DDCA_Display_Info_List *dlist = NULL; \
     ddca_get_display_info_list2(false, &dlist); \
     if (dlist) { \
@@ -39,14 +39,12 @@ static void bl_load_vpcode(void) {
                 func; \
                 ddca_free_any_vcp_value(valrec); \
             } \
-            if (!keep_ref) { \
-                ddca_close_display(dh); \
-            } \
+            ddca_close_display(dh); \
         } \
         ddca_free_display_info_list(dlist); \
     }
 
-#define DDCUTIL_FUNC(keep_ref, sn, func) \
+#define DDCUTIL_FUNC(sn, func) \
     DDCA_Display_Identifier pdid = NULL; \
     DDCA_Display_Ref dref = NULL; \
     DDCA_Display_Handle dh = NULL; \
@@ -66,9 +64,7 @@ static void bl_load_vpcode(void) {
     } \
 end: \
     if (dh) { \
-        if (!keep_ref) { \
-                ddca_close_display(dh); \
-        } \
+        ddca_close_display(dh); \
     } \
     if (pdid) { \
         ddca_free_display_identifier(pdid); \
@@ -292,10 +288,6 @@ static void dtor_client(void *client) {
     free(sc->d.sn);
     if (sc->d.is_internal) {
         udev_device_unref(sc->d.dev);
-    } else {
-#ifdef DDC_PRESENT
-        ddca_close_display(sc->d.dev);
-#endif
     }
     free(sc);
 }
@@ -348,17 +340,17 @@ static int add_backlight_sn(double target_pct, bool is_smooth, double smooth_ste
         if (internal == -1 && !ok) {
             if (sn_id) {
                 // find display with given id
-                DDCUTIL_FUNC(true, sn_id, {
+                DDCUTIL_FUNC(sn_id, {
                     ok = true;
                     max = VALREC_MAX_VAL(valrec);
                     const uint16_t curr = VALREC_CUR_VAL(valrec);
                     initial_pct = (double)curr / max;
                     internal = 0;
-                    device = dh;
+                    device = dref;
                 });
             } else {
                 // Find first display available
-                DDCUTIL_LOOP(true, {
+                DDCUTIL_LOOP({
                     sn_id = strdup(id);
                     ok = true;
                     leave = true; // loop variable defined in DDCUTIL_LOOP
@@ -366,7 +358,7 @@ static int add_backlight_sn(double target_pct, bool is_smooth, double smooth_ste
                     const uint16_t curr = VALREC_CUR_VAL(valrec);
                     initial_pct = (double)curr / max;
                     internal = 0;
-                    device = dh;
+                    device = dref;
                 });
             }
         }
@@ -469,11 +461,15 @@ static int set_internal_backlight(smooth_client *sc) {
 static int set_external_backlight(smooth_client *sc) {
     int ret = -1;
 #ifdef DDC_PRESENT
-    int new_value = next_backlight_level(sc);
-    if (new_value >= 0) {
-        int8_t new_sh = (new_value >> 8) & 0xff;
-        int8_t new_sl = new_value & 0xff;
-        ret = ddca_set_non_table_vcp_value(sc->d.dev, br_code, new_sh, new_sl);
+    DDCA_Display_Handle dh = NULL;
+    if (!ddca_open_display2(sc->d.dev, false, &dh)) {
+        int new_value = next_backlight_level(sc);
+        if (new_value >= 0) {
+            int8_t new_sh = (new_value >> 8) & 0xff;
+            int8_t new_sl = new_value & 0xff;
+            ret = ddca_set_non_table_vcp_value(dh, br_code, new_sh, new_sl);
+        }
+        ddca_close_display(dh);
     }
 #endif
     return ret;
@@ -524,10 +520,7 @@ static smooth_client *fetch_running_client(const char *sn) {
     for (itr = map_itr_new(running_clients); itr && !found; itr = map_itr_next(itr)) {
         sc = (smooth_client *)map_itr_get_data(itr);
         if (!sc->d.is_internal) {
-            DDCA_Display_Ref cl_ref = ddca_display_ref_from_handle(sc->d.dev);
-            if (cl_ref == ref) {
-                found = true;
-            }
+            found = sc->d.dev == ref;
         }
     }
     free(itr);
@@ -565,12 +558,12 @@ static int append_internal_backlight(sd_bus_message *reply, const char *path) {
 static int append_external_backlight(sd_bus_message *reply, const char *sn, bool first_found) {
     int ret = -1;
     if (sn && strlen(sn)) {
-        DDCUTIL_FUNC(false, sn, {
+        DDCUTIL_FUNC(sn, {
             ret = 0;
             append_backlight(reply, sn, (double)VALREC_CUR_VAL(valrec) / VALREC_MAX_VAL(valrec));
         });
     } else {
-        DDCUTIL_LOOP(false, {
+        DDCUTIL_LOOP({
             ret = 0;
             append_backlight(reply, id, (double)VALREC_CUR_VAL(valrec) / VALREC_MAX_VAL(valrec));
             leave = first_found; // loop variable defined in DDCUTIL_LOOP
@@ -613,11 +606,11 @@ static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_err
         /* Clear map */
         map_clear(running_clients);
         add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, backlight_interface, 1);
-        DDCUTIL_LOOP(true, {
+        DDCUTIL_LOOP({
             add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, id, 0);
             smooth_client *sc = map_get(running_clients, id);
             if (sc) {
-                sc->d.dev = dh;
+                sc->d.dev = dref;
                 sc->d.max = VALREC_MAX_VAL(valrec);
                 const uint16_t curr = VALREC_CUR_VAL(valrec);
                 sc->curr_pct = (double)curr / sc->d.max;
