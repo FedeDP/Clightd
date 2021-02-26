@@ -1,13 +1,3 @@
-## 5.2
-
-### Backlight
-- [x] Support ddcutil 1.0.0
-- [x] Emit Backlight.Changed for external monitors
-- [x] Improve external monitors ddc handling
-
-### Keyboard
-- [x] Add a keyboard backlight module
-
 ### Idle
 - [x] Check auth in GetClient
 
