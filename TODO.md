@@ -1,6 +1,3 @@
-### Idle
-- [x] Check auth in GetClient
-
 ## 5.X
 - [ ] Keep it up to date with possible ddcutil/libmodule api changes
 
