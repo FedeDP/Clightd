@@ -607,6 +607,14 @@ static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_err
         map_clear(running_clients);
         add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, backlight_interface, 1);
         DDCUTIL_LOOP({
+            /* 
+             * In case same monitor happens multiple times
+             * (ie: it is connected to eg: hdmpi and DisplayPort)
+             * skip it!
+             */
+            if (map_has_key(running_clients, id)) {
+                continue;
+            }
             add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, id, 0);
             smooth_client *sc = map_get(running_clients, id);
             if (sc) {
