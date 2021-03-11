@@ -366,6 +366,7 @@ static int add_backlight_sn(double target_pct, bool is_smooth, double smooth_ste
     /* When internal argument was 0, initial_pct is set afterwards */
 
     if (ok) {
+        m_log("Adding '%s' monitor\n", sn_id);
         smooth_client *sc = calloc(1, sizeof(smooth_client));
         reset_backlight_struct(sc, target_pct, initial_pct, is_smooth, smooth_step, smooth_wait, verse);
         sc->d.is_internal = internal;
@@ -375,7 +376,8 @@ static int add_backlight_sn(double target_pct, bool is_smooth, double smooth_ste
         sc->d.sn = sn_id;
         sc->d.max = max;
 
-        map_put(running_clients, sc->d.sn, sc);
+        int ret = map_put(running_clients, sc->d.sn, sc);
+        m_log("Put '%s' monitor (%p): %d\n", sn_id, sc, ret);
     } else {
         free(sn_id);
     }
