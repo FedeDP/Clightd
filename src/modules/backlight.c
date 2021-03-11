@@ -609,7 +609,7 @@ static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_err
         DDCUTIL_LOOP({
             /* 
              * In case same monitor happens multiple times
-             * (ie: it is connected to eg: hdmpi and DisplayPort)
+             * (ie: it is connected to eg: hdmi and DisplayPort)
              * skip it!
              */
             if (map_has_key(running_clients, id)) {
