@@ -462,15 +462,19 @@ static int set_external_backlight(smooth_client *sc) {
     int ret = -1;
 #ifdef DDC_PRESENT
     DDCA_Display_Handle dh = NULL;
+    m_log("Opening %p monitor handle\n", sc->d.dev);
     if (!ddca_open_display2(sc->d.dev, false, &dh)) {
+        m_log("Opened %p monitor handle\n", sc->d.dev);
         int new_value = next_backlight_level(sc);
         if (new_value >= 0) {
             int8_t new_sh = (new_value >> 8) & 0xff;
             int8_t new_sl = new_value & 0xff;
             ret = ddca_set_non_table_vcp_value(dh, br_code, new_sh, new_sl);
+            m_log("Set bl: %d\n", ret);
         }
         ddca_close_display(dh);
     }
+    m_log("End with: %d\n", ret);
 #endif
     return ret;
 }
@@ -609,11 +613,13 @@ static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_err
         DDCUTIL_LOOP({
             add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, id, 0);
             smooth_client *sc = map_get(running_clients, id);
+            m_log("ADDED %s monitor\n", id);
             if (sc) {
                 sc->d.dev = dref;
                 sc->d.max = VALREC_MAX_VAL(valrec);
                 const uint16_t curr = VALREC_CUR_VAL(valrec);
                 sc->curr_pct = (double)curr / sc->d.max;
+                m_log("SET %p monitor ref; max monitor bl: %i, curr: %i\n", dref, sc->d.max, curr);
             }
         });
         m_log("Target pct: %s%.2lf\n", verse > 0 ? "+" : (verse < 0 ? "-" : ""), target_pct);
