@@ -613,13 +613,13 @@ static int method_setallbrightness(sd_bus_message *m, void *userdata, sd_bus_err
         DDCUTIL_LOOP({
             add_backlight_sn(target_pct, is_smooth, smooth_step, smooth_wait, verse, id, 0);
             smooth_client *sc = map_get(running_clients, id);
-            m_log("ADDED %s monitor\n", id);
+            m_log("ADDED %s monitor. Found %d monitors. Sc: %p\n", id, dlist->ct, sc);
             if (sc) {
                 sc->d.dev = dref;
                 sc->d.max = VALREC_MAX_VAL(valrec);
                 const uint16_t curr = VALREC_CUR_VAL(valrec);
                 sc->curr_pct = (double)curr / sc->d.max;
-                m_log("SET %p monitor ref; max monitor bl: %i, curr: %i\n", sc->d.dev, sc->d.max, curr);
+                m_log("SET %p monitor ref on %p sc; max monitor bl: %i, curr: %i\n", sc->d.dev, sc, sc->d.max, curr);
             }
         });
         m_log("Target pct: %s%.2lf\n", verse > 0 ? "+" : (verse < 0 ? "-" : ""), target_pct);
