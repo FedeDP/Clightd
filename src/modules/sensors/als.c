@@ -148,7 +148,7 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
 
         if (illuminance >= 1) {
             if (illuminance != min) {
-                pct[ctr++] = (log10(illuminance) - log10(min)) / log10(max);
+                pct[ctr++] = log10(illuminance) / log10(max);
             } else if (illuminance == min) {
                 pct[ctr++] = 0.01;
             }
