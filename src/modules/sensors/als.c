@@ -2,6 +2,7 @@
 #include <udev.h>
 
 #define ALS_NAME            "Als"
+/* For more on interpreting lux values: https://docs.microsoft.com/en-us/windows/win32/sensorsapi/understanding-and-interpreting-lux-values */
 #define ALS_ILL_MAX         100000 // Direct Sunlight
 #define ALS_ILL_MIN         20 // Dark Room
 #define ALS_INTERVAL        20 // ms
