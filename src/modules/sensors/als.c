@@ -2,8 +2,8 @@
 #include <udev.h>
 
 #define ALS_NAME            "Als"
-#define ALS_ILL_MAX         500
-#define ALS_ILL_MIN         22
+#define ALS_ILL_MAX         100000 // Direct Sunlight
+#define ALS_ILL_MIN         20 // Dark Room
 #define ALS_INTERVAL        20 // ms
 #define ALS_SUBSYSTEM       "iio"
 
@@ -101,11 +101,11 @@ static void parse_settings(char *settings, int *min, int *max, int *interval) {
         fprintf(stderr, "Wrong interval value. Resetting default.\n");
         *interval = ALS_INTERVAL;
     }
-    if (*min < 0) {
+    if (*min < 1) {
         fprintf(stderr, "Wrong min value. Resetting default.\n");
         *min = ALS_ILL_MIN;
     }
-    if (*max < 0) {
+    if (*max < 1) {
         fprintf(stderr, "Wrong max value. Resetting default.\n");
         *max = ALS_ILL_MAX;
     }
@@ -146,8 +146,12 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
             }
         }
 
-        if (illuminance >= 0) {
-            pct[ctr++] = illuminance / max;
+        if (illuminance >= 1) {
+            if (illuminance != min) {
+                pct[ctr++] = (log10(illuminance) - log10(min)) / log10(max);
+            } else if (illuminance == min) {
+                pct[ctr++] = 0.01;
+            }
         }
 
         usleep(interval * 1000);
