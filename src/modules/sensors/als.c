@@ -2,14 +2,15 @@
 #include <udev.h>
 
 #define ALS_NAME            "Als"
-#define ALS_ILL_MAX         500
-#define ALS_ILL_MIN         22
+/* For more on interpreting lux values: https://docs.microsoft.com/en-us/windows/win32/sensorsapi/understanding-and-interpreting-lux-values */
+#define ALS_ILL_MAX         100000 // Direct sunlight
+#define ALS_ILL_MIN         1 // Pitch black
 #define ALS_INTERVAL        20 // ms
 #define ALS_SUBSYSTEM       "iio"
 
 SENSOR(ALS_NAME);
 
-static void parse_settings(char *settings, int *min, int *max, int *interval);
+static void parse_settings(char *settings, int *interval);
 
 /* properties names to be checked. "in_illuminance_input" has higher priority. */
 static const char *ill_names[] = { "in_illuminance_input", "in_illuminance_raw", "in_intensity_clear_raw" };
@@ -61,13 +62,11 @@ static void destroy_monitor(void) {
     udev_monitor_unref(mon);
 }
 
-static void parse_settings(char *settings, int *min, int *max, int *interval) {
-    const char opts[] = { 'i', 'm', 'M' };
-    int *vals[] = { interval, min, max };
+static void parse_settings(char *settings, int *interval) {
+    const char opts[] = { 'i' };
+    int *vals[] = { interval };
 
     /* Default values */
-    *min = ALS_ILL_MIN;
-    *max = ALS_ILL_MAX;
     *interval = ALS_INTERVAL;
 
     if (settings && strlen(settings)) {
@@ -101,24 +100,14 @@ static void parse_settings(char *settings, int *min, int *max, int *interval) {
         fprintf(stderr, "Wrong interval value. Resetting default.\n");
         *interval = ALS_INTERVAL;
     }
-    if (*min < 0) {
-        fprintf(stderr, "Wrong min value. Resetting default.\n");
-        *min = ALS_ILL_MIN;
-    }
-    if (*max < 0) {
-        fprintf(stderr, "Wrong max value. Resetting default.\n");
-        *max = ALS_ILL_MAX;
-    }
-    if (*min > *max) {
-        fprintf(stderr, "Wrong min/max values. Resetting defaults.\n");
-        *min = ALS_ILL_MIN;
-        *max = ALS_ILL_MAX;
-    }
 }
 
 static int capture(void *dev, double *pct, const int num_captures, char *settings) {
-    int min, max, interval;
-    parse_settings(settings, &min, &max, &interval);
+    int interval;
+    parse_settings(settings, &interval);
+
+    int min = ALS_ILL_MIN;
+    int max = ALS_ILL_MAX;
 
     int ctr = 0;
     const char *val = NULL;
@@ -146,8 +135,8 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
             }
         }
 
-        if (illuminance >= 0) {
-            pct[ctr++] = illuminance / max;
+        if (illuminance >= 1) {
+            pct[ctr++] = log10(illuminance) / log10(max);
         }
 
         usleep(interval * 1000);
