@@ -1,5 +1,6 @@
 ## 5.X
 - [ ] Keep it up to date with possible ddcutil/libmodule api changes
+- [x] ALS sensors (and yoctolight too) have a logarithmic curve for lux values (#71)
 
 ## 6.0
 
