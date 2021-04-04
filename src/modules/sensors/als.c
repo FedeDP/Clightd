@@ -1,16 +1,11 @@
 #include <sensor.h>
 #include <udev.h>
+#include "als.h"
 
 #define ALS_NAME            "Als"
-/* For more on interpreting lux values: https://docs.microsoft.com/en-us/windows/win32/sensorsapi/understanding-and-interpreting-lux-values */
-#define ALS_ILL_MAX         100000 // Direct sunlight
-#define ALS_ILL_MIN         1 // Pitch black
-#define ALS_INTERVAL        20 // ms
 #define ALS_SUBSYSTEM       "iio"
 
 SENSOR(ALS_NAME);
-
-static void parse_settings(char *settings, int *interval);
 
 /* properties names to be checked. "in_illuminance_input" has higher priority. */
 static const char *ill_names[] = { "in_illuminance_input", "in_illuminance_raw", "in_intensity_clear_raw" };
@@ -62,52 +57,9 @@ static void destroy_monitor(void) {
     udev_monitor_unref(mon);
 }
 
-static void parse_settings(char *settings, int *interval) {
-    const char opts[] = { 'i' };
-    int *vals[] = { interval };
-
-    /* Default values */
-    *interval = ALS_INTERVAL;
-
-    if (settings && strlen(settings)) {
-        char *token; 
-        char *rest = settings; 
-
-        while ((token = strtok_r(rest, ",", &rest))) {
-            char opt;
-            int val;
-
-            if (sscanf(token, "%c=%d", &opt, &val) == 2) {
-                bool found = false;
-                for (int i = 0; i < SIZE(opts) && !found; i++) {
-                    if (opts[i] == opt) {
-                        *(vals[i]) = val;
-                        found = true;
-                    }
-                }
-
-                if (!found) {
-                    fprintf(stderr, "Option %c not found.\n", opt);
-                }
-            } else {
-                fprintf(stderr, "Expected a=b format.\n");
-            }
-        }
-    }
-    
-    /* Sanity checks */
-    if (*interval < 0 || *interval > 1000) {
-        fprintf(stderr, "Wrong interval value. Resetting default.\n");
-        *interval = ALS_INTERVAL;
-    }
-}
-
 static int capture(void *dev, double *pct, const int num_captures, char *settings) {
     int interval;
     parse_settings(settings, &interval);
-
-    int min = ALS_ILL_MIN;
-    int max = ALS_ILL_MAX;
 
     int ctr = 0;
     const char *val = NULL;
@@ -127,16 +79,12 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
             val = udev_device_get_sysattr_value(dev, ill_names[i]);
             if (val) {
                 illuminance = atof(val) * scale;
-                if (illuminance > max) {
-                    illuminance = max;
-                } else if (illuminance < min) {
-                    illuminance = min;
-                }
             }
         }
 
         if (illuminance >= 1) {
-            pct[ctr++] = log10(illuminance) / log10(max);
+            ctr++;
+            pct[i] = compute_value(illuminance);
         }
 
         usleep(interval * 1000);

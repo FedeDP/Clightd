@@ -4,12 +4,13 @@
 #include <udev.h>
 #include <libusb.h>
 
+/* This overrides define in als.h. Define it before include. */
+#define ALS_INTERVAL        500 // ms
+#include "als.h"
+
 #define YOCTO_ERR(fmt, ...)  fprintf(stderr, fmt, ##__VA_ARGS__); return -1;
 
 #define YOCTO_NAME            "YoctoLight"
-#define YOCTO_ILL_MAX         500
-#define YOCTO_ILL_MIN         22
-#define YOCTO_INTERVAL        500 // ms
 #define YOCTO_SUBSYSTEM       "usb"
 #define YOCTO_PROPERTY        "idVendor"
 #define YOCTO_VENDORID        "24e0"
@@ -98,7 +99,6 @@ typedef struct {
 } ylight_state;
 
 static bool get_dev_config(libusb_device *dev);
-static void parse_settings(char *settings, int *min, int *max, int *interval);
 static int init_usb_device(void);
 static int start_usb_device(USB_Packet *rpkt);
 static int destroy_usb_device(void);
@@ -179,61 +179,6 @@ static void recv_monitor(void **dev) {
 
 static void destroy_monitor(void) {
     udev_monitor_unref(mon);
-}
-
-static void parse_settings(char *settings, int *min, int *max, int *interval) {
-    const char opts[] = { 'i', 'm', 'M' };
-    int *vals[] = { interval, min, max };
-    
-    /* Default values */
-    *min = YOCTO_ILL_MIN;
-    *max = YOCTO_ILL_MAX;
-    *interval = YOCTO_INTERVAL;
-    
-    if (settings && strlen(settings)) {
-        char *token; 
-        char *rest = settings; 
-        
-        while ((token = strtok_r(rest, ",", &rest))) {
-            char opt;
-            int val;
-            
-            if (sscanf(token, "%c=%d", &opt, &val) == 2) {
-                bool found = false;
-                for (int i = 0; i < SIZE(opts) && !found; i++) {
-                    if (opts[i] == opt) {
-                        *(vals[i]) = val;
-                        found = true;
-                    }
-                }
-                
-                if (!found) {
-                    fprintf(stderr, "Option %c not found.\n", opt);
-                }
-            } else {
-                fprintf(stderr, "Expected a=b format.\n");
-            }
-        }
-    }
-    
-    /* Sanity checks */
-    if (*interval < 0 || *interval > 1000) {
-        fprintf(stderr, "Wrong interval value. Resetting default.\n");
-        *interval = YOCTO_INTERVAL;
-    }
-    if (*min < 0) {
-        fprintf(stderr, "Wrong min value. Resetting default.\n");
-        *min = YOCTO_ILL_MIN;
-    }
-    if (*max < 0) {
-        fprintf(stderr, "Wrong max value. Resetting default.\n");
-        *max = YOCTO_ILL_MAX;
-    }
-    if (*min > *max) {
-        fprintf(stderr, "Wrong min/max values. Resetting defaults.\n");
-        *min = YOCTO_ILL_MIN;
-        *max = YOCTO_ILL_MAX;
-    }
 }
 
 static inline void build_conf_packet(USB_Packet *pkt, int stream_type) {
@@ -382,8 +327,8 @@ static int destroy_usb_device(void) {
 }
 
 static int capture(void *dev, double *pct, const int num_captures, char *settings) {
-    int min, max, interval;
-    parse_settings(settings, &min, &max, &interval);
+    int interval;
+    parse_settings(settings, &interval);
     int ctr = -ENODEV;
     
     if (state.hdl) {
@@ -395,12 +340,7 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
                 int trans = 0;
                 libusb_interrupt_transfer(state.hdl, state.rdendp, (unsigned char *) &rpkt, YOCTO_PKT_SIZE, &trans, interval);
                 double illuminance = atof((char *)&rpkt.data[3]);
-                if (illuminance > max) {
-                    illuminance = max;
-                } else if (illuminance < min) {
-                    illuminance = min;
-                }
-                pct[ctr++] = illuminance / max;
+                pct[ctr++] = compute_value(illuminance);
             }
         }
         destroy_usb_device();
