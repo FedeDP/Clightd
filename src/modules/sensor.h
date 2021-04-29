@@ -6,7 +6,7 @@
  * - a bunch of callbacks:
  * 
  * -> validate_dev() called when retrieving a device from a monitor to validate retrieved device.
- * -> fetch_dev() called by is_sensor_available(), to fetch a device (with requqested interface, if set)
+ * -> fetch_dev() called by is_sensor_available(), to fetch a device (with requested interface, if set)
  * -> fetch_props_dev() to retrieve a device properties, ie: its node and, if (action), an associated action
  * -> destroy_dev() to free dev resources
  * 
@@ -24,13 +24,14 @@
 
 /* Sensor->name must match its enumeration stringified value */
 #define _SENSORS \
-    X(ALS, 0) \
-    X(YOCTOLIGHT, 1) \
-    X(CAMERA, 2) \
-    X(CUSTOM, 3)
+    X(ALS) \
+    X(YOCTOLIGHT) \
+    X(CAMERA_PW) \
+    X(CAMERA) \
+    X(CUSTOM)
 
 enum sensors { 
-#define X(name, val) name = val,
+#define X(name) name,
     _SENSORS
 #undef X
     SENSOR_NUM

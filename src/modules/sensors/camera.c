@@ -1,12 +1,10 @@
 #include <sys/mman.h>
-#include <linux/videodev2.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <stdint.h>
-#include <sensor.h>
+#include "camera.h"
 #include <udev.h>
 #include <jpeglib.h>
-#include <module/map.h>
 
 #define CAMERA_NAME                 "Camera"
 #define CAMERA_ILL_MAX              255
@@ -15,11 +13,6 @@
 
 #define SET_V4L2(id, val)           set_v4l2_control(id, val, #id, true)
 #define SET_V4L2_DEF(id)            set_v4l2_control_def(id, #id)
-#ifndef NDEBUG
-    #define INFO(fmt, ...)          printf(fmt, ##__VA_ARGS__);
-#else
-    #define INFO(fmt, ...)
-#endif
 
 static const __u32 supported_fmts[] = {
     V4L2_PIX_FMT_GREY,
@@ -66,7 +59,6 @@ struct state {
     int device_fd;
     uint32_t pixelformat;
     struct buffer buf;
-    struct histogram hist[HISTOGRAM_STEPS];
     char *settings;
     struct mjpeg_dec *decoder;
     map_t *stored_values;
@@ -132,11 +124,9 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
         set_camera_settings();
         create_decoder();
         for (int i = 0; i < num_captures; i++) {
-            struct v4l2_buffer buf = { .type = V4L2_BUF_TYPE_VIDEO_CAPTURE, .memory = V4L2_MEMORY_MMAP};
-            memset(state.hist, 0, HISTOGRAM_STEPS * sizeof(struct histogram));
-            
+            struct v4l2_buffer buf = { .type = V4L2_BUF_TYPE_VIDEO_CAPTURE, .memory = V4L2_MEMORY_MMAP};            
             if (send_frame(&buf) == 0 && recv_frame(&buf) == 0) {
-                pct[ctr++] = compute_brightness(buf.bytesused) / CAMERA_ILL_MAX;
+                pct[ctr++] = compute_brightness(buf.bytesused);
             }
         }
         destroy_decoder();
@@ -434,8 +424,6 @@ static int recv_frame(struct v4l2_buffer *buf) {
 
 static double compute_brightness(unsigned int size) {
     double brightness = 0.0;
-    double min = CAMERA_ILL_MAX;
-    double max = 0.0;
         
     uint8_t *img_data = state.buf.start;
     if (state.decoder) {
@@ -444,12 +432,25 @@ static double compute_brightness(unsigned int size) {
             return brightness;
         }
     }
+        
+    brightness = get_frame_brightness(img_data, size, (state.pixelformat == V4L2_PIX_FMT_YUYV));
+    
+    if (img_data != state.buf.start) {
+        free(img_data);
+    }
+    return brightness;
+}
+
+double get_frame_brightness(uint8_t *img_data, size_t size, bool is_yuv) {
+    double brightness = 0.0;
+    double min = CAMERA_ILL_MAX;
+    double max = 0.0;
     
     /*
-     * If greyscale -> increment by 1. 
+     * If greyscale (rgb is converted to grey) -> increment by 1. 
      * If YUYV -> increment by 2: we only want Y! 
      */
-    const int inc = 1 + (state.pixelformat == V4L2_PIX_FMT_YUYV);
+    const int inc = 1 + is_yuv;
     const double total = size / inc;
 
     /* Find minimum and maximum brightness */
@@ -464,16 +465,17 @@ static double compute_brightness(unsigned int size) {
 
     /* Ok, we should never get in here */
     if (max == 0.0) {
-        goto end;
+        return brightness;
     }
 
     /* Calculate histogram */
+    struct histogram hist[HISTOGRAM_STEPS] = {0};
     const double step_size = (max - min) / HISTOGRAM_STEPS;
     for (int i = 0; i < size; i += inc) {
         int bucket = (img_data[i] - min) / step_size;
         if (bucket >= 0 && bucket < HISTOGRAM_STEPS) {
-            state.hist[bucket].sum += img_data[i];
-            state.hist[bucket].count++;
+            hist[bucket].sum += img_data[i];
+            hist[bucket].count++;
         }
     }
 
@@ -482,7 +484,7 @@ static double compute_brightness(unsigned int size) {
     double quartiles[3] = {0.0, 0.0, 0.0};
     int j = 0;
     for (int i = 0; i < HISTOGRAM_STEPS && j < 3; i++) {
-        quartiles[j] += state.hist[i].count;
+        quartiles[j] += hist[i].count;
         if (quartiles[j] >= quartile_size) {
             quartiles[j] = (quartile_size / quartiles[j]) + i;
             j++;
@@ -514,15 +516,10 @@ static double compute_brightness(unsigned int size) {
      * and return the average brightness for it.
      */
     for (int i = max_bucket; i >= min_bucket; i--) {
-        if (state.hist[i].count > step_size) {
-            brightness = state.hist[i].sum / state.hist[i].count;
+        if (hist[i].count > step_size) {
+            brightness = hist[i].sum / hist[i].count;
             break;
         }
     }
-    
-end:
-    if (img_data != state.buf.start) {
-        free(img_data);
-    }
-    return brightness;
+    return (double)brightness / CAMERA_ILL_MAX;
 }

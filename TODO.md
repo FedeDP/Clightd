@@ -1,8 +1,14 @@
-## 5.X
-- [ ] Keep it up to date with possible ddcutil/libmodule api changes
+## 5.4
+
+### Sensor
 - [x] ALS sensors (and yoctolight too) have a logarithmic curve for lux values (#71)
 
-## 6.0
+### Pipewire
+- [x] Support pipewire for Camera sensor? This would allow multiple application sharing camera
+- [ ] Support monitor sensor api for pipewire
+- [ ] Pipewire run as root needs XDG_RUNTIME_DIR env
+
+## 6.x
 
 ### Backlight
 - [ ] Create new object paths for each detected display

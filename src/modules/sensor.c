@@ -87,7 +87,7 @@ static void destroy(void) {
 
 void sensor_register_new(sensor_t *sensor) {
     const char *sensor_names[] = {
-    #define X(name, val) #name,
+    #define X(name) #name,
         _SENSORS
     #undef X
     };
