@@ -2,6 +2,7 @@
 
 ### Sensor
 - [x] ALS sensors (and yoctolight too) have a logarithmic curve for lux values (#71)
+- [x] fixed memleak in camera sensor
 
 ### Pipewire
 - [x] Support pipewire for Camera sensor? This would allow multiple application sharing camera

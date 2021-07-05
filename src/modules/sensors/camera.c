@@ -148,15 +148,15 @@ static void set_v4l2_control_def(uint32_t id, const char *name) {
 }
 
 static void set_v4l2_control(uint32_t id, int32_t val, const char *name, bool store) {
-    struct v4l2_control *old_ctrl = calloc(1, sizeof(struct v4l2_control));
-    old_ctrl->id = id;
+    struct v4l2_control old_ctrl = {0};
+    old_ctrl.id = id;
     /* Store initial value, if set. */
-    if (-1 == xioctl(VIDIOC_G_CTRL, old_ctrl)) {
+    if (-1 == xioctl(VIDIOC_G_CTRL, &old_ctrl)) {
         INFO("'%s' unsupported\n", name);
         return;
     }
     
-    if (old_ctrl->value != val) {
+    if (old_ctrl.value != val) {
         struct v4l2_control ctrl ={0};
         ctrl.id = id;
         ctrl.value = val;
@@ -165,8 +165,14 @@ static void set_v4l2_control(uint32_t id, int32_t val, const char *name, bool st
         } else {
             INFO("Set '%s' val: %d\n", name, val);
             if (store) {
-                INFO("Storing initial setting for '%s': %d\n", name, val);
-                map_put(state.stored_values, name, old_ctrl);
+                struct v4l2_control *store_ctrl = calloc(1, sizeof(struct v4l2_control));
+                if (store_ctrl) {
+                    memcpy(store_ctrl, &old_ctrl, sizeof(struct v4l2_control));
+                    INFO("Storing initial setting for '%s': %d\n", name, val);
+                    map_put(state.stored_values, name, (void *)store_ctrl);
+                } else {
+                    INFO("failed to store initial setting for '%s'\n", name)
+                }
             }
         }
     } else {
