@@ -1,6 +1,7 @@
 #include <sensor.h>
 #include <linux/videodev2.h>
 #include <module/map.h>
+#include <udev.h>
 
 #ifndef NDEBUG
     #define INFO(fmt, ...)          printf(fmt, ##__VA_ARGS__);

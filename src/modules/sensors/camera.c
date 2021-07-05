@@ -3,7 +3,6 @@
 #include <sys/ioctl.h>
 #include <stdint.h>
 #include "camera.h"
-#include <udev.h>
 #include <jpeglib.h>
 
 #define CAMERA_NAME                 "Camera"

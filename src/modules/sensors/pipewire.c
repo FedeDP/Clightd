@@ -11,27 +11,30 @@
 #define PW_NAME                 "Camera_PW"
 
 typedef struct {
-    struct pw_main_loop *loop;
-    struct pw_stream *stream;
-    struct spa_video_info format;
-    double *pct;
-    int num_captures;
-    int capture_idx;
-    char *settings;
-    map_t *stored_values;
-} pw_data_t;
-
-typedef struct {
     uint32_t id;
     struct spa_hook proxy_listener;
     struct pw_proxy *proxy;
+    const char *action;
 } pw_node_t;
+
+typedef struct {
+    pw_node_t node;
+    struct pw_loop *loop;
+    struct pw_stream *stream;
+    struct spa_video_info format;
+    double *pct;
+    int capture_idx;
+    char *settings;
+    map_t *stored_values;
+    bool with_err;
+} pw_data_t;
 
 typedef struct {
     struct pw_loop *mon_loop;
     struct pw_context *context;
     struct pw_core *core;
     struct pw_registry *registry;
+    struct spa_hook registry_listener;
 } pw_mon_t;
 
 extern const struct pw_stream_control *pw_stream_get_control(struct pw_stream *stream, uint32_t id);
@@ -45,6 +48,9 @@ static void restore_camera_settings(pw_data_t *pw);
 SENSOR(PW_NAME);
 
 static pw_mon_t pw_mon;
+static pw_data_t *last_recved;
+static pw_data_t **nodes;
+static int nodes_len;
 
 static void _ctor_ init_libpipewire(void) {
     pw_init(NULL, NULL);
@@ -60,28 +66,21 @@ static void on_process(void *_data) {
     struct pw_buffer *b;
     if ((b = pw_stream_dequeue_buffer(data->stream)) == NULL) {
         fprintf(stderr, "out of buffers: %m");
-        goto end;
+        goto err;
     }
 
     const bool is_yuv = data->format.info.raw.format == SPA_VIDEO_FORMAT_YUY2;
     struct spa_buffer *buf = b->buffer;
-    for (int i = 0; i < buf->n_datas; i++) {
-        uint8_t *sdata;
-        if ((sdata = buf->datas[i].data) == NULL) {
-           goto end;
-        }
-        data->pct[data->capture_idx++] = get_frame_brightness(sdata, buf->datas[i].chunk->size, is_yuv);
-        
-        // Ok, we finished capturing frames
-        if (data->capture_idx == data->num_captures) {
-            goto end;
-        }
+    uint8_t *sdata;
+    if ((sdata = buf->datas[0].data) == NULL) {
+        goto err;
     }
+    data->pct[data->capture_idx++] = get_frame_brightness(sdata, buf->datas[0].chunk->size, is_yuv);
     pw_stream_queue_buffer(data->stream, b);
     return;
     
-end:
-    pw_main_loop_quit(data->loop);
+err:
+    data->with_err = true;
 }
 
 static void on_stream_param_changed(void *_data, uint32_t id, const struct spa_pod *param) {
@@ -94,18 +93,18 @@ static void on_stream_param_changed(void *_data, uint32_t id, const struct spa_p
     if (spa_format_parse(param,
             &data->format.media_type,
             &data->format.media_subtype) < 0) {
-        pw_main_loop_quit(data->loop);
+        data->with_err = true;
         return;
     }
 
     if (data->format.media_type != SPA_MEDIA_TYPE_video ||
         data->format.media_subtype != SPA_MEDIA_SUBTYPE_raw) {
-        pw_main_loop_quit(data->loop);
+        data->with_err = true;
         return;
     }
 
     if (spa_format_video_raw_parse(param, &data->format.info.raw) < 0) {
-        pw_main_loop_quit(data->loop);
+        data->with_err = true;
         return;
     }
 }
@@ -137,21 +136,34 @@ static void build_format(struct spa_pod_builder *b, const struct spa_pod **param
 
 static bool validate_dev(void *dev) {
     pw_data_t *pw = (pw_data_t *)dev;
-    return pw_stream_set_active(pw->stream, true) == 0;
+    if (pw->stream) {
+        return pw_stream_set_active(pw->stream, true) == 0;
+    }
+    return true;
 }
 
 static void fetch_dev(const char *interface, void **dev) {
-    // TODO
-    setenv("XDG_RUNTIME_DIR", "/run/user/1000", 1);
-    pw_data_t *pw = calloc(1, sizeof(pw_data_t));
+    pw_data_t *pw = NULL;
+    if (interface) {
+        uint32_t id = atoi(interface);
+        for (int i = 0; i < nodes_len && !pw; i++) {
+            if (nodes[i]->node.id == id) {
+                pw = nodes[i];
+            }
+        }
+    } else if (nodes_len > 0) {
+        pw = nodes[0];
+    }
+
+    // TODO error checking
     if (pw) {
         const struct spa_pod *params;
         uint8_t buffer[1024];
         struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, sizeof(buffer));
     
-        pw->loop = pw_main_loop_new(NULL);
+        pw->loop = pw_loop_new(NULL);
         pw->stream = pw_stream_new_simple(
-            pw_main_loop_get_loop(pw->loop),
+            pw->loop,
             "clightd-camera-pw",
             pw_properties_new(
                 PW_KEY_MEDIA_TYPE, "Video",
@@ -164,10 +176,10 @@ static void fetch_dev(const char *interface, void **dev) {
         build_format(&b, &params);
 
         int res;
-        // FIXME: fix when correct device is passed
+        // FIXME: fix when correct device is passed ??
         if ((res = pw_stream_connect(pw->stream,
                 PW_DIRECTION_INPUT,
-                interface ? (uint32_t)atoi(interface) : PW_ID_ANY,
+                /*pw->node.id*/PW_ID_ANY,
                 PW_STREAM_FLAG_AUTOCONNECT |    /* try to automatically connect this stream */
                 PW_STREAM_FLAG_INACTIVE |
                 PW_STREAM_FLAG_MAP_BUFFERS,     /* mmap the buffer data for us */
@@ -177,57 +189,84 @@ static void fetch_dev(const char *interface, void **dev) {
             free(pw);
             return;
         }
-        *dev = pw;
     }
+    *dev = pw;
 }
 
 static void fetch_props_dev(void *dev, const char **node, const char **action) {
     static char str_id[32];
     pw_data_t *pw = (pw_data_t *)dev;
-    uint32_t id = pw_stream_get_node_id(pw->stream);
-    sprintf(str_id, "%d", id);
+    
+    sprintf(str_id, "%d", pw->node.id);
     *node = str_id;
     
     if (action) {
-        // TODO
-        *action = "";
+        *action = pw->node.action;
     }
 }
 
 static void destroy_dev(void *dev) {
     pw_data_t *pw = (pw_data_t *)dev;
-    pw_stream_destroy(pw->stream);
-    pw_main_loop_destroy(pw->loop);
+    if (pw->stream) {
+        pw_stream_destroy(pw->stream);
+    }
+    if (pw->loop) {
+        pw_loop_destroy(pw->loop);
+    }
     map_free(pw->stored_values);
-    free(dev);
+    if (!strcmp(pw->node.action, UDEV_ACTION_RM)) {
+        int found_idx = -1;
+        for (int i = 0; i < nodes_len; i++) {
+            if (found_idx != -1) {
+                nodes[i - 1] = nodes[i];
+                nodes[i] = NULL;
+            }
+            if (pw == nodes[i]) {
+                found_idx = i;
+            }
+        }
+        free(pw);
+        nodes = realloc(nodes, --nodes_len);
+    }
 }
-/*
-static void removed_proxy (void *data) {
-    pw_node_t *node = (pw_node_t *)data;
-    INFO("Removed node %d\n", node->id);
-    // TODO: manage node removed
-    pw_proxy_destroy(node->proxy);
-    free(node);
+
+static void removed_proxy(void *data) {
+    pw_data_t *pw = (pw_data_t *)data;
+    pw->node.action = UDEV_ACTION_RM;
+    INFO("Removed node %d\n", pw->node.id);
+    pw_proxy_destroy(pw->node.proxy);
+    last_recved = pw;
 }
 
 static const struct pw_proxy_events proxy_events = {
-	PW_VERSION_PROXY_EVENTS,
-	.removed = removed_proxy,
+    PW_VERSION_PROXY_EVENTS,
+    .removed = removed_proxy,
 };
 
 static void registry_event_global(void *data, uint32_t id,
                     uint32_t permissions, const char *type, uint32_t version,
                     const struct spa_dict *props) {
-
     if (strcmp(type, PW_TYPE_INTERFACE_Node) == 0) {
         const char *mc = spa_dict_lookup(props, PW_KEY_MEDIA_CLASS);
         const char *mr = spa_dict_lookup(props, PW_KEY_MEDIA_ROLE);
         if (mc && mr &&  !strcmp(mc, "Video/Source") && !strcmp(mr, "Camera")) {
+            void *tmp = realloc(nodes, ++nodes_len);
+            if (!tmp) {
+                return;
+            }
+            nodes = tmp;
+            
+            pw_data_t *pw = calloc(1, sizeof(pw_data_t));
+            if (!pw) {
+                return;
+            }
             INFO("Added node %d\n", id);
-            pw_node_t *node = calloc(1, sizeof(pw_node_t));
-            node->id = id;
-            node->proxy = pw_registry_bind(pw_mon.registry, id, type, PW_VERSION_NODE, sizeof(pw_node_t));
-            pw_proxy_add_listener(node->proxy, &node->proxy_listener, &proxy_events, node);
+            pw->node.id = id;
+            pw->node.action = UDEV_ACTION_ADD;
+            pw->node.proxy = pw_registry_bind(pw_mon.registry, id, type, PW_VERSION_NODE, sizeof(pw_data_t));
+            pw_proxy_add_listener(pw->node.proxy, &pw->node.proxy_listener, &proxy_events, pw);
+            last_recved = pw; // used by recv_monitor
+            nodes[nodes_len - 1] = pw;
         }
     }
 }
@@ -235,46 +274,56 @@ static void registry_event_global(void *data, uint32_t id,
 static const struct pw_registry_events registry_events = {
     PW_VERSION_REGISTRY_EVENTS,
     .global = registry_event_global,
-};*/
+};
 
 static int init_monitor(void) {
-    // TODO ?
-//     pw_mon.mon_loop = pw_loop_new(NULL);
-//     pw_mon.context = pw_context_new(pw_mon.mon_loop, NULL, 0);
-//     pw_mon.core = pw_context_connect(pw_mon.context, NULL, 0);                                
-//     pw_mon.registry = pw_core_get_registry(pw_mon.core, PW_VERSION_REGISTRY, 0);                                
-//                                                                                 
-//     struct spa_hook registry_listener;       
-//     spa_zero(registry_listener);                                            
-//     pw_registry_add_listener(pw_mon.registry, &registry_listener, &registry_events, NULL);    
-//         
-//     int fd = pw_loop_get_fd(pw_mon.mon_loop);
-//     pw_loop_enter(pw_mon.mon_loop);
-//     return fd;
+    // TODO... setenv... ??
+    setenv("XDG_RUNTIME_DIR", "/run/user/1000", 1);
+    pw_mon.mon_loop = pw_loop_new(NULL);
+    pw_mon.context = pw_context_new(pw_mon.mon_loop, NULL, 0);
+    pw_mon.core = pw_context_connect(pw_mon.context, NULL, 0);                                
+    pw_mon.registry = pw_core_get_registry(pw_mon.core, PW_VERSION_REGISTRY, 0);                                
+                                                                                
+    spa_zero(pw_mon.registry_listener);                                            
+    pw_registry_add_listener(pw_mon.registry, &pw_mon.registry_listener, &registry_events, NULL);    
+        
+    int fd = pw_loop_get_fd(pw_mon.mon_loop);
+    pw_loop_enter(pw_mon.mon_loop);
+    return fd;
 }
 
 static void recv_monitor(void **dev) {
-//     pw_loop_iterate(pw_mon.mon_loop, 0); 
-//     *dev = NULL; // TODO
+    last_recved = NULL;
+    while (pw_loop_iterate(pw_mon.mon_loop, -1) >= 0) {
+        if (last_recved) {
+            break;
+        }
+    }
+    *dev = last_recved;
 }
 
 static void destroy_monitor(void) {
-//     pw_loop_leave(pw_mon.mon_loop);
-//     pw_proxy_destroy((struct pw_proxy*)pw_mon.registry);
-//     pw_core_disconnect(pw_mon.core);
-//     pw_context_destroy(pw_mon.context);
-//     pw_loop_destroy(pw_mon.mon_loop);
+    pw_loop_leave(pw_mon.mon_loop);
+    pw_proxy_destroy((struct pw_proxy*)pw_mon.registry);
+    pw_core_disconnect(pw_mon.core);
+    pw_context_destroy(pw_mon.context);
+    pw_loop_destroy(pw_mon.mon_loop);
 }
 
 static int capture(void *dev, double *pct, const int num_captures, char *settings) {
     pw_data_t *pw = (pw_data_t *)dev;
-    pw->num_captures = num_captures;
     pw->pct = pct;
     pw->settings = settings;
     pw->stored_values = map_new(true, free);
     
     set_camera_settings(pw);
-    pw_main_loop_run(pw->loop);
+    pw_loop_enter(pw->loop);
+    while (pw->capture_idx < num_captures && !pw->with_err) {
+        if (pw_loop_iterate(pw->loop, -1) < 0) {
+            break;
+        }
+    }
+    pw_loop_leave(pw->loop);
     restore_camera_settings(pw);
     return pw->capture_idx;
 }
