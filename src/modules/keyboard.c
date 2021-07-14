@@ -20,10 +20,13 @@ static int kbd_new(struct udev_device *dev, void *userdata);
 static inline int set_value(kbd_t *k, const char *sysattr, int value);
 static map_ret_code set_brightness(void *userdata, const char *key, void *data);
 static map_ret_code set_timeout(void *userdata, const char *key, void *data);
+static map_ret_code append_backlight(void *userdata, const char *key, void *data);
+static map_ret_code append_timeout(void *userdata, const char *key, void *data);
 static int method_setkeyboard(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_getkeyboard(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_settimeout(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_gettimeout(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
+static int fetch_timeout(kbd_t *k);
 
 MODULE("KEYBOARD");
 
@@ -32,7 +35,9 @@ static const char main_interface[] = "org.clightd.clightd.KbdBacklight";
 static const sd_bus_vtable main_vtable[] = {
     SD_BUS_VTABLE_START(0),
     SD_BUS_METHOD("Set", "d", "b", method_setkeyboard, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("Get", NULL, "a(sd)", method_getkeyboard, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("SetTimeout", "i", "b", method_settimeout, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("GetTimeout", NULL, "a(si)", method_gettimeout, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_SIGNAL("Changed", "sd", 0),
     SD_BUS_VTABLE_END
 };
@@ -214,13 +219,39 @@ static int method_setkeyboard(sd_bus_message *m, void *userdata, sd_bus_error *r
 
 static int method_getkeyboard(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     kbd_t *k = (kbd_t *)userdata;
+    if (k) {
+        int curr = atoi(udev_device_get_sysattr_value(k->dev, "brightness"));
+        const double pct = (double)curr / k->max;
+        return sd_bus_reply_method_return(m, "d", pct);
+    }
+    sd_bus_message *reply = NULL;
+    sd_bus_message_new_method_return(m, &reply);
+    sd_bus_message_open_container(reply, SD_BUS_TYPE_ARRAY, "(sd)");
+    int r = map_iterate(kbds, append_backlight, reply);
+    sd_bus_message_close_container(reply);
+    if (r == 0) {
+        r = sd_bus_send(NULL, reply, NULL);
+    }
+    sd_bus_message_unref(reply);
+    return r;
+}
+
+static map_ret_code append_backlight(void *userdata, const char *key, void *data) {
+    sd_bus_message *reply = (sd_bus_message *)userdata;
+    
+    kbd_t *k = (kbd_t *)data;
     int curr = atoi(udev_device_get_sysattr_value(k->dev, "brightness"));
     const double pct = (double)curr / k->max;
-    return sd_bus_reply_method_return(m, "d", pct);
+    
+    sd_bus_message_open_container(reply, SD_BUS_TYPE_STRUCT, "sd");
+    sd_bus_message_append(reply, "sd", key, pct);
+    sd_bus_message_close_container(reply);
+    
+    return MAP_OK;
 }
 
 static int method_settimeout(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-//     ASSERT_AUTH();
+    ASSERT_AUTH();
     
     int timeout;
     int r = sd_bus_message_read(m, "i", &timeout);
@@ -242,6 +273,26 @@ static int method_settimeout(sd_bus_message *m, void *userdata, sd_bus_error *re
 
 static int method_gettimeout(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     kbd_t *k = (kbd_t *)userdata;
+    if (k) {
+        int tm = fetch_timeout(k);
+        if (tm >= 0) {
+            return sd_bus_reply_method_return(m, "i", tm);
+        }
+        return sd_bus_error_set_errno(ret_error, -tm);
+    }
+    sd_bus_message *reply = NULL;
+    sd_bus_message_new_method_return(m, &reply);
+    sd_bus_message_open_container(reply, SD_BUS_TYPE_ARRAY, "(si)");
+    int r = map_iterate(kbds, append_timeout, reply);
+    sd_bus_message_close_container(reply);
+    if (r == 0) {
+        r = sd_bus_send(NULL, reply, NULL);
+    }
+    sd_bus_message_unref(reply);
+    return r;
+}
+
+static int fetch_timeout(kbd_t *k) {
     const char *timeout = udev_device_get_sysattr_value(k->dev, "stop_timeout");
     if (timeout) {
         int tm;
@@ -256,9 +307,22 @@ static int method_gettimeout(sd_bus_message *m, void *userdata, sd_bus_error *re
                     break;
                 }
             }
-            return sd_bus_reply_method_return(m, "i", tm);
+            return tm;
         }
-        return sd_bus_error_set_errno(ret_error, EINVAL);
+        return -EINVAL;
     }
-    return sd_bus_error_set_errno(ret_error, ENOENT);
+    return -ENOENT;
+}
+
+static map_ret_code append_timeout(void *userdata, const char *key, void *data) {
+    sd_bus_message *reply = (sd_bus_message *)userdata;
+    
+    kbd_t *k = (kbd_t *)data;
+    int tm = fetch_timeout(k);
+    if (tm >= 0) {
+        sd_bus_message_open_container(reply, SD_BUS_TYPE_STRUCT, "si");
+        sd_bus_message_append(reply, "si", key, tm);
+        sd_bus_message_close_container(reply);
+    }
+    return MAP_OK;
 }
