@@ -1,12 +1,6 @@
 ## 5.X
-
-### Sensor
-- [x] ALS sensors (and yoctolight too) have a logarithmic curve for lux values (#71)
-- [x] fixed memleak in camera sensor
-
-### KbdBacklight
-- [x] Add Get and GetTimeout method on main object to fetch all kbd backlight and timeouts alltoghether
-
+- [ ] Keep it up to date with possible ddcutil api changes
+ 
 ## 6.0
 
 ### Backlight
