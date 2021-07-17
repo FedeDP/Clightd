@@ -1,5 +1,10 @@
 ## 5.X
 - [ ] Keep it up to date with possible ddcutil api changes
+
+### Camera
+- [x] Add support for a cropping setting parameter: "x=0.4-0.6,y=0.2-0.8"
+- [x] Support crop through crop and selection v4l2 api if available
+- [x] fallback at manually skipping pixels
  
 ## 6.0
 
