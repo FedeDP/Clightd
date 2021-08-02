@@ -608,7 +608,7 @@ static double compute_brightness(unsigned int size) {
     int total = 0; // compute total used pixels
     for (int row = row_start; row < row_end; row++) {
         for (int col = col_start; col < col_end * inc; col += inc) {
-            const int idx = (row + 1) * col;
+            const int idx = (row * state.width * inc) + col;
             if (img_data[idx] < min) {
                 min = img_data[idx];
             }
@@ -629,7 +629,7 @@ static double compute_brightness(unsigned int size) {
     const double step_size = (max - min) / HISTOGRAM_STEPS;
     for (int row = row_start; row < row_end; row++) {
         for (int col = col_start; col < col_end * inc; col += inc) {
-            const int idx = (row + 1) * col;
+            const int idx = (row * state.width * inc) + col;
             int bucket = (img_data[idx] - min) / step_size;
             if (bucket >= 0 && bucket < HISTOGRAM_STEPS) {
                 state.hist[bucket].sum += img_data[idx];
