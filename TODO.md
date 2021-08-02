@@ -15,6 +15,8 @@
 - [ ] use more meaningful return types ? (boolean does not make much sense...)
 - [ ] Better error handling/code
 - [ ] Drop old BACKLIGHT module? -> in case, drop {Lower,Raise,Set}All from clightd polkit policy
+- [x] Drop bl_store_vpcode() and only load vpcode from CLIGHTD_BL_VCP env?
+- [x] Add CLIGHTD_BL_VCP Environment variable to systemd script with a comment thus it is simple to update it if needed
 
 ## 5.x
 - [ ] Keep it up to date with possible ddcutil api changes

@@ -69,11 +69,10 @@ MODULE("BACKLIGHT2");
     /* Default value */
     static DDCA_Vcp_Feature_Code br_code = 0x10;
 
-    extern void bl_store_vpcode(int code);
-
     static void bl_load_vpcode(void) {
         if (getenv("CLIGHTD_BL_VCP")) {
             br_code = strtol(getenv("CLIGHTD_BL_VCP"), NULL, 16);
+            m_log("Set 0x%x vcp code.\n", br_code);
         }
     }
 
@@ -95,7 +94,7 @@ MODULE("BACKLIGHT2");
         }
     }
     
-    static void store_external_devices() {
+    static void store_external_devices(void) {
         DDCA_Display_Info_List *dlist = NULL;
         ddca_get_display_info_list2(false, &dlist);
         if (dlist) {
@@ -135,7 +134,7 @@ MODULE("BACKLIGHT2");
 
 #else
 
-    static void store_external_devices() { }
+    static void store_external_devices(void) { }
 
 #endif
 

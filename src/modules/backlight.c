@@ -10,10 +10,6 @@
 /* Default value */
 static DDCA_Vcp_Feature_Code br_code = 0x10;
 
-void bl_store_vpcode(int code) {
-    br_code = code;
-}
-
 static void bl_load_vpcode(void) {
     if (getenv("CLIGHTD_BL_VCP")) {
         br_code = strtol(getenv("CLIGHTD_BL_VCP"), NULL, 16);
