@@ -1,8 +1,7 @@
-#include <commons.h>
-#include <module/map.h>
 #include <polkit.h>
 #include <udev.h>
 #include <math.h>
+#include <module/map.h>
 
 typedef struct {
     double target_pct;
@@ -16,7 +15,7 @@ typedef struct {
 } smooth_t;
 
 typedef struct {
-    bool is_internal;
+    int is_internal;
     void *dev;
     int max;
     char obj_path[100];
@@ -55,6 +54,8 @@ static const sd_bus_vtable vtable[] = {
     SD_BUS_METHOD("Get", NULL, "d", method_getbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("Raise", "d(du)", "b", method_raisebrightness, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("Lower", "d(du)", "b", method_lowerbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_PROPERTY("Max", "i", NULL, offsetof(bl_t, max), SD_BUS_VTABLE_PROPERTY_CONST),
+    SD_BUS_PROPERTY("Internal", "b", NULL, offsetof(bl_t, is_internal), SD_BUS_VTABLE_PROPERTY_CONST),
     SD_BUS_SIGNAL("Changed", "d", 0),
     SD_BUS_VTABLE_END
 };
@@ -432,7 +433,7 @@ static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error 
         } else {
             r = map_iterate(bls, set_backlight, &params);
         }
-        verse = 0;
+        verse = 0; // reset verse
         r = sd_bus_reply_method_return(m, "b", r == 0);
     }
     return r;

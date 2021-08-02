@@ -1,8 +1,6 @@
-#include <commons.h>
 #include <polkit.h>
 #include <udev.h>
 #include <math.h>
-#include <stddef.h>
 #include <module/map.h>
 
 #define KBD_SUBSYSTEM           "leds"
