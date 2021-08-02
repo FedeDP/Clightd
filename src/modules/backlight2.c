@@ -16,23 +16,42 @@ typedef struct {
 
 typedef struct {
     int is_internal;
-    void *dev;
-    int max;
+    void *dev; // differs between struct udev_device (internal devices) and DDCA_Display_Ref for external ones
+    int max; // cached device max backlight value
     char obj_path[100];
     const char *sn;
     sd_bus_slot *slot;
     smooth_t *smooth; // when != NULL -> smoothing
 } bl_t;
 
+/* Device manager */
+static void stop_smooth(bl_t *bl);
+static void bl_dtor(void *data);
+static int store_internal_device(struct udev_device *dev, void *userdata);
+static void store_external_devices(void);
+
+/* Getters */
+static double get_internal_backlight(bl_t *bl);
+static double get_external_backlight(bl_t *bl);
+static map_ret_code get_backlight(void *userdata, const char *key, void *data);
+
+/* Setters */
+static int set_internal_backlight(bl_t *bl, int value);
+static int set_external_backlight(bl_t *bl, int value);
+static int set_backlight_value(bl_t *bl, double *target_pct, double smooth_step);
+static map_ret_code set_backlight(void *userdata, const char *key, void *data);
+
+/* Helper methods */
+static void emit_signals(bl_t *bl, double pct);
+static void sanitize_target_step(double *target_pct, double *smooth_step);
+static double next_backlight_pct(bl_t *bl, double *target_pct, double smooth_step);
+static inline bool is_smooth(smooth_params_t *params);
+
+/* DBus API */
 static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_getbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_raisebrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_lowerbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
-static void stop_smooth(bl_t *bl);
-static void bl_dtor(void *data);
-static void emit_signals(bl_t *bl, double pct);
-static int store_internal_device(struct udev_device *dev, void *userdata);
-static int set_backlight_value(bl_t *bl, double *pct, double smooth_step);
 
 static map_t *bls;
 static struct udev_monitor *mon;
@@ -250,9 +269,25 @@ static void bl_dtor(void *data) {
     free(bl);
 }
 
-static void emit_signals(bl_t *bl, double pct) {
-    sd_bus_emit_signal(bus, object_path, main_interface, "Changed", "sd", bl->sn, pct);
-    sd_bus_emit_signal(bus, bl->obj_path, bus_interface, "Changed", "d", pct);
+static int store_internal_device(struct udev_device *dev, void *userdata) {
+    const int max = atoi(udev_device_get_sysattr_value(dev, "max_brightness"));
+    const char *id = udev_device_get_sysname(dev);
+    bl_t *d = calloc(1, sizeof(bl_t));
+    if (d) {
+        d->is_internal = true;
+        d->dev = udev_device_ref(dev);
+        d->max = max;     
+        d->sn = strdup(id);
+        snprintf(d->obj_path, sizeof(d->obj_path) - 1, "%s/%s", object_path, d->sn);
+        int r = sd_bus_add_object_vtable(bus, &d->slot, d->obj_path, bus_interface, vtable, d);
+        if (r < 0) {
+            m_log("Failed to add object vtable on path '%s': %d\n", d->obj_path, r);
+            bl_dtor(d);
+            return r;
+        } 
+        return map_put(bls, d->sn, d);
+    }
+    return -ENOMEM;
 }
 
 static double get_internal_backlight(bl_t *bl) {
@@ -307,25 +342,64 @@ static int set_external_backlight(bl_t *bl, int value) {
     return ret;
 }
 
-static int store_internal_device(struct udev_device *dev, void *userdata) {
-    const int max = atoi(udev_device_get_sysattr_value(dev, "max_brightness"));
-    const char *id = udev_device_get_sysname(dev);
-    bl_t *d = calloc(1, sizeof(bl_t));
-    if (d) {
-        d->is_internal = true;
-        d->dev = udev_device_ref(dev);
-        d->max = max;     
-        d->sn = strdup(id);
-        snprintf(d->obj_path, sizeof(d->obj_path) - 1, "%s/%s", object_path, d->sn);
-        int r = sd_bus_add_object_vtable(bus, &d->slot, d->obj_path, bus_interface, vtable, d);
-        if (r < 0) {
-            m_log("Failed to add object vtable on path '%s': %d\n", d->obj_path, r);
-            bl_dtor(d);
-            return r;
-        } 
-        return map_put(bls, d->sn, d);
+/* Set a target_pct eventually computing smooth step */
+static int set_backlight_value(bl_t *bl, double *target_pct, double smooth_step) {
+    const double next_pct = next_backlight_pct(bl, target_pct, smooth_step);
+    if (next_pct == *target_pct || next_pct == -1.0f) {
+        // end of smooth transition!
+        if (next_pct == -1.0f) {
+            m_log("no need to change backlight level for %s.\n", bl->sn);
+            *target_pct = next_pct; // disable smoothing eventually
+            return 0;
+        }
+        m_log("%s reached target backlight: %.2lf.\n", bl->sn, next_pct);
+        stop_smooth(bl);
     }
-    return -ENOMEM;
+    const int value = (int)round(bl->max * next_pct);
+    if (bl->is_internal) {
+        return set_internal_backlight(bl, value);
+    }
+    int ret = set_external_backlight(bl, value);
+    if (ret == 0) {
+        /*
+         * For external monitor: 
+         * Emit signals now as we will never receive them from udev monitor.
+         */
+        emit_signals(bl, next_pct);
+    }
+    return ret;
+}
+
+static map_ret_code set_backlight(void *userdata, const char *key, void *data) {
+    smooth_params_t params = *((smooth_params_t *)userdata);
+    bl_t *bl = (bl_t *)data;
+    
+    stop_smooth(bl);
+    if (set_backlight_value(bl, &params.target_pct, params.step) == 0) {
+        if (is_smooth(&params)) {
+            bl->smooth = calloc(1, sizeof(smooth_t));
+            if (bl->smooth) {
+                memcpy(&bl->smooth->params, &params, sizeof(smooth_params_t));
+                
+                // set and start timer fd
+                bl->smooth->fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+                m_register_fd(bl->smooth->fd, true, bl);
+                struct itimerspec timerValue = {{0}};
+                timerValue.it_value.tv_sec = params.wait / 1000;
+                timerValue.it_value.tv_nsec = 1000 * 1000 * (params.wait % 1000); // ms
+                timerValue.it_interval.tv_sec = params.wait / 1000;
+                timerValue.it_interval.tv_nsec = 1000 * 1000 * (params.wait % 1000); // ms
+                timerfd_settime(bl->smooth->fd, 0, &timerValue, NULL);
+            }
+        }
+        return MAP_OK;
+    }
+    return MAP_ERR;
+}
+
+static void emit_signals(bl_t *bl, double pct) {
+    sd_bus_emit_signal(bus, object_path, main_interface, "Changed", "sd", bl->sn, pct);
+    sd_bus_emit_signal(bus, bl->obj_path, bus_interface, "Changed", "d", pct);
 }
 
 static void sanitize_target_step(double *target_pct, double *smooth_step) {
@@ -366,63 +440,8 @@ static double next_backlight_pct(bl_t *bl, double *target_pct, double smooth_ste
     return curr_pct;
 }
 
-/* Set a target_pct eventually computing smooth step */
-static int set_backlight_value(bl_t *bl, double *target_pct, double smooth_step) {
-    const double next_pct = next_backlight_pct(bl, target_pct, smooth_step);
-    if (next_pct == *target_pct || next_pct == -1.0f) {
-        // end of smooth transition!
-        if (next_pct == -1.0f) {
-            m_log("no need to change backlight level for %s.\n", bl->sn);
-            *target_pct = next_pct; // disable smoothing eventually
-            return 0;
-        }
-        m_log("%s reached target backlight: %.2lf.\n", bl->sn, next_pct);
-        stop_smooth(bl);
-    }
-    const int value = (int)round(bl->max * next_pct);
-    if (bl->is_internal) {
-        return set_internal_backlight(bl, value);
-    }
-    int ret = set_external_backlight(bl, value);
-    if (ret == 0) {
-        /*
-         * For external monitor: 
-         * Emit signals now as we will never receive them from udev monitor.
-         */
-        emit_signals(bl, next_pct);
-    }
-    return ret;
-}
-
 static inline bool is_smooth(smooth_params_t *params) {
     return params->step > 0 && params->wait > 0 && params->target_pct > 0;
-}
-
-static map_ret_code set_backlight(void *userdata, const char *key, void *data) {
-    smooth_params_t params = *((smooth_params_t *)userdata);
-    bl_t *bl = (bl_t *)data;
-    
-    stop_smooth(bl);
-    if (set_backlight_value(bl, &params.target_pct, params.step) == 0) {
-        if (is_smooth(&params)) {
-            bl->smooth = calloc(1, sizeof(smooth_t));
-            if (bl->smooth) {
-                memcpy(&bl->smooth->params, &params, sizeof(smooth_params_t));
-                
-                // set and start timer fd
-                bl->smooth->fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
-                m_register_fd(bl->smooth->fd, true, bl);
-                struct itimerspec timerValue = {{0}};
-                timerValue.it_value.tv_sec = params.wait / 1000;
-                timerValue.it_value.tv_nsec = 1000 * 1000 * (params.wait % 1000); // ms
-                timerValue.it_interval.tv_sec = params.wait / 1000;
-                timerValue.it_interval.tv_nsec = 1000 * 1000 * (params.wait % 1000); // ms
-                timerfd_settime(bl->smooth->fd, 0, &timerValue, NULL);
-            }
-        }
-        return MAP_OK;
-    }
-    return MAP_ERR;
 }
 
 static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
