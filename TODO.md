@@ -12,11 +12,12 @@
 - [x] Follow Keyboard API
 - [x] Create this new interface under org.clightd.clightd.Backlight2 (to avoid api break)?
 - [x] Actually implement logic
-- [ ] use more meaningful return types ? (boolean does not make much sense...)
+- [ ] use more meaningful return types for Set,Raise,Lower? (boolean does not make much sense...)... TODO? For now, no return type
 - [ ] Better error handling/code
 - [ ] Drop old BACKLIGHT module? -> in case, drop {Lower,Raise,Set}All from clightd polkit policy
 - [x] Drop bl_store_vpcode() and only load vpcode from CLIGHTD_BL_VCP env?
 - [x] Add CLIGHTD_BL_VCP Environment variable to systemd script with a comment thus it is simple to update it if needed
+- [x] Expose Max and Internal properties
 
 ## 5.x
 - [ ] Keep it up to date with possible ddcutil api changes

@@ -41,19 +41,19 @@ static const char bus_interface[] = "org.clightd.clightd.Backlight2.Server";
 static const char main_interface[] = "org.clightd.clightd.Backlight2";
 static const sd_bus_vtable main_vtable[] = {
     SD_BUS_VTABLE_START(0),
-    SD_BUS_METHOD("Set", "d(du)", "b", method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("Set", "d(du)", NULL, method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("Get", NULL, "a(sd)", method_getbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("Raise", "d(du)", "b", method_raisebrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("Lower", "d(du)", "b", method_lowerbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("Raise", "d(du)", NULL, method_raisebrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("Lower", "d(du)", NULL, method_lowerbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_SIGNAL("Changed", "sd", 0),
     SD_BUS_VTABLE_END
 };
 static const sd_bus_vtable vtable[] = {
     SD_BUS_VTABLE_START(0),
-    SD_BUS_METHOD("Set", "d(du)", "b", method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("Set", "d(du)", NULL, method_setbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("Get", NULL, "d", method_getbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("Raise", "d(du)", "b", method_raisebrightness, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("Lower", "d(du)", "b", method_lowerbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("Raise", "d(du)", NULL, method_raisebrightness, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("Lower", "d(du)", NULL, method_lowerbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_PROPERTY("Max", "i", NULL, offsetof(bl_t, max), SD_BUS_VTABLE_PROPERTY_CONST),
     SD_BUS_PROPERTY("Internal", "b", NULL, offsetof(bl_t, is_internal), SD_BUS_VTABLE_PROPERTY_CONST),
     SD_BUS_SIGNAL("Changed", "d", 0),
@@ -350,7 +350,7 @@ static double next_backlight_pct(bl_t *bl, double *target_pct, double smooth_ste
     
     if (verse != 0) {
         *target_pct = curr_pct + (verse * *target_pct);
-        sanitize_target_step(target_pct, NULL);
+        sanitize_target_step(target_pct, &smooth_step);
     }
     if (smooth_step > 0) {
         if (*target_pct < curr_pct) {
@@ -371,6 +371,11 @@ static int set_backlight_value(bl_t *bl, double *target_pct, double smooth_step)
     const double next_pct = next_backlight_pct(bl, target_pct, smooth_step);
     if (next_pct == *target_pct || next_pct == -1.0f) {
         // end of smooth transition!
+        if (next_pct == -1.0f) {
+            m_log("no need to change backlight level for %s.\n", bl->sn);
+            *target_pct = next_pct; // disable smoothing eventually
+            return 0;
+        }
         m_log("%s reached target backlight: %.2lf.\n", bl->sn, next_pct);
         stop_smooth(bl);
     }
@@ -390,28 +395,28 @@ static int set_backlight_value(bl_t *bl, double *target_pct, double smooth_step)
 }
 
 static inline bool is_smooth(smooth_params_t *params) {
-    return params->step > 0 && params->wait > 0;
+    return params->step > 0 && params->wait > 0 && params->target_pct > 0;
 }
 
 static map_ret_code set_backlight(void *userdata, const char *key, void *data) {
-    smooth_params_t *params = (smooth_params_t *)userdata;
+    smooth_params_t params = *((smooth_params_t *)userdata);
     bl_t *bl = (bl_t *)data;
     
     stop_smooth(bl);
-    if (set_backlight_value(bl, &params->target_pct, params->step) == 0) {
-        if (is_smooth(params)) {
+    if (set_backlight_value(bl, &params.target_pct, params.step) == 0) {
+        if (is_smooth(&params)) {
             bl->smooth = calloc(1, sizeof(smooth_t));
             if (bl->smooth) {
-                memcpy(&bl->smooth->params, params, sizeof(smooth_params_t));
+                memcpy(&bl->smooth->params, &params, sizeof(smooth_params_t));
                 
                 // set and start timer fd
                 bl->smooth->fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
                 m_register_fd(bl->smooth->fd, true, bl);
                 struct itimerspec timerValue = {{0}};
-                timerValue.it_value.tv_sec = params->wait / 1000;
-                timerValue.it_value.tv_nsec = 1000 * 1000 * (params->wait % 1000); // ms
-                timerValue.it_interval.tv_sec = params->wait / 1000;
-                timerValue.it_interval.tv_nsec = 1000 * 1000 * (params->wait % 1000); // ms
+                timerValue.it_value.tv_sec = params.wait / 1000;
+                timerValue.it_value.tv_nsec = 1000 * 1000 * (params.wait % 1000); // ms
+                timerValue.it_interval.tv_sec = params.wait / 1000;
+                timerValue.it_interval.tv_nsec = 1000 * 1000 * (params.wait % 1000); // ms
                 timerfd_settime(bl->smooth->fd, 0, &timerValue, NULL);
             }
         }
@@ -434,7 +439,7 @@ static int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error 
             r = map_iterate(bls, set_backlight, &params);
         }
         verse = 0; // reset verse
-        r = sd_bus_reply_method_return(m, "b", r == 0);
+        r = sd_bus_reply_method_return(m, NULL);
     }
     return r;
 }
