@@ -20,6 +20,10 @@
 - [x] Expose Max and Internal properties
 - [ ] Update dbus api wiki
 
+### In case of API break
+- [ ] Drop is_smooth options for gamma
+- [ ] avoid returning boolean where it does not make sense
+
 ## 5.x
 - [ ] Keep it up to date with possible ddcutil api changes
 
