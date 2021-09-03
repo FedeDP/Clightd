@@ -114,7 +114,9 @@ static int set(void *priv_data, const int temp) {
 
 static int get(void *priv_data) {
     // Unsupported ?
-    return -1;
+    // Ok anyway, just return 0;
+    // It will be supported one day hopefully
+    return 0;
 }
 
 static int dtor(void *priv_data) {
