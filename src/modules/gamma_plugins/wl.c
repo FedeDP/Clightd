@@ -52,7 +52,6 @@ static int validate(const char **id, const char *env,  void **priv_data) {
     *priv_data = calloc(1, sizeof(wlr_gamma_priv));
     wlr_gamma_priv *priv = (wlr_gamma_priv *)*priv_data;
     if (!priv) {
-        wl_display_disconnect(display);
         return -ENOMEM;
     }
     
