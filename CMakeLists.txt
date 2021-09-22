@@ -126,7 +126,7 @@ if(SYSTEMD_BASE_FOUND)
     # This can be overridden by cmdline
     if(NOT SYSTEMD_SERVICE_DIR)
         # Fetch it from systemd
-        pkg_get_variable(SYSTEMD_SERVICE_DIR systemd systemdsystemconfdir)
+        pkg_get_variable(SYSTEMD_SERVICE_DIR systemd systemdsystemunitdir)
     endif()
 
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/clightd.service
