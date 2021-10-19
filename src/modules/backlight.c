@@ -428,14 +428,12 @@ static int next_backlight_level(smooth_client *sc) {
         } else if (target_pct > sc->curr_pct) {
             sc->curr_pct = (sc->curr_pct + sc->smooth.step) > target_pct ? 
             target_pct : sc->curr_pct + sc->smooth.step;
-        } else {
-            sc->curr_pct = -1.0f; // useless
         }
     } else {
         sc->curr_pct = target_pct;
     }
 
-    if (sc->curr_pct == target_pct || sc->curr_pct == -1.0f) {
+    if (sc->curr_pct == target_pct) {
         sc->reached_target = true;
     }
     return sc->d.max * sc->curr_pct;

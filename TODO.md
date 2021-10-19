@@ -4,14 +4,25 @@
 - [x] Add support for a cropping setting parameter: "x=0.4-0.6,y=0.2-0.8"
 - [x] Support crop through crop and selection v4l2 api if available
 - [x] fallback at manually skipping pixels
- 
+
+### Gamma
+- [x] return 0 for Wl gamma Get (sway protocol) even if it is not implemented, to avoid breaking clight
+
 ### Backlight
+- [x] Never set current pct to -1 before emitting signals; fixes https://github.com/FedeDP/Clight/issues/225
+
+### Backlight2
 - [x] Create new object paths for each detected display
 - [x] Drop "Set/Get" methods, and add a Set method on each object path
 - [x] SetAll will call Set on each object path (and will be renamed to Set); same for GetAll
 - [x] Follow Keyboard API
 - [x] Create this new interface under org.clightd.clightd.Backlight2 (to avoid api break)?
 - [x] Actually implement logic
+- [ ] FIX: backlight2 is created before i2c module is loaded, thus no external monitor is created. Possibly use new ddca_redetect_displays() api available since ddcutil 1.2.0?
+> ddca_redetect_displays 	 Redetect displays
+> ddca_get_display_refs 	 Returns a null-terminated list of valid DDCA_Display_Refs
+> ddca_get_display_info 	 Returns DDCA_Display_Info for a DDCA_Display_Ref
+
 - [ ] use more meaningful return types for Set,Raise,Lower? (boolean does not make much sense...)... TODO? For now, no return type
 - [x] Better error handling/code
 - [ ] Drop old BACKLIGHT module? -> in case, drop {Lower,Raise,Set}All from clightd polkit policy
