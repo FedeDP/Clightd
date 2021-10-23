@@ -258,8 +258,6 @@ static void init(void) {
     }
     
     // Store and create internal devices object paths
-    /* FB_BLANK_UNBLANK (0)   : power on.
-    udev_match m = { .sysattr_key = "bl_power", .sysattr_val = "0" }; */
     udev_devices_foreach(BL_SUBSYSTEM, NULL, store_internal_device, NULL);
 
     // Store and create external devices object paths
@@ -269,6 +267,7 @@ static void init(void) {
     int fd = init_udev_monitor(BL_SUBSYSTEM, &mon);
     m_register_fd(fd, false, NULL);
     
+    // If ddcutil >= 1.2.0 -> register timer to refresh external devices
     init_external_device_refresh_timer();
 }
 
@@ -305,29 +304,11 @@ static void receive(const msg_t *msg, const void *userdata) {
                     bl_t *bl = map_get(bls, id);
                     if (!strcmp(action, UDEV_ACTION_CHANGE)) {
                         int old_bl_value = -1;
-                        /* Keep our device ref in sync! */
                         if (bl) {
                             old_bl_value = atoi(udev_device_get_sysattr_value(bl->dev, "brightness"));
+                            /* Keep our device ref in sync! */
                             udev_device_unref(bl->dev);
                             bl->dev = udev_device_ref(dev);
-                        /*}
-
-                         *
-                         * https://www.kernel.org/doc/Documentation/ABI/stable/sysfs-class-backlight
-                         * Control BACKLIGHT power, values are FB_BLANK_* from fb.h
-                         *   - FB_BLANK_UNBLANK (0)   : power on.
-                         *   - FB_BLANK_POWERDOWN (4) : power off
-                         *
-                        int bl_power = atoi(udev_device_get_sysattr_value(dev, "bl_power"));
-                        if (bl_power == FB_BLANK_POWERDOWN && bl) {
-                            // NOTE: my driver does not seem to send any udev event for this
-                            map_remove(bls, id);
-                        } else if (bl_power == FB_BLANK_UNBLANK && !bl) {
-                            if (store_internal_device(dev, NULL) != 0) {
-                                m_log("failed to store new device.\n");
-                            }
-                        } else if (bl) {*/
-                            // Assume brightness changed!
                             int val = atoi(udev_device_get_sysattr_value(dev, "brightness"));
                             if (val != old_bl_value) {
                                 const double pct = (double)val / bl->max;
