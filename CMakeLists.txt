@@ -119,7 +119,11 @@ if(SYSTEMD_BASE_FOUND)
     else()
         set(POLKIT_NAME "polkit")
     endif()
-
+    
+    if(WITH_DDC)
+        set(AFTER "After=systemd-modules-load.service")
+    endif()
+    
     # Properly configure clightd systemd service to use correct dep on polkit.service
     configure_file(${SCRIPT_DIR}/clightd.service clightd.service @ONLY)
     

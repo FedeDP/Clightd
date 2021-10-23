@@ -36,6 +36,9 @@
 - [x] call sd_bus_emit_object_added() sd_bus_emit_object_removed() When object path are created/deleted
 - [x] Fix: udev_reference is a snapshot of an udev device at a current time. Wrong!
 
+### Generic
+- [x] When built with ddcutil, clightd.service should be started after systemd-modules-load.service
+
 ## 5.x
 - [ ] Keep it up to date with possible ddcutil api changes
 

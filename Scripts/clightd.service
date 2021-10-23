@@ -1,6 +1,7 @@
 [Unit]
 Description=Bus service to manage various screen related properties (gamma, dpms, backlight)
 Requires=@POLKIT_NAME@.service
+@AFTER@
 
 [Service]
 Type=dbus
