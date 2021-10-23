@@ -36,7 +36,7 @@
 - [x] Add CLIGHTD_BL_VCP Environment variable to systemd script with a comment thus it is simple to update it if needed
 - [x] Expose Max and Internal properties
 - [ ] Update dbus api wiki
-- [ ] add a page about monitor hotplugging (dep on ddcutil > 1.2.0 and refresh time!)
+- [ ] add a page about monitor hotplugging (dep on ddcutil >= 1.2.0 and refresh time!)
 
 ### KbdBacklight
 - [x] call sd_bus_emit_object_added() sd_bus_emit_object_removed() When object path are created/deleted
