@@ -73,6 +73,7 @@ static bool evaluate(void) {
 
 static void init(void) {
     kbds = map_new(true, dtor_kbd);
+    sd_bus_add_object_manager(bus, NULL, object_path);
     int r = sd_bus_add_object_vtable(bus,
                                  NULL,
                                  object_path,

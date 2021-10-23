@@ -247,6 +247,7 @@ static void init(void) {
     bl_load_vpcode();
 #endif
     bls = map_new(false, bl_dtor);
+    sd_bus_add_object_manager(bus, NULL, object_path);
     int r = sd_bus_add_object_vtable(bus,
                                  NULL,
                                  object_path,
