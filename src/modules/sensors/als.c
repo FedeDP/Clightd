@@ -74,19 +74,20 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
     }
 
     for (int i = 0; i < num_captures; i++) {
+        struct udev_device *non_cached_dev = udev_device_new_from_syspath(udev, udev_device_get_syspath(dev));
         double illuminance = -1;
         for (int i = 0; i < SIZE(ill_names) && illuminance == -1; i++) {
-            val = udev_device_get_sysattr_value(dev, ill_names[i]);
+            val = udev_device_get_sysattr_value(non_cached_dev, ill_names[i]);
             if (val) {
                 illuminance = atof(val) * scale;
             }
         }
+        udev_device_unref(non_cached_dev);
 
         if (illuminance >= 1) {
             ctr++;
             pct[i] = compute_value(illuminance);
         }
-
         usleep(interval * 1000);
     }
     return ctr;
