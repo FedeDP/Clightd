@@ -38,6 +38,7 @@
 
 ### Generic
 - [x] When built with ddcutil, clightd.service should be started after systemd-modules-load.service
+- [x] Show commit hash in version
 
 ## 5.x
 - [ ] Keep it up to date with possible ddcutil api changes
