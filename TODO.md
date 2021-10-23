@@ -22,12 +22,6 @@
 - [x] Add support for monitor hotplug using new ddcutil 1.2.0 api ddca_redetect_displays()
 - [x] Fix: internal backlight is not removed when bl_power goes to 4 (no udev event is triggered indeed)... added a note for now in code (not needed probably; let's push with the actual code commented out and remove it later)
 
-- [x] Clight -> avoid specifying that clightd.service must be enabled as it is started by clight later in the process (thus i2c module is already loaded and ddc C api can load external monitors!)
-- [ ] Clight -> add faq entry "no external monitor found -> disable clightd unit and let clight start it!"
-- [ ] Clight -> Fix: right now clight only emits internal signals for first backlight interface for whom it received a signal; what if that interface disappears? -> subscribe to object_added/removed signals and take a map of available objects!
-- [ ] Clight -> On objectadded set state.curr_bl_pct on new monitor, so that runtime added monitors have correct backlight set (and check if any override curve exists!)
-- [ ] Clight -> drop conf option "screen_sysname" in clight, now useless (?) as new API set backlight on any found device
-
 - [x] call sd_bus_emit_object_added() sd_bus_emit_object_removed() When object path are created/deleted
 
 - [ ] use more meaningful return types for Set,Raise,Lower? (boolean does not make much sense...)...

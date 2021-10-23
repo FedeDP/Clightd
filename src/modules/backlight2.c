@@ -215,7 +215,7 @@ MODULE("BACKLIGHT2");
         external_devices_refresh_fd = timerfd_create(CLOCK_BOOTTIME, 0);
         m_register_fd(external_devices_refresh_fd, true, NULL);
         
-        /* Run every 10s */
+        /* Run every 30s */
         struct itimerspec tm = {0};
         tm.it_value.tv_sec = EXTERNAL_MONITOR_REFRESH_TIME;
         tm.it_interval.tv_sec = EXTERNAL_MONITOR_REFRESH_TIME;
@@ -290,9 +290,12 @@ static void receive(const msg_t *msg, const void *userdata) {
                 m_log("failed to set backlight for %s\n", bl->sn);
                 /* 
                  * failed to set backlight; stop right now to avoid endless loop:
-                 * some external monitors report the capability to mange backlight
+                 * some external monitors report the capability to manage backlight
                  * but they fail instead, leaving us to an infinite loop.
                  */
+                stop_smooth(bl);
+            } else if (bl->smooth->params.target_pct == 0) {
+                /* set_backlight_value advised us to stop smoothing as it ended */
                 stop_smooth(bl);
             }
         } else if (msg->fd_msg->fd != external_devices_refresh_fd) {
@@ -303,18 +306,17 @@ static void receive(const msg_t *msg, const void *userdata) {
                 const char *action = udev_device_get_action(dev);
                 if (action) {
                     bl_t *bl = map_get(bls, id);
-                    if (!strcmp(action, UDEV_ACTION_CHANGE)) {
-                        int old_bl_value = -1;
-                        if (bl) {
-                            old_bl_value = atoi(udev_device_get_sysattr_value(bl->dev, "brightness"));
-                            /* Keep our device ref in sync! */
-                            udev_device_unref(bl->dev);
-                            bl->dev = udev_device_ref(dev);
-                            int val = atoi(udev_device_get_sysattr_value(dev, "brightness"));
-                            if (val != old_bl_value) {
-                                const double pct = (double)val / bl->max;
-                                emit_signals(bl, pct);
-                            }
+                    if (!strcmp(action, UDEV_ACTION_CHANGE) && bl) {
+                        // Load cached value
+                        int old_bl_value = atoi(udev_device_get_sysattr_value(bl->dev, "brightness"));
+                        /* Keep our device ref in sync! */
+                        udev_device_unref(bl->dev);
+                        bl->dev = udev_device_ref(dev);
+                        
+                        int val = atoi(udev_device_get_sysattr_value(dev, "brightness"));
+                        if (val != old_bl_value) {
+                            const double pct = (double)val / bl->max;
+                            emit_signals(bl, pct);
                         }
                     } else if (!strcmp(action, UDEV_ACTION_ADD) && !bl) {
                         if (store_internal_device(dev, &bl) != 0) {
@@ -369,6 +371,8 @@ static int store_internal_device(struct udev_device *dev, void *userdata) {
         d->dev = udev_device_ref(dev);
         d->max = max;
         d->sn = strdup(id);
+        // Unused. But receive() callback expects brightness value to be cached
+        udev_device_get_sysattr_value(dev, "brightness");
         snprintf(d->obj_path, sizeof(d->obj_path) - 1, "%s/%s", object_path, d->sn);
         ret = sd_bus_add_object_vtable(bus, &d->slot, d->obj_path, bus_interface, vtable, d);
         if (ret < 0) {
@@ -408,9 +412,9 @@ static double get_external_backlight(bl_t *bl) {
 
 map_ret_code get_backlight(void *userdata, const char *key, void *data) {
     bl_t *bl = (bl_t *)data;
-    double *val = (double *)userdata; 
+    double *val = (double *)userdata;
     if (bl->is_internal) {
-       *val = get_internal_backlight(bl);
+        *val = get_internal_backlight(bl);
     } else {
         *val = get_external_backlight(bl);
     }
@@ -440,27 +444,26 @@ static int set_external_backlight(bl_t *bl, int value) {
 /* Set a target_pct eventually computing smooth step */
 static int set_backlight_value(bl_t *bl, double *target_pct, double smooth_step) {
     const double next_pct = next_backlight_pct(bl, target_pct, smooth_step);
-    if (next_pct == *target_pct || next_pct == -1.0f) {
-        // end of smooth transition!
-        if (next_pct == -1.0f) {
-            m_log("no need to change backlight level for %s.\n", bl->sn);
-            *target_pct = next_pct; // disable smoothing eventually
-            return 0;
-        }
-        m_log("%s reached target backlight: %.2lf.\n", bl->sn, next_pct);
-        stop_smooth(bl);
-    }
     const int value = (int)round(bl->max * next_pct);
+    int ret;
     if (bl->is_internal) {
-        return set_internal_backlight(bl, value);
+        ret = set_internal_backlight(bl, value);
+    } else {
+        ret = set_external_backlight(bl, value);
     }
-    int ret = set_external_backlight(bl, value);
     if (ret == 0) {
         /*
-         * For external monitor: 
+         * For external monitor:
          * Emit signals now as we will never receive them from udev monitor.
+         * For internal monitor:
+         * Emit signals now or they will be filtered by receive() callback check
+         * that new_val is != from cached one.
          */
         emit_signals(bl, next_pct);
+    }
+    if (next_pct == *target_pct) {
+        m_log("%s reached target backlight: %.2lf.\n", bl->sn, next_pct);
+        *target_pct = 0; // eventually disable smooth (if called by set_backlight and not by timerfd)
     }
     return ret;
 }
@@ -523,13 +526,12 @@ static double next_backlight_pct(bl_t *bl, double *target_pct, double smooth_ste
         *target_pct = curr_pct + (verse * *target_pct);
         sanitize_target_step(target_pct, &smooth_step);
     }
+    
     if (smooth_step > 0) {
         if (*target_pct < curr_pct) {
             curr_pct = (curr_pct - smooth_step < *target_pct) ? *target_pct : curr_pct - smooth_step;
         } else if (*target_pct > curr_pct) {
             curr_pct = (curr_pct + smooth_step) > *target_pct ? *target_pct : curr_pct + smooth_step;
-        } else {
-            curr_pct = -1.0f; // useless
         }
     } else {
         curr_pct = *target_pct;
