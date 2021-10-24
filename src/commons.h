@@ -26,5 +26,9 @@
 #define WRONG_PLUGIN            INT_MIN + 1
 #define COMPOSITOR_NO_PROTOCOL  INT_MIN + 2
 
+#define UDEV_ACTION_ADD     "add"
+#define UDEV_ACTION_RM      "remove"
+#define UDEV_ACTION_CHANGE  "change"
+
 extern sd_bus *bus;
 extern struct udev *udev;

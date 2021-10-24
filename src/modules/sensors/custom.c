@@ -57,7 +57,7 @@ static void fetch_props_dev(void *dev, const char **node, const char **action) {
     }
 
     if (action) {
-        static const char *actions[] = { "Removed", "Added" };
+        static const char *actions[] = { UDEV_ACTION_RM, UDEV_ACTION_ADD };
 
         int idx = access(dev, F_OK) == 0;
         *action = actions[idx];

@@ -69,9 +69,12 @@ static void receive(const msg_t *msg, const void *userdata) {
             const char *action = NULL;
             sensor->fetch_props_dev(dev, &node, &action);
             
-            sd_bus_emit_signal(bus, sensor->obj_path, bus_interface, "Changed", "ss", node, action);
-            /* Changed is emitted on Sensor main object too */
-            sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "ss", node, action);
+            if (strcmp(action, UDEV_ACTION_ADD) == 0 ||
+                strcmp(action, UDEV_ACTION_RM) == 0) {
+                sd_bus_emit_signal(bus, sensor->obj_path, bus_interface, "Changed", "ss", node, action);
+                /* Changed is emitted on Sensor main object too */
+                sd_bus_emit_signal(bus, object_path, bus_interface, "Changed", "ss", node, action);
+            }
             sensor->destroy_dev(dev);
         }
     }
