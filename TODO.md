@@ -20,17 +20,16 @@
 - [x] Create this new interface under org.clightd.clightd.Backlight2 (to avoid api break)?
 - [x] Actually implement logic
 - [x] Add support for monitor hotplug using new ddcutil 1.2.0 api ddca_redetect_displays()
-- [x] Fix: internal backlight is not removed when bl_power goes to 4 (no udev event is triggered indeed)... added a note for now in code (not needed probably; let's push with the actual code commented out and remove it later)
 
 - [x] call sd_bus_emit_object_added() sd_bus_emit_object_removed() When object path are created/deleted
 
-- [ ] use more meaningful return types for Set,Raise,Lower? (boolean does not make much sense...)...
 - [x] Better error handling/code
 - [x] Drop bl_store_vpcode() and only load vpcode from CLIGHTD_BL_VCP env?
 - [x] Add CLIGHTD_BL_VCP Environment variable to systemd script with a comment thus it is simple to update it if needed
 - [x] Expose Max and Internal properties
 - [ ] Update dbus api wiki
-- [ ] add a page about monitor hotplugging (dep on ddcutil >= 1.2.0 and refresh time!)
+- [x] add a page about monitor hotplugging (dep on ddcutil >= 1.2.0 and refresh time!)
+- [ ] Investigate memleaks (related to ddca_redetect_displays()?)
 
 ### KbdBacklight
 - [x] call sd_bus_emit_object_added() sd_bus_emit_object_removed() When object path are created/deleted
