@@ -1,4 +1,4 @@
-## 5.5 (6.0)
+## 5.5
 
 ### Camera
 - [x] Add support for a cropping setting parameter: "x=0.4-0.6,y=0.2-0.8"
@@ -32,7 +32,7 @@
 - [x] Expose Max and Internal properties
 - [ ] Update dbus api wiki
 - [x] add a page about monitor hotplugging (dep on ddcutil >= 1.2.0 and refresh time!)
-- [ ] Investigate memleaks (related to ddca_redetect_displays()?)
+- [ ] Investigate memleaks (related to ddca_redetect_displays()?) -> see here: https://github.com/rockowitz/ddcutil/issues/202
 
 ### KbdBacklight
 - [x] call sd_bus_emit_object_added() sd_bus_emit_object_removed() When object path are created/deleted
