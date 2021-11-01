@@ -4,7 +4,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#ifndef USE_STACK_T // TODO: drop when ugprading to libmodule6.0.0
 #include <systemd/sd-bus.h>
+#endif
 #include <libudev.h>
 #include <unistd.h>
 #include <sys/timerfd.h>
@@ -30,5 +32,7 @@
 #define UDEV_ACTION_RM      "remove"
 #define UDEV_ACTION_CHANGE  "change"
 
+#ifndef USE_STACK_T
 extern sd_bus *bus;
+#endif
 extern struct udev *udev;

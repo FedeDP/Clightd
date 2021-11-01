@@ -7,6 +7,9 @@
 
 ### Gamma
 - [x] return 0 for Wl gamma Get (sway protocol) even if it is not implemented, to avoid breaking clight
+- [x] gamma on sway fix: keep connection alive and call dispatch!
+- [x] fix segfault 
+- [x] move free(priv) inside each plugin as sway implementation requires it to be kept alive!
 
 ### Backlight
 - [x] Never set current pct to -1 before emitting signals; fixes https://github.com/FedeDP/Clight/issues/225
