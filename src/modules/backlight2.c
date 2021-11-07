@@ -182,7 +182,7 @@ MODULE("BACKLIGHT2");
     
 #endif
 
-#if defined DDCUTIL_VMAJOR >= 1 && DDCUTIL_VMINOR >= 2
+#if DDCUTIL_VMAJOR >= 1 && DDCUTIL_VMINOR >= 2
 
     #define EXTERNAL_MONITOR_REFRESH_TIME 30 // in seconds
 

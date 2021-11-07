@@ -32,7 +32,8 @@
 - [x] Expose Max and Internal properties
 - [ ] Update dbus api wiki
 - [x] add a page about monitor hotplugging (dep on ddcutil >= 1.2.0 and refresh time!)
-- [ ] Investigate memleaks (related to ddca_redetect_displays()?) -> see here: https://github.com/rockowitz/ddcutil/issues/202
+- [x] Investigate memleaks (related to ddca_redetect_displays()?) -> see here: https://github.com/rockowitz/ddcutil/issues/202
+- [ ] Instead of 30s sleep, use an udev_monitor on drm subsystem?
 
 ### KbdBacklight
 - [x] call sd_bus_emit_object_added() sd_bus_emit_object_removed() When object path are created/deleted
