@@ -4,6 +4,9 @@
 #include <module/map.h>
 #include <linux/fb.h>
 
+#define BL_SUBSYSTEM        "backlight"
+#define DRM_SUBSYSTEM       "drm"
+
 typedef struct {
     double target_pct;
     double step;
@@ -57,9 +60,8 @@ int method_raisebrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_
 int method_lowerbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 
 map_t *bls;
-static struct udev_monitor *mon;
+static struct udev_monitor *bl_mon, *drm_mon;
 static uint64_t curr_cookie;
-static int external_devices_refresh_fd;
 static int verse;
 
 static const char object_path[] = "/org/clightd/clightd/Backlight2";
@@ -184,12 +186,7 @@ MODULE("BACKLIGHT2");
 
 #if DDCUTIL_VMAJOR >= 1 && DDCUTIL_VMINOR >= 2
 
-    #define EXTERNAL_MONITOR_REFRESH_TIME 30 // in seconds
-
     static void update_external_devices(void) {
-        uint64_t t;
-        read(external_devices_refresh_fd, &t, sizeof(uint64_t));
-        
         /*
          * Algo: increment current cookie,
          * then rededect all displays.
@@ -209,26 +206,12 @@ MODULE("BACKLIGHT2");
             }
         }
     }
-    
-    static void init_external_device_refresh_timer(void) {
-        /* Timer that every 10s refreshes external devices to check for newly added/deleted ones */
-        external_devices_refresh_fd = timerfd_create(CLOCK_BOOTTIME, 0);
-        m_register_fd(external_devices_refresh_fd, true, NULL);
-        
-        /* Run every 30s */
-        struct itimerspec tm = {0};
-        tm.it_value.tv_sec = EXTERNAL_MONITOR_REFRESH_TIME;
-        tm.it_interval.tv_sec = EXTERNAL_MONITOR_REFRESH_TIME;
-        timerfd_settime(external_devices_refresh_fd, 0, &tm, NULL);
-    }
+
 #else
 
     static void update_external_devices(void) { }
-    static void init_external_device_refresh_timer(void) { }
 
 #endif
-
-#define BL_SUBSYSTEM        "backlight"
 
 static void module_pre_start(void) {
 
@@ -265,11 +248,12 @@ static void init(void) {
     store_external_devices();
     
     // Register udev monitor for new internal devices
-    int fd = init_udev_monitor(BL_SUBSYSTEM, &mon);
+    int fd = init_udev_monitor(BL_SUBSYSTEM, &bl_mon);
     m_register_fd(fd, false, NULL);
     
-    // If ddcutil >= 1.2.0 -> register timer to refresh external devices
-    init_external_device_refresh_timer();
+    // Register udev monitor for external devices
+    fd = init_udev_monitor(DRM_SUBSYSTEM, &drm_mon);
+    m_register_fd(fd, false, NULL);
 }
 
 /* 
@@ -298,10 +282,11 @@ static void receive(const msg_t *msg, const void *userdata) {
                 /* set_backlight_value advised us to stop smoothing as it ended */
                 stop_smooth(bl);
             }
-        } else if (msg->fd_msg->fd != external_devices_refresh_fd) {
+        } else {
             /* From udev monitor, consume! */
-            struct udev_device *dev = udev_monitor_receive_device(mon);
+            struct udev_device *dev = udev_monitor_receive_device(bl_mon);
             if (dev) {
+                // Ok, the event was from internal monitor
                 const char *id = udev_device_get_sysname(dev);
                 const char *action = udev_device_get_action(dev);
                 if (action) {
@@ -330,16 +315,22 @@ static void receive(const msg_t *msg, const void *userdata) {
                     }
                 }
                 udev_device_unref(dev);
+            } else {
+                dev = udev_monitor_receive_device(drm_mon);
+                if (dev) {
+                    // The event was from external monitor!
+                    update_external_devices();
+                    udev_device_unref(dev);
+                }
             }
-        } else {
-            update_external_devices();
         }
     }
 }
 
 static void destroy(void) {
     map_free(bls);
-    udev_monitor_unref(mon);
+    udev_monitor_unref(bl_mon);
+    udev_monitor_unref(drm_mon);
 }
 
 static void stop_smooth(bl_t *bl) {
