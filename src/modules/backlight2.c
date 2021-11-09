@@ -108,9 +108,6 @@ MODULE("BACKLIGHT2");
             br_code = strtol(getenv("CLIGHTD_BL_VCP"), NULL, 16);
             m_log("Set 0x%x vcp code.\n", br_code);
         }
-#if DDCUTIL_VMAJOR >= 1 && DDCUTIL_VMINOR >= 2 && DDCUTIL_VMICRO >= 1
-        ddca_enable_force_slave_address(true);
-#endif
     }
 
     static void get_info_id(char *id, const int size, const DDCA_Display_Info *dinfo) {

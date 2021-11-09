@@ -34,7 +34,6 @@
 - [x] add a page about monitor hotplugging (dep on ddcutil >= 1.2.0 and refresh time!)
 - [x] Investigate memleaks (related to ddca_redetect_displays()?) -> see here: https://github.com/rockowitz/ddcutil/issues/202
 - [x] Instead of 30s sleep, use an udev_monitor on drm subsystem?
-- [x] Force slave address: ddca_enable_force_slave_address. Fixes #82
 
 ### KbdBacklight
 - [x] call sd_bus_emit_object_added() sd_bus_emit_object_removed() When object path are created/deleted
