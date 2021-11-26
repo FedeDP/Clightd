@@ -1,11 +1,14 @@
 [Unit]
 Description=Bus service to manage various screen related properties (gamma, dpms, backlight)
 Requires=@POLKIT_NAME@.service
+@AFTER@
 
 [Service]
 Type=dbus
 BusName=org.clightd.clightd
 User=root
+# Default backlight vcp code; update if needed
+Environment=CLIGHTD_BL_VCP=0x10
 ExecStart=@CMAKE_INSTALL_FULL_LIBEXECDIR@/clightd
 Restart=on-failure
 RestartSec=5
