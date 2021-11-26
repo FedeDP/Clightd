@@ -63,8 +63,9 @@ static int get(void *priv_data) {
     return temp;
 }
 
-static int dtor(void *priv_data) {
+static void dtor(void *priv_data) {
     xorg_gamma_priv *priv = (xorg_gamma_priv *)priv_data;
     XRRFreeScreenResources(priv->res);
-    return XCloseDisplay(priv->dpy);
+    XCloseDisplay(priv->dpy);
+    free(priv_data);
 }

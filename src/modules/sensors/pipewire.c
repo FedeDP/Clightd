@@ -1,14 +1,13 @@
 #ifdef PIPEWIRE_PRESENT
 
 #include "camera.h"
-
+#include <dirent.h>
 #include <spa/param/video/format-utils.h>
 #include <spa/debug/types.h>
 #include <spa/utils/result.h>
-
 #include <pipewire/pipewire.h>
 
-#define PW_NAME                 "Camera_PW"
+#define PW_NAME                 "Pipewire"
 
 typedef struct {
     uint32_t id;
@@ -51,6 +50,7 @@ static pw_mon_t pw_mon;
 static pw_data_t *last_recved;
 static pw_data_t **nodes;
 static int nodes_len;
+static int uid;
 
 static void _ctor_ init_libpipewire(void) {
     pw_init(NULL, NULL);
@@ -60,52 +60,87 @@ static void _dtor_ destroy_libpipewire(void) {
     pw_deinit();
 }
 
+static void set_env() {
+    char path[64];
+    snprintf(path, sizeof(path), "/run/user/%d", uid);
+    setenv("XDG_RUNTIME_DIR", path, 1);;
+}
+
 static void on_process(void *_data) {
-    pw_data_t *data = _data;
+    printf("kek\n");
+    pw_data_t *pw = _data;
     
-    struct pw_buffer *b;
-    if ((b = pw_stream_dequeue_buffer(data->stream)) == NULL) {
+    struct pw_buffer *b = pw_stream_dequeue_buffer(pw->stream);
+    if (b == NULL) {
         fprintf(stderr, "out of buffers: %m");
         goto err;
     }
-
-    const bool is_yuv = data->format.info.raw.format == SPA_VIDEO_FORMAT_YUY2;
+    
+    const bool is_yuv = pw->format.info.raw.format == SPA_VIDEO_FORMAT_YUY2;
     struct spa_buffer *buf = b->buffer;
-    uint8_t *sdata;
-    if ((sdata = buf->datas[0].data) == NULL) {
+
+    uint8_t *sdata = buf->datas[0].data;
+    if (sdata == NULL) {
         goto err;
     }
-    data->pct[data->capture_idx++] = get_frame_brightness(sdata, buf->datas[0].chunk->size, is_yuv);
-    pw_stream_queue_buffer(data->stream, b);
+    
+    rect_info_t full = {
+        .row_start = 0,
+        .row_end = pw->format.info.raw.size.height,
+        .col_start = 0,
+        .col_end = pw->format.info.raw.size.width,
+    };
+    
+    pw->pct[pw->capture_idx++] = get_frame_brightness(sdata, NULL, &full, is_yuv);
+    pw_stream_queue_buffer(pw->stream, b);
     return;
     
 err:
-    data->with_err = true;
+    pw->with_err = true;
 }
 
 static void on_stream_param_changed(void *_data, uint32_t id, const struct spa_pod *param) {
-    pw_data_t *data = _data;
-
+    pw_data_t *pw = _data;
+    
     if (param == NULL || id != SPA_PARAM_Format) {
         return;
     }
-
+    
     if (spa_format_parse(param,
-            &data->format.media_type,
-            &data->format.media_subtype) < 0) {
-        data->with_err = true;
+        &pw->format.media_type,
+        &pw->format.media_subtype) < 0) {
+        
+        pw->with_err = true;
         return;
     }
-
-    if (data->format.media_type != SPA_MEDIA_TYPE_video ||
-        data->format.media_subtype != SPA_MEDIA_SUBTYPE_raw) {
-        data->with_err = true;
+        
+    if (pw->format.media_type != SPA_MEDIA_TYPE_video ||
+        pw->format.media_subtype != SPA_MEDIA_SUBTYPE_raw) {
+        
+        pw->with_err = true;
         return;
     }
-
-    if (spa_format_video_raw_parse(param, &data->format.info.raw) < 0) {
-        data->with_err = true;
+            
+    if (spa_format_video_raw_parse(param, &pw->format.info.raw) < 0) {
+        pw->with_err = true;
         return;
+    }
+}
+
+static void on_stream_state_changed(void *_data, enum pw_stream_state old,
+                                    enum pw_stream_state state, const char *error) {
+    pw_data_t *pw = _data;
+    INFO("Stream state: \"%s\"\n", pw_stream_state_as_string(state));
+    switch (state) {
+        case PW_STREAM_STATE_UNCONNECTED:
+            pw->with_err = true;
+            break;
+        case PW_STREAM_STATE_PAUSED:
+            /* because we started inactive, activate ourselves now */
+            pw_stream_set_active(pw->stream, true);
+            break;
+        default:
+            break;
     }
 }
 
@@ -113,38 +148,35 @@ static void on_stream_param_changed(void *_data, uint32_t id, const struct spa_p
 static const struct pw_stream_events stream_events = {
     PW_VERSION_STREAM_EVENTS,
     .param_changed = on_stream_param_changed,
+    .state_changed = on_stream_state_changed,
     .process = on_process,
 };
 
 static void build_format(struct spa_pod_builder *b, const struct spa_pod **params) {
     *params = spa_pod_builder_add_object(b,
-        SPA_TYPE_OBJECT_Format,     SPA_PARAM_EnumFormat,
-        SPA_FORMAT_mediaType,       SPA_POD_Id(SPA_MEDIA_TYPE_video),
-        SPA_FORMAT_mediaSubtype,    SPA_POD_Id(SPA_MEDIA_SUBTYPE_raw),
-        SPA_FORMAT_VIDEO_format,    SPA_POD_CHOICE_ENUM_Id(2,
-                        SPA_VIDEO_FORMAT_GRAY8, // V4L2_PIX_FMT_GREY
-                        SPA_VIDEO_FORMAT_YUY2), // V4L2_PIX_FMT_YUYV
-        SPA_FORMAT_VIDEO_size,      SPA_POD_CHOICE_RANGE_Rectangle(
-                        &SPA_RECTANGLE(160, 120),
-                        &SPA_RECTANGLE(1, 1),
-                        &SPA_RECTANGLE(640, 480)),
-        SPA_FORMAT_VIDEO_framerate, SPA_POD_CHOICE_RANGE_Fraction(
-                        &SPA_FRACTION(25, 1),
-                        &SPA_FRACTION(0, 1),
-                        &SPA_FRACTION(120, 1)));
+                                        SPA_TYPE_OBJECT_Format,     SPA_PARAM_EnumFormat,
+                                        SPA_FORMAT_mediaType,       SPA_POD_Id(SPA_MEDIA_TYPE_video),
+                                        SPA_FORMAT_mediaSubtype,    SPA_POD_Id(SPA_MEDIA_SUBTYPE_raw),
+                                        SPA_FORMAT_VIDEO_format,    SPA_POD_CHOICE_ENUM_Id(2,
+                                                                        SPA_VIDEO_FORMAT_GRAY8, // V4L2_PIX_FMT_GREY
+                                                                        SPA_VIDEO_FORMAT_YUY2), // V4L2_PIX_FMT_YUYV
+                                        SPA_FORMAT_VIDEO_size,      SPA_POD_CHOICE_RANGE_Rectangle(
+                                                                        &SPA_RECTANGLE(160, 120),
+                                                                        &SPA_RECTANGLE(1, 1),
+                                                                        &SPA_RECTANGLE(640, 480)),
+                                        SPA_FORMAT_VIDEO_framerate, SPA_POD_CHOICE_RANGE_Fraction(
+                                                                        &SPA_FRACTION(25, 1),
+                                                                        &SPA_FRACTION(0, 1),
+                                                                        &SPA_FRACTION(120, 1)));
 }
 
 static bool validate_dev(void *dev) {
-    pw_data_t *pw = (pw_data_t *)dev;
-    if (pw->stream) {
-        return pw_stream_set_active(pw->stream, true) == 0;
-    }
     return true;
 }
 
 static void fetch_dev(const char *interface, void **dev) {
     pw_data_t *pw = NULL;
-    if (interface) {
+    if (interface && strlen(interface)) {
         uint32_t id = atoi(interface);
         for (int i = 0; i < nodes_len && !pw; i++) {
             if (nodes[i]->node.id == id) {
@@ -155,51 +187,47 @@ static void fetch_dev(const char *interface, void **dev) {
         pw = nodes[0];
     }
 
-    // TODO error checking
     if (pw) {
+        set_env();
+        
         const struct spa_pod *params;
         uint8_t buffer[1024];
         struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, sizeof(buffer));
-    
+        
         pw->loop = pw_loop_new(NULL);
-        pw->stream = pw_stream_new_simple(
-            pw->loop,
-            "clightd-camera-pw",
-            pw_properties_new(
-                PW_KEY_MEDIA_TYPE, "Video",
-                PW_KEY_MEDIA_CATEGORY, "Capture",
-                PW_KEY_MEDIA_ROLE, "Camera",
-                NULL),
-            &stream_events,
-            pw);
-
+        pw->stream = pw_stream_new_simple(pw->loop,
+                                        "clightd-camera-pw",
+                                        pw_properties_new(
+                                            PW_KEY_MEDIA_TYPE, "Video",
+                                            PW_KEY_MEDIA_CATEGORY, "Capture",
+                                            PW_KEY_MEDIA_ROLE, "Camera",
+                                            NULL),
+                                        &stream_events,
+                                        pw);
         build_format(&b, &params);
-
         int res;
-        // FIXME: fix when correct device is passed ??
         if ((res = pw_stream_connect(pw->stream,
-                PW_DIRECTION_INPUT,
-                /*pw->node.id*/PW_ID_ANY,
-                PW_STREAM_FLAG_AUTOCONNECT |    /* try to automatically connect this stream */
-                PW_STREAM_FLAG_INACTIVE |
-                PW_STREAM_FLAG_MAP_BUFFERS,     /* mmap the buffer data for us */
-                &params, 1))                    /* extra parameters, see above */ < 0) {
-            
+                                    PW_DIRECTION_INPUT,
+                                    pw->node.id,
+                                    PW_STREAM_FLAG_AUTOCONNECT |    /* try to automatically connect this stream */
+                                    PW_STREAM_FLAG_INACTIVE |
+                                    PW_STREAM_FLAG_MAP_BUFFERS,     /* mmap the buffer data for us */
+                                    &params, 1))                  /* extra parameters, see above */ < 0) {
+
             fprintf(stderr, "can't connect: %s\n", spa_strerror(res));
             free(pw);
-            return;
+        } else {
+            *dev = pw;
         }
+        unsetenv("XDG_RUNTIME_DIR");
     }
-    *dev = pw;
 }
 
 static void fetch_props_dev(void *dev, const char **node, const char **action) {
     static char str_id[32];
     pw_data_t *pw = (pw_data_t *)dev;
-    
     sprintf(str_id, "%d", pw->node.id);
     *node = str_id;
-    
     if (action) {
         *action = pw->node.action;
     }
@@ -244,8 +272,9 @@ static const struct pw_proxy_events proxy_events = {
 };
 
 static void registry_event_global(void *data, uint32_t id,
-                    uint32_t permissions, const char *type, uint32_t version,
-                    const struct spa_dict *props) {
+                                uint32_t permissions, const char *type, uint32_t version,
+                                const struct spa_dict *props) {
+
     if (strcmp(type, PW_TYPE_INTERFACE_Node) == 0) {
         const char *mc = spa_dict_lookup(props, PW_KEY_MEDIA_CLASS);
         const char *mr = spa_dict_lookup(props, PW_KEY_MEDIA_ROLE);
@@ -277,28 +306,45 @@ static const struct pw_registry_events registry_events = {
 };
 
 static int init_monitor(void) {
-    // TODO... setenv... ??
-    setenv("XDG_RUNTIME_DIR", "/run/user/1000", 1);
+    DIR *d = opendir("/run/user/");
+    if (d) {
+        struct dirent *dir;
+        while ((dir = readdir(d)) != NULL) {
+            if (dir->d_type == DT_DIR) {
+                if (sscanf(dir->d_name, "%d", &uid) == 1) {
+                    printf("Found user %d\n", uid);
+                    break;
+                }
+            }
+        }
+        closedir(d);
+    }
+    
+    // Unsupported... can this happen?
+    if (uid == 0) {
+        return -1;
+    }
+    
+    set_env();
+    
     pw_mon.mon_loop = pw_loop_new(NULL);
     pw_mon.context = pw_context_new(pw_mon.mon_loop, NULL, 0);
-    pw_mon.core = pw_context_connect(pw_mon.context, NULL, 0);                                
-    pw_mon.registry = pw_core_get_registry(pw_mon.core, PW_VERSION_REGISTRY, 0);                                
-                                                                                
-    spa_zero(pw_mon.registry_listener);                                            
-    pw_registry_add_listener(pw_mon.registry, &pw_mon.registry_listener, &registry_events, NULL);    
-        
+    pw_mon.core = pw_context_connect(pw_mon.context, NULL, 0);
+    pw_mon.registry = pw_core_get_registry(pw_mon.core, PW_VERSION_REGISTRY, 0);
+    
+    spa_zero(pw_mon.registry_listener);
+    pw_registry_add_listener(pw_mon.registry, &pw_mon.registry_listener, &registry_events, NULL);
+    
     int fd = pw_loop_get_fd(pw_mon.mon_loop);
     pw_loop_enter(pw_mon.mon_loop);
+
+    unsetenv("XDG_RUNTIME_DIR");
     return fd;
 }
 
 static void recv_monitor(void **dev) {
     last_recved = NULL;
-    while (pw_loop_iterate(pw_mon.mon_loop, -1) >= 0) {
-        if (last_recved) {
-            break;
-        }
-    }
+    pw_loop_iterate(pw_mon.mon_loop, 0);
     *dev = last_recved;
 }
 
@@ -314,11 +360,13 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
     pw_data_t *pw = (pw_data_t *)dev;
     pw->pct = pct;
     pw->settings = settings;
-    pw->stored_values = map_new(true, free);
-    
+    if (!pw->stored_values) {
+        pw->stored_values = map_new(true, free);
+    }
     set_camera_settings(pw);
     pw_loop_enter(pw->loop);
     while (pw->capture_idx < num_captures && !pw->with_err) {
+        printf("top %d\n", pw->capture_idx);
         if (pw_loop_iterate(pw->loop, -1) < 0) {
             break;
         }
@@ -331,24 +379,24 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
 // Stolen from https://github.com/PipeWire/pipewire/blob/master/spa/plugins/v4l2/v4l2-utils.c#L1017
 static uint32_t control_to_prop_id(uint32_t control_id) {
     switch (control_id) {
-    case V4L2_CID_BRIGHTNESS:
-        return SPA_PROP_brightness;
-    case V4L2_CID_CONTRAST:
-        return SPA_PROP_contrast;
-    case V4L2_CID_SATURATION:
-        return SPA_PROP_saturation;
-    case V4L2_CID_HUE:
-        return SPA_PROP_hue;
-    case V4L2_CID_GAMMA:
-        return SPA_PROP_gamma;
-    case V4L2_CID_EXPOSURE:
-        return SPA_PROP_exposure;
-    case V4L2_CID_GAIN:
-        return SPA_PROP_gain;
-    case V4L2_CID_SHARPNESS:
-        return SPA_PROP_sharpness;
-    default:
-        return SPA_PROP_START_CUSTOM + control_id;
+        case V4L2_CID_BRIGHTNESS:
+            return SPA_PROP_brightness;
+        case V4L2_CID_CONTRAST:
+            return SPA_PROP_contrast;
+        case V4L2_CID_SATURATION:
+            return SPA_PROP_saturation;
+        case V4L2_CID_HUE:
+            return SPA_PROP_hue;
+        case V4L2_CID_GAMMA:
+            return SPA_PROP_gamma;
+        case V4L2_CID_EXPOSURE:
+            return SPA_PROP_exposure;
+        case V4L2_CID_GAIN:
+            return SPA_PROP_gain;
+        case V4L2_CID_SHARPNESS:
+            return SPA_PROP_sharpness;
+        default:
+            return SPA_PROP_START_CUSTOM + control_id;
     }
 }
 

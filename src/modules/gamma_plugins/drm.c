@@ -109,8 +109,9 @@ static int get(void *priv_data) {
     return temp;
 }
 
-static int dtor(void *priv_data) {
+static void dtor(void *priv_data) {
     drm_gamma_priv *priv = (drm_gamma_priv *)priv_data;
     drmModeFreeResources(priv->res);
-    return close(priv->fd);
+    close(priv->fd);
+    free(priv_data);
 }

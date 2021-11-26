@@ -40,7 +40,7 @@ typedef struct _gamma_plugin {
     int (*validate)(const char **id, const char *env, void **priv_data);
     int (*set)(void *priv_data, const int temp);
     int (*get)(void *priv_data);
-    int (*dtor)(void *priv_data);
+    void (*dtor)(void *priv_data);
     char obj_path[100];
 } gamma_plugin;
 
@@ -48,7 +48,7 @@ typedef struct _gamma_plugin {
     static int validate(const char **id, const char *env, void **priv_data); \
     static int set(void *priv_data, const int temp); \
     static int get(void *priv_data); \
-    static int dtor(void *priv_data); \
+    static void dtor(void *priv_data); \
     static void _ctor_ register_gamma_plugin(void) { \
         static gamma_plugin self = { name, validate, set, get, dtor }; \
         gamma_register_new(&self); \

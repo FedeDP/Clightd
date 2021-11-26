@@ -246,7 +246,6 @@ static void client_dtor(void *c) {
     if (cl->plugin) {
         cl->plugin->dtor(cl->priv);
     }
-    free(cl->priv);
     free((char *)cl->display);
     free((char *)cl->env);
     free(cl);
@@ -376,7 +375,7 @@ static int start_client(gamma_client *cl, int temp, bool is_smooth, unsigned int
     
     // NOTE: it seems like on wayland smooth transitions are not working.
     // Forcefully disable them for now.
-    if (cl->is_smooth && cl->plugin == plugins[WL]) {
+    if (cl->plugin == plugins[WL] && cl->is_smooth) {
         fprintf(stderr, "Smooth transitions are not supported on wayland.\n");
         cl->is_smooth = false;
     }

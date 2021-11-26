@@ -1,18 +1,21 @@
-#include <commons.h>
 #include <polkit.h>
 #include <udev.h>
 #include <math.h>
-#include <stddef.h>
 #include <module/map.h>
 
 #define KBD_SUBSYSTEM           "leds"
 #define KBD_SYSNAME_MATCH       "kbd_backlight"
 
+#define WITH_KBD_DEVICE(k, fn) \
+    struct udev_device *kbd_dev = udev_device_new_from_subsystem_sysname(udev, KBD_SUBSYSTEM, k->sysname); \
+    fn; \
+    udev_device_unref(kbd_dev);
+
 typedef struct {
     int max;
     char obj_path[100];
     sd_bus_slot *slot;          // vtable's slot
-    struct udev_device *dev;
+    const char *sysname;
 } kbd_t;
 
 static void dtor_kbd(void *data);
@@ -20,10 +23,13 @@ static int kbd_new(struct udev_device *dev, void *userdata);
 static inline int set_value(kbd_t *k, const char *sysattr, int value);
 static map_ret_code set_brightness(void *userdata, const char *key, void *data);
 static map_ret_code set_timeout(void *userdata, const char *key, void *data);
+static map_ret_code append_backlight(void *userdata, const char *key, void *data);
+static map_ret_code append_timeout(void *userdata, const char *key, void *data);
 static int method_setkeyboard(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_getkeyboard(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_settimeout(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_gettimeout(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
+static int fetch_timeout(kbd_t *k);
 
 MODULE("KEYBOARD");
 
@@ -32,7 +38,9 @@ static const char main_interface[] = "org.clightd.clightd.KbdBacklight";
 static const sd_bus_vtable main_vtable[] = {
     SD_BUS_VTABLE_START(0),
     SD_BUS_METHOD("Set", "d", "b", method_setkeyboard, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("Get", NULL, "a(sd)", method_getkeyboard, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("SetTimeout", "i", "b", method_settimeout, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("GetTimeout", NULL, "a(si)", method_gettimeout, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_SIGNAL("Changed", "sd", 0),
     SD_BUS_VTABLE_END
 };
@@ -52,7 +60,7 @@ static map_t *kbds;
 static struct udev_monitor *mon;
 
 static void module_pre_start(void) {
-    
+
 }
 
 static bool check(void) {
@@ -65,6 +73,7 @@ static bool evaluate(void) {
 
 static void init(void) {
     kbds = map_new(true, dtor_kbd);
+    sd_bus_add_object_manager(bus, NULL, object_path);
     int r = sd_bus_add_object_vtable(bus,
                                  NULL,
                                  object_path,
@@ -93,16 +102,22 @@ static void receive(const msg_t *msg, const void *userdata) {
     if (strstr(key, KBD_SYSNAME_MATCH)) {
         const char *action = udev_device_get_action(dev);
         if (action) {
+            kbd_t *k = map_get(kbds, key);
             if (!strcmp(action, UDEV_ACTION_ADD)) {
-                // Register new interface
-                kbd_new(dev, NULL);
+                if (!k) {
+                    kbd_new(dev, &k);
+                    if (k) {
+                        sd_bus_emit_object_added(bus, k->obj_path);
+                    }
+                }
             } else if (!strcmp(action, UDEV_ACTION_RM)) {
-                // Remove the interface
-                map_remove(kbds, key);
+                if (k) {
+                    sd_bus_emit_object_removed(bus, k->obj_path);
+                    map_remove(kbds, key);
+                }
             } else if (!strcmp(action, UDEV_ACTION_CHANGE)) {
                 // Changed event!
-                /* Note: it seems like "change" udev signal is never triggered for kbd backlight though */                
-                kbd_t *k = map_get(kbds, key);
+                /* Note: it seems like "change" udev signal is never triggered for kbd backlight though */
                 if (k) {
                     int curr = atoi(udev_device_get_sysattr_value(dev, "brightness"));
                     const double pct = (double)curr / k->max;
@@ -126,7 +141,6 @@ static void destroy(void) {
 static void dtor_kbd(void *data) {
     kbd_t *k = (kbd_t *)data;
     sd_bus_slot_unref(k->slot);
-    udev_device_unref(k->dev);
     free(k);
 }
 
@@ -138,15 +152,13 @@ static int kbd_new(struct udev_device *dev, void *userdata) {
     }
     
     k->max = atoi(udev_device_get_sysattr_value(dev, "max_brightness"));
-    k->dev = udev_device_ref(dev);
-    
-    const char *name = udev_device_get_sysname(dev);
+    k->sysname = strdup(udev_device_get_sysname(dev));
     
     /*
      * Substitute wrong chars, eg: dell::kbd_backlight -> dell__kbd_backlight
      * See spec: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-marshaling-object-path
      */
-    snprintf(k->obj_path, sizeof(k->obj_path) - 1, "%s/%s", object_path, name);
+    snprintf(k->obj_path, sizeof(k->obj_path) - 1, "%s/%s", object_path, k->sysname);
     char *ptr = NULL;
     while ((ptr = strchr(k->obj_path, ':'))) {
         *ptr = '_';
@@ -157,7 +169,12 @@ static int kbd_new(struct udev_device *dev, void *userdata) {
         m_log("Failed to add object vtable on path '%s': %d\n", k->obj_path, r);
         dtor_kbd(k);
     } else {
-        map_put(kbds, name, k);
+        map_put(kbds, k->sysname, k);
+    }
+    
+    if (userdata) {
+        kbd_t **ktmp = (kbd_t **)userdata;
+        *ktmp = k;
     }
     return 0;
 }
@@ -165,7 +182,11 @@ static int kbd_new(struct udev_device *dev, void *userdata) {
 static inline int set_value(kbd_t *k, const char *sysattr, int value) {
     char val[15] = {0};
     snprintf(val, sizeof(val) - 1, "%d", value);
-    return udev_device_set_sysattr_value(k->dev, sysattr, val);
+    int ret;
+    WITH_KBD_DEVICE(k, {
+        ret = udev_device_set_sysattr_value(kbd_dev, sysattr, val);
+    });
+    return ret;
 }
 
 static map_ret_code set_brightness(void *userdata, const char *key, void *data) {
@@ -174,7 +195,7 @@ static map_ret_code set_brightness(void *userdata, const char *key, void *data) 
     
     if (set_value(k, "brightness", (int)round(target_pct * k->max)) >= 0) {
          // Emit on global object
-        sd_bus_emit_signal(bus, object_path, main_interface, "Changed", "sd", udev_device_get_sysname(k->dev), target_pct);
+        sd_bus_emit_signal(bus, object_path, main_interface, "Changed", "sd", k->sysname, target_pct);
         // Emit on specific object too!
         sd_bus_emit_signal(bus, k->obj_path, bus_interface, "Changed", "d", target_pct);
         return MAP_OK;
@@ -214,13 +235,45 @@ static int method_setkeyboard(sd_bus_message *m, void *userdata, sd_bus_error *r
 
 static int method_getkeyboard(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     kbd_t *k = (kbd_t *)userdata;
-    int curr = atoi(udev_device_get_sysattr_value(k->dev, "brightness"));
+    if (k) {
+        int curr;
+        WITH_KBD_DEVICE(k, {
+            curr = atoi(udev_device_get_sysattr_value(kbd_dev, "brightness"));
+        });
+        const double pct = (double)curr / k->max;
+        return sd_bus_reply_method_return(m, "d", pct);
+    }
+    sd_bus_message *reply = NULL;
+    sd_bus_message_new_method_return(m, &reply);
+    sd_bus_message_open_container(reply, SD_BUS_TYPE_ARRAY, "(sd)");
+    int r = map_iterate(kbds, append_backlight, reply);
+    sd_bus_message_close_container(reply);
+    if (r == 0) {
+        r = sd_bus_send(NULL, reply, NULL);
+    }
+    sd_bus_message_unref(reply);
+    return r;
+}
+
+static map_ret_code append_backlight(void *userdata, const char *key, void *data) {
+    sd_bus_message *reply = (sd_bus_message *)userdata;
+    
+    kbd_t *k = (kbd_t *)data;
+    int curr;
+    WITH_KBD_DEVICE(k, {
+        curr = atoi(udev_device_get_sysattr_value(kbd_dev, "brightness"));
+    });
     const double pct = (double)curr / k->max;
-    return sd_bus_reply_method_return(m, "d", pct);
+    
+    sd_bus_message_open_container(reply, SD_BUS_TYPE_STRUCT, "sd");
+    sd_bus_message_append(reply, "sd", key, pct);
+    sd_bus_message_close_container(reply);
+    
+    return MAP_OK;
 }
 
 static int method_settimeout(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-//     ASSERT_AUTH();
+    ASSERT_AUTH();
     
     int timeout;
     int r = sd_bus_message_read(m, "i", &timeout);
@@ -242,7 +295,30 @@ static int method_settimeout(sd_bus_message *m, void *userdata, sd_bus_error *re
 
 static int method_gettimeout(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     kbd_t *k = (kbd_t *)userdata;
-    const char *timeout = udev_device_get_sysattr_value(k->dev, "stop_timeout");
+    if (k) {
+        int tm = fetch_timeout(k);
+        if (tm >= 0) {
+            return sd_bus_reply_method_return(m, "i", tm);
+        }
+        return sd_bus_error_set_errno(ret_error, -tm);
+    }
+    sd_bus_message *reply = NULL;
+    sd_bus_message_new_method_return(m, &reply);
+    sd_bus_message_open_container(reply, SD_BUS_TYPE_ARRAY, "(si)");
+    int r = map_iterate(kbds, append_timeout, reply);
+    sd_bus_message_close_container(reply);
+    if (r == 0) {
+        r = sd_bus_send(NULL, reply, NULL);
+    }
+    sd_bus_message_unref(reply);
+    return r;
+}
+
+static int fetch_timeout(kbd_t *k) {
+    const char *timeout;
+    WITH_KBD_DEVICE(k, {
+        timeout = udev_device_get_sysattr_value(kbd_dev, "stop_timeout");
+    });
     if (timeout) {
         int tm;
         char suffix = 's';
@@ -256,9 +332,22 @@ static int method_gettimeout(sd_bus_message *m, void *userdata, sd_bus_error *re
                     break;
                 }
             }
-            return sd_bus_reply_method_return(m, "i", tm);
+            return tm;
         }
-        return sd_bus_error_set_errno(ret_error, EINVAL);
+        return -EINVAL;
     }
-    return sd_bus_error_set_errno(ret_error, ENOENT);
+    return -ENOENT;
+}
+
+static map_ret_code append_timeout(void *userdata, const char *key, void *data) {
+    sd_bus_message *reply = (sd_bus_message *)userdata;
+    
+    kbd_t *k = (kbd_t *)data;
+    int tm = fetch_timeout(k);
+    if (tm >= 0) {
+        sd_bus_message_open_container(reply, SD_BUS_TYPE_STRUCT, "si");
+        sd_bus_message_append(reply, "si", key, tm);
+        sd_bus_message_close_container(reply);
+    }
+    return MAP_OK;
 }

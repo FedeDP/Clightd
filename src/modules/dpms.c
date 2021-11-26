@@ -133,7 +133,7 @@ static int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
     const char *display = NULL, *env = NULL;
     int level;
     
-    ASSERT_AUTH();
+   ASSERT_AUTH();
     
     /* Read the parameters */
     int r = sd_bus_message_read(m, "ssi", &display, &env, &level);

@@ -6,22 +6,50 @@
 #include <jpeglib.h>
 
 #define CAMERA_NAME                 "Camera"
-#define CAMERA_ILL_MAX              255
 #define CAMERA_SUBSYSTEM            "video4linux"
-#define HISTOGRAM_STEPS             40
 
 #define SET_V4L2(id, val)           set_v4l2_control(id, val, #id, true)
 #define SET_V4L2_DEF(id)            set_v4l2_control_def(id, #id)
 
-static const __u32 supported_fmts[] = {
-    V4L2_PIX_FMT_GREY,
-    V4L2_PIX_FMT_YUYV,
-    V4L2_PIX_FMT_MJPEG
+struct buffer {
+    uint8_t *start;
+    size_t length;
+};
+
+struct mjpeg_dec {
+    struct jpeg_decompress_struct cinfo;
+    struct jpeg_error_mgr err;
+    int (*dec_cb)(uint8_t **frame, int len);
+};
+
+typedef enum { X_AXIS, Y_AXIS, MAX_AXIS } crop_axis;
+typedef enum { DISABLED, CROP_API, SELECTION_API, MANUAL} crop_type_t;
+
+typedef struct {
+    bool enabled;
+    double area_pct[2]; // start - end
+} crop_info_t;
+
+struct state {
+    int device_fd;
+    uint32_t pixelformat;
+    uint32_t width;
+    uint32_t height;
+    crop_info_t crop[MAX_AXIS];
+    crop_type_t crop_type;
+    struct buffer buf;
+    char *settings;
+    struct mjpeg_dec *decoder;
+    map_t *stored_values;
 };
 
 static void set_v4l2_control_def(uint32_t id, const char *name);
 static void set_v4l2_control(uint32_t id, int32_t val, const char *name, bool store);
 static void set_camera_settings_def(void);
+static void inline fill_crop_rect(crop_info_t *cr, struct v4l2_rect *rect);
+static int set_selection(crop_info_t *cr);
+static int set_crop(crop_info_t *cr);
+static int try_set_crop(crop_info_t *crop);
 static void set_camera_settings(void);
 static void restore_camera_settings(void);
 static int set_camera_fmt(void);
@@ -38,33 +66,13 @@ static int send_frame(struct v4l2_buffer *buf);
 static int recv_frame(struct v4l2_buffer *buf);
 static double compute_brightness(unsigned int size);
 
-struct buffer {
-    uint8_t *start;
-    size_t length;
-};
-
-struct histogram {
-    double count;
-    double sum;
-};
-
-struct mjpeg_dec {
-    struct jpeg_decompress_struct cinfo;
-    struct jpeg_error_mgr err;
-    int (*dec_cb)(uint8_t **frame, int len);
-};
-
-struct state {
-    int device_fd;
-    uint32_t pixelformat;
-    struct buffer buf;
-    char *settings;
-    struct mjpeg_dec *decoder;
-    map_t *stored_values;
-};
-
 static struct state state;
 static struct udev_monitor *mon;
+static const __u32 supported_fmts[] = {
+    V4L2_PIX_FMT_GREY,
+    V4L2_PIX_FMT_YUYV,
+    V4L2_PIX_FMT_MJPEG
+};
 
 SENSOR(CAMERA_NAME);
 
@@ -123,7 +131,7 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
         set_camera_settings();
         create_decoder();
         for (int i = 0; i < num_captures; i++) {
-            struct v4l2_buffer buf = { .type = V4L2_BUF_TYPE_VIDEO_CAPTURE, .memory = V4L2_MEMORY_MMAP};            
+            struct v4l2_buffer buf = { .type = V4L2_BUF_TYPE_VIDEO_CAPTURE, .memory = V4L2_MEMORY_MMAP};
             if (send_frame(&buf) == 0 && recv_frame(&buf) == 0) {
                 pct[ctr++] = compute_brightness(buf.bytesused);
             }
@@ -198,21 +206,128 @@ static void set_camera_settings_def(void) {
     SET_V4L2_DEF(V4L2_CID_BRIGHTNESS);
 }
 
+static void inline fill_crop_rect(crop_info_t *cr, struct v4l2_rect *rect) {
+    if (state.crop[Y_AXIS].enabled) {
+        const double *a_pct = cr[Y_AXIS].area_pct;
+        const double height_pct = a_pct[1] - a_pct[0];
+        rect->height = height_pct * state.height;
+        rect->top = a_pct[0] * state.height;
+    }
+    if (state.crop[X_AXIS].enabled) {
+        const double *a_pct = cr[X_AXIS].area_pct;
+        const double width_pct = a_pct[1] - a_pct[0];
+        rect->width = width_pct * state.width;
+        rect->left = a_pct[0] * state.width;
+    }
+}
+
+// https://www.kernel.org/doc/html/v4.12/media/uapi/v4l/vidioc-g-selection.html
+static int set_selection(crop_info_t *cr) {    
+    struct v4l2_selection selection = {0};
+    selection.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    selection.target = V4L2_SEL_TGT_CROP;
+    if (-1 == xioctl(VIDIOC_G_SELECTION, &selection)) {
+        INFO("VIDIOC_G_SELECTION failed: %m\n");
+        return -errno;
+    }    
+    if (cr) {
+        fill_crop_rect(cr, &selection.r);
+    } else {
+        // Reset default
+        selection.target = V4L2_SEL_TGT_CROP_DEFAULT;
+    }
+    if (-1 == xioctl(VIDIOC_S_SELECTION, &selection)) {
+        INFO("VIDIOC_S_SELECTION failed: %m\n");
+        return -errno;
+    }
+    state.crop_type = SELECTION_API;
+    return 0;
+}
+
+// https://www.kernel.org/doc/html/v4.14/media/uapi/v4l/crop.html
+static int set_crop(crop_info_t *cr) {
+    struct v4l2_crop crop = {0};
+    crop.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    if (-1 == xioctl(VIDIOC_G_CROP, &crop)) {
+        INFO("VIDIOC_G_CROP failed: %m\n");
+        return -errno;
+    }
+    
+    if (cr) {
+        fill_crop_rect(cr, &crop.c);
+    } else {
+        // Reset default
+        struct v4l2_cropcap cropcap = {0};
+        cropcap.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        if (-1 == xioctl(VIDIOC_CROPCAP, &cropcap)) {
+            INFO("VIDIOC_CROPCAP failed: %m\n");
+            return -errno;
+        }
+        crop.c = cropcap.defrect;
+    }
+    if (-1 == xioctl(VIDIOC_S_CROP, &crop)) {
+        INFO("VIDIOC_S_CROP failed: %m\n");
+        return -errno;
+    }
+    state.crop_type = CROP_API;
+    return 0;
+}
+
+static int try_set_crop(crop_info_t *crop) {
+    /** Try "new" selection API **/
+    if (set_selection(crop) != 0) {
+        /** Try "old" crop API **/
+        return set_crop(crop);
+    }
+    return 0;
+}
+
 /* Parse settings string! */
 static void set_camera_settings(void) {
     /* Set default values */
     set_camera_settings_def();
     if (state.settings && strlen(state.settings)) {
         char *token; 
-        char *rest = state.settings; 
-        
+        char *rest = state.settings;
+                
         while ((token = strtok_r(rest, ",", &rest))) {
             uint32_t v4l2_op;
             int32_t v4l2_val;
+            char axis;
+            double area_pct[2];
+            
             if (sscanf(token, "%u=%d", &v4l2_op, &v4l2_val) == 2) {
                 SET_V4L2(v4l2_op, v4l2_val);
+            } else if (sscanf(token, "%c=%lf-%lf", &axis, &area_pct[0], &area_pct[1]) == 3) {
+                int8_t crop_idx = -1;
+                if (area_pct[0] >= area_pct[1]) {
+                    fprintf(stderr, "Start should be lesser than end: %lf-%lf\n", area_pct[0], area_pct[1]);
+                } else {
+                    switch (axis) {
+                        case 'x':
+                            crop_idx = X_AXIS;
+                            break;
+                        case 'y':
+                            crop_idx = Y_AXIS;
+                            break;
+                        default:
+                            fprintf(stderr, "wrong axis specified: %c; 'x' or 'y' supported.\n", axis);
+                            break;
+                    }
+                }
+                if (crop_idx != -1 && !state.crop[crop_idx].enabled) {
+                    state.crop[crop_idx].enabled = true;
+                    state.crop[crop_idx].area_pct[0] = area_pct[0];
+                    state.crop[crop_idx].area_pct[1] = area_pct[1];
+                }
             } else {
                 fprintf(stderr, "Expected a=b format in '%s' token.\n", token);
+            }
+        }
+        if (state.crop[X_AXIS].enabled || state.crop[Y_AXIS].enabled) {
+            if (try_set_crop(state.crop) != 0) {
+                INFO("Unsupported crop/selection v4l2 API; fallback at manually skipping pixels.\n")
+                state.crop_type = MANUAL;
             }
         }
     }
@@ -224,6 +339,18 @@ static void restore_camera_settings(void) {
         const char *ctrl_name = map_itr_get_key(itr); 
         INFO("Restoring setting for '%s'\n", ctrl_name)
         set_v4l2_control(old_ctrl->id, old_ctrl->value, ctrl_name, false);
+    }
+    
+    // Restore crop if needed
+    switch (state.crop_type) {
+    case SELECTION_API:
+        set_selection(NULL);
+        break;
+    case CROP_API:
+        set_crop(NULL);
+        break;
+    default:
+        break;
     }
 }
 
@@ -241,6 +368,8 @@ static int set_camera_fmt(void) {
     
     INFO("Image fmt: %s\n", (char *)&fmt.fmt.pix.pixelformat);
     INFO("Image res: %d x %d\n", fmt.fmt.pix.width, fmt.fmt.pix.height);
+    state.height = fmt.fmt.pix.height;
+    state.width = fmt.fmt.pix.width;
     return 0;
 }
 
@@ -268,12 +397,6 @@ static int check_camera_caps(void) {
     if (-1 == xioctl(VIDIOC_S_PRIORITY, &priority)) {
         INFO("Failed to set priority\n");
     }
-    
-    struct v4l2_format fmt = {0};
-    fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    fmt.fmt.pix.width = 160;
-    fmt.fmt.pix.height = 120;
-    fmt.fmt.pix.field = V4L2_FIELD_INTERLACED;
     
     /* Check supported formats */
     struct v4l2_fmtdesc fmtdesc = {0};
@@ -418,7 +541,7 @@ static int send_frame(struct v4l2_buffer *buf) {
     return 0;
 }
 
-static int recv_frame(struct v4l2_buffer *buf) {    
+static int recv_frame(struct v4l2_buffer *buf) {
     /* Dequeue the buffer */
     if(-1 == xioctl(VIDIOC_DQBUF, buf)) {
         perror("VIDIOC_DQBUF");
@@ -429,7 +552,6 @@ static int recv_frame(struct v4l2_buffer *buf) {
 
 static double compute_brightness(unsigned int size) {
     double brightness = 0.0;
-        
     uint8_t *img_data = state.buf.start;
     if (state.decoder) {
         size = state.decoder->dec_cb(&img_data, size);
@@ -437,94 +559,37 @@ static double compute_brightness(unsigned int size) {
             return brightness;
         }
     }
-        
-    brightness = get_frame_brightness(img_data, size, (state.pixelformat == V4L2_PIX_FMT_YUYV));
     
+    rect_info_t full = {
+        .row_start = 0,
+        .row_end = state.height,
+        .col_start = 0,
+        .col_end = state.width,
+    };
+    
+    if (state.crop_type == MANUAL) {
+        // Manual crop if needed
+        rect_info_t crop = { 
+            .row_start = 0,
+            .row_end = state.height,
+            .col_start = 0,
+            .col_end = state.width,
+        };
+        if (state.crop[X_AXIS].enabled) {
+            crop.col_start = state.crop[X_AXIS].area_pct[0] * state.width;
+            crop.col_end = state.crop[X_AXIS].area_pct[1] * state.width;
+        }
+        if (state.crop[Y_AXIS].enabled) {
+            crop.row_start = state.crop[Y_AXIS].area_pct[0] * state.height;
+            crop.row_end = state.crop[Y_AXIS].area_pct[1] * state.height;
+        }
+        INFO("Manual crop: rows[%d-%d], cols[%d-%d]\n", crop.row_start, crop.row_end, crop.col_start, crop.col_end);
+        brightness = get_frame_brightness(img_data, &crop, &full, (state.pixelformat == V4L2_PIX_FMT_YUYV));
+    } else {
+        brightness = get_frame_brightness(img_data, NULL, &full, (state.pixelformat == V4L2_PIX_FMT_YUYV));
+    }
     if (img_data != state.buf.start) {
         free(img_data);
     }
     return brightness;
-}
-
-double get_frame_brightness(uint8_t *img_data, size_t size, bool is_yuv) {
-    double brightness = 0.0;
-    double min = CAMERA_ILL_MAX;
-    double max = 0.0;
-    
-    /*
-     * If greyscale (rgb is converted to grey) -> increment by 1. 
-     * If YUYV -> increment by 2: we only want Y! 
-     */
-    const int inc = 1 + is_yuv;
-    const double total = size / inc;
-
-    /* Find minimum and maximum brightness */
-    for (int i = 0; i < size; i += inc) {
-        if (img_data[i] < min) {
-            min = img_data[i];
-        }
-        if (img_data[i] > max) {
-            max = img_data[i];
-        }
-    }
-
-    /* Ok, we should never get in here */
-    if (max == 0.0) {
-        return brightness;
-    }
-
-    /* Calculate histogram */
-    struct histogram hist[HISTOGRAM_STEPS] = {0};
-    const double step_size = (max - min) / HISTOGRAM_STEPS;
-    for (int i = 0; i < size; i += inc) {
-        int bucket = (img_data[i] - min) / step_size;
-        if (bucket >= 0 && bucket < HISTOGRAM_STEPS) {
-            hist[bucket].sum += img_data[i];
-            hist[bucket].count++;
-        }
-    }
-
-    /* Find (approximate) quartiles for histogram steps */
-    const double quartile_size = total / 4;
-    double quartiles[3] = {0.0, 0.0, 0.0};
-    int j = 0;
-    for (int i = 0; i < HISTOGRAM_STEPS && j < 3; i++) {
-        quartiles[j] += hist[i].count;
-        if (quartiles[j] >= quartile_size) {
-            quartiles[j] = (quartile_size / quartiles[j]) + i;
-            j++;
-        }
-    }
-
-    /*
-     * Results may be clustered in a single estimated quartile, 
-     * in which case consider full range.
-     */
-    int min_bucket = 0;
-    int max_bucket = HISTOGRAM_STEPS - 1;
-    if (quartiles[2] > quartiles[0]) {
-        /* Trim outlier buckets via interquartile range */
-        const double iqr = (quartiles[2] - quartiles[0]) * 1.5;
-        min_bucket = quartiles[0] - iqr;
-        max_bucket = quartiles[2] + iqr;
-        if (min_bucket < 0) {
-            min_bucket = 0;
-        }
-        if (max_bucket > HISTOGRAM_STEPS - 1) {
-            max_bucket = HISTOGRAM_STEPS - 1;
-        }
-    }
-    
-    /*
-     * Find the highest brightness bucket with
-     * a significant sample count
-     * and return the average brightness for it.
-     */
-    for (int i = max_bucket; i >= min_bucket; i--) {
-        if (hist[i].count > step_size) {
-            brightness = hist[i].sum / hist[i].count;
-            break;
-        }
-    }
-    return (double)brightness / CAMERA_ILL_MAX;
 }

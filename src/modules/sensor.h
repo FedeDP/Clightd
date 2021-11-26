@@ -26,7 +26,7 @@
 #define _SENSORS \
     X(ALS) \
     X(YOCTOLIGHT) \
-    X(CAMERA_PW) \
+    X(PIPEWIRE) \
     X(CAMERA) \
     X(CUSTOM)
 

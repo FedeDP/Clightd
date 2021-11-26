@@ -1,6 +1,9 @@
+#define USE_STACK_T // this is needed for a bug in libmodule: stack_t type is already declared in signal.h
+
 #include "wlr-gamma-control-unstable-v1-client-protocol.h"
 #include "gamma.h"
 #include "wl_utils.h"
+#include <module/stack.h>
 
 struct output {
     struct wl_output *wl_output;
@@ -16,6 +19,7 @@ typedef struct {
     struct wl_list outputs;
     struct wl_registry *registry;
     struct zwlr_gamma_control_manager_v1 *gamma_control_manager;
+    bool not_first_time;
 } wlr_gamma_priv;
 
 static int create_gamma_table(uint32_t ramp_size, uint16_t **table);
@@ -39,7 +43,36 @@ static const struct wl_registry_listener registry_listener = {
     .global_remove = registry_handle_global_remove,
 };
 
+static stack_t *clients;
+static bool leaving;
+
 GAMMA("Wl");
+
+MODULE("GAMMASWAY");
+
+static bool check(void) {
+    return true;
+}
+
+static bool evaluate(void) {
+    return true;
+}
+
+static void init(void) {
+    clients = stack_new(dtor);
+}
+
+static void receive(const msg_t *msg, const void *userdata) {
+    if (msg && !msg->is_pubsub) {
+        wlr_gamma_priv *priv = (wlr_gamma_priv *)msg->fd_msg->userptr;
+        wl_display_dispatch(priv->dpy);
+    }
+}
+
+static void destroy(void) {
+    leaving = true; // notify dtor that all clients must be destroyed
+    stack_free(clients);
+}
 
 static int validate(const char **id, const char *env,  void **priv_data) {
     struct wl_display *display = fetch_wl_display(*id, env);
@@ -47,12 +80,24 @@ static int validate(const char **id, const char *env,  void **priv_data) {
         return WRONG_PLUGIN;
     }
     
+    /* Check if we already have a running client for this display */
+    for (stack_itr_t *itr = stack_itr_new(clients); itr; itr = stack_itr_next(itr)) {
+        wlr_gamma_priv *p = (wlr_gamma_priv *)stack_itr_get_data(itr);
+        if (p->dpy == display) {
+            *priv_data = p;
+            // this is not the first time we use this client.
+            // No need to register its fd
+            p->not_first_time = true;
+            free(itr);
+            return 0;
+        }
+    }
+    
     int ret = UNSUPPORTED;
     /* init private data */
     *priv_data = calloc(1, sizeof(wlr_gamma_priv));
     wlr_gamma_priv *priv = (wlr_gamma_priv *)*priv_data;
     if (!priv) {
-        wl_display_disconnect(display);
         return -ENOMEM;
     }
     
@@ -102,6 +147,7 @@ static int set(void *priv_data, const int temp) {
     
     struct output *output;
     wl_list_for_each(output, &priv->outputs, link) {
+        lseek(output->table_fd, 0, SEEK_SET);
         uint16_t *r = output->table;
         uint16_t *g = output->table + output->ramp_size;
         uint16_t *b = output->table + 2 * output->ramp_size;
@@ -110,16 +156,38 @@ static int set(void *priv_data, const int temp) {
                                         output->table_fd);
     }
     wl_display_flush(priv->dpy);
+    // Register this fd and listen on events
+    if (!priv->not_first_time) {
+        m_register_fd(wl_display_get_fd(priv->dpy), false, priv);
+        stack_push(clients, priv);
+    }
     return 0;
 }
 
 static int get(void *priv_data) {
     // Unsupported ?
-    return -1;
+    // Ok anyway, just return 0;
+    // It will be supported one day hopefully
+    return 0;
 }
 
-static int dtor(void *priv_data) {
+static void dtor(void *priv_data) {
+    if (!leaving) {
+        /* Check if we already have a running client for this display */
+        for (stack_itr_t *itr = stack_itr_new(clients); itr; itr = stack_itr_next(itr)) {
+            wlr_gamma_priv *p = (wlr_gamma_priv *)stack_itr_get_data(itr);
+            if (p == priv_data) {
+                // do not remove this client as we need to keep it alive;
+                free(itr);
+                return;
+            }
+        }
+    }
+    
     wlr_gamma_priv *priv = (wlr_gamma_priv *)priv_data;
+    if (priv->dpy) {
+        m_deregister_fd(wl_display_get_fd(priv->dpy));
+    }
     struct output *output, *tmp_output;
     wl_list_for_each_safe(output, tmp_output, &priv->outputs, link) {
         wl_list_remove(&output->link);
@@ -131,10 +199,10 @@ static int dtor(void *priv_data) {
     if (priv->gamma_control_manager) {
         zwlr_gamma_control_manager_v1_destroy(priv->gamma_control_manager);
     }
+    free(priv_data);
     // NOTE: dpy is disconnected on program exit to workaround
     // gamma protocol limitation that resets gamma as soon as display is disconnected.
     // See wl_utils.c
-    return 0;
 }
 
 static int create_gamma_table(uint32_t ramp_size, uint16_t **table) {

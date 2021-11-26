@@ -1,11 +1,18 @@
 cmake_minimum_required(VERSION 3.14)
 
-project(clightd VERSION 5.4 LANGUAGES C)
+project(clightd VERSION 5.5 LANGUAGES C)
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 include(GNUInstallDirs)
 find_package(PkgConfig)
+
+execute_process(
+        COMMAND git log -1 --format=%h
+        WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+        OUTPUT_VARIABLE GIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+)
 
 # Create program target
 file(GLOB SOURCES src/*.c src/utils/*.c src/modules/*.c src/modules/sensors/*.c)
@@ -19,7 +26,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 )
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     -D_GNU_SOURCE
-    -DVERSION="${PROJECT_VERSION}"
+    -DVERSION="${PROJECT_VERSION}-${GIT_HASH}"
 )
 set_property(TARGET ${PROJECT_NAME} PROPERTY C_STANDARD 99)
 
@@ -120,14 +127,18 @@ if(SYSTEMD_BASE_FOUND)
     else()
         set(POLKIT_NAME "polkit")
     endif()
-
+    
+    if(WITH_DDC)
+        set(AFTER "After=systemd-modules-load.service")
+    endif()
+    
     # Properly configure clightd systemd service to use correct dep on polkit.service
     configure_file(${SCRIPT_DIR}/clightd.service clightd.service @ONLY)
     
     # This can be overridden by cmdline
     if(NOT SYSTEMD_SERVICE_DIR)
         # Fetch it from systemd
-        pkg_get_variable(SYSTEMD_SERVICE_DIR systemd systemdsystemconfdir)
+        pkg_get_variable(SYSTEMD_SERVICE_DIR systemd systemdsystemunitdir)
     endif()
 
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/clightd.service

@@ -26,10 +26,6 @@
 sd_bus *bus = NULL;
 struct udev *udev = NULL;
 
-#ifdef DDC_PRESENT
-extern void bl_store_vpcode(int code);
-#endif
-
 static const char bus_interface[] = "org.clightd.clightd";
 
 /* Every module needs it; let's init it before any module */
@@ -43,16 +39,12 @@ static void check_opts(int argc, char *argv[]) {
             printf("Clightd: dbus API to easily set screen backlight, gamma temperature and get ambient brightness through webcam frames capture or ALS devices.\n");
             printf("* Current version: %s\n", VERSION);
             printf("* https://github.com/FedeDP/Clightd\n");
-            printf("* Copyright (C) 2019  Federico Di Pierro <nierro92@gmail.com>\n");
+            printf("* Copyright (C) 2021  Federico Di Pierro <nierro92@gmail.com>\n");
             exit(EXIT_SUCCESS);
+        } else {
+            fprintf(stderr, "Unrecognized option: %s.\n", argv[i]);
+            exit(EXIT_FAILURE);
         }
-#ifdef DDC_PRESENT
-        else if (!strcmp(argv[i], "-c") || !strcmp(argv[i], "--vpcode")) {
-            if (++i < argc) {
-                bl_store_vpcode(atoi(argv[i]));
-            }
-        }
-#endif
     }
 }
 
