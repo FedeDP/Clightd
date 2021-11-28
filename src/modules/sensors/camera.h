@@ -1,3 +1,5 @@
+#pragma once
+
 #include <sensor.h>
 #include <linux/videodev2.h>
 #include <module/map.h>

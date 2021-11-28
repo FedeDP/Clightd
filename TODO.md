@@ -39,22 +39,37 @@
 - [x] call sd_bus_emit_object_added() sd_bus_emit_object_removed() When object path are created/deleted
 - [x] Fix: udev_reference is a snapshot of an udev device at a current time. Wrong!
 
-### Generic
-- [x] When built with ddcutil, clightd.service should be started after systemd-modules-load.service
-- [x] Show commit hash in version
-
 ### ALS
 - [x] Fix: avoid using cached udev_dev reference in loop (thus always returning same ambient brightness read during a Capture request)
 - [x] Fixed EIO errors
 
 ### Sensor
 - [x] Only emit Sensor.Changed signal for added/removed devices
+- [ ] Add a List method in Sensor api to list all available devices ("as")
 
 ### Pipewire
 - [x] Support pipewire for Camera sensor? This would allow multiple application sharing camera
 - [x] Pipewire run as root needs XDG_RUNTIME_DIR env -> workaround: find the first /run/user folder and use that
 - [ ] Unify camera settings between camera and pipewire sensors... ?
 - [x] Support monitor sensor api for pipewire
+- [x] Fix segfault
+- [x] Fix subsequent Capture
+- [ ] Check if installing it on system causes pipewire module to be disabled because clightd starts before /run/user/1000 is created!
+-> in case, disable monitor for now and instead rely upon user-provided interface string or PW_ID_ANY
+- [ ] Use caller uid instead of defaulting to first found user during Capture!
+- [ ] Use a map to store list of nodes?
+- [ ] Free list of nodes upon exit!
+- [ ] Fix xdg_runtime_dir set to create monitor
+
+### Generic
+- [x] When built with ddcutil, clightd.service should be started after systemd-modules-load.service
+- [x] Show commit hash in version
+- [ ] All api that require eg Xauth or xdg rutime user, fallback at automatically fetching a default value given the caller:
+> unsigned int uid;
+//     sd_bus_creds *c;
+//     sd_bus_query_sender_creds(m, SD_BUS_CREDS_EUID, &c);
+//     sd_bus_creds_get_euid(c, &uid); (/run/user/1000)
+// Function fill_bus_creds() -> fills a global "runtime_dir", "xauth_dir" etc etc given a sd_bus_message, then exposes "sender_get_runtime_dir() etc etc"
 
 ## 5.x
 - [ ] Keep it up to date with possible ddcutil api changes

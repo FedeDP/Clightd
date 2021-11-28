@@ -67,7 +67,6 @@ static void set_env() {
 }
 
 static void on_process(void *_data) {
-    printf("kek\n");
     pw_data_t *pw = _data;
     
     struct pw_buffer *b = pw_stream_dequeue_buffer(pw->stream);
@@ -78,7 +77,6 @@ static void on_process(void *_data) {
     
     const bool is_yuv = pw->format.info.raw.format == SPA_VIDEO_FORMAT_YUY2;
     struct spa_buffer *buf = b->buffer;
-
     uint8_t *sdata = buf->datas[0].data;
     if (sdata == NULL) {
         goto err;
@@ -125,6 +123,13 @@ static void on_stream_param_changed(void *_data, uint32_t id, const struct spa_p
         pw->with_err = true;
         return;
     }
+    
+    uint8_t params_buffer[1024];
+    struct spa_pod_builder b = SPA_POD_BUILDER_INIT(params_buffer, sizeof(params_buffer));
+    const struct spa_pod *params = spa_pod_builder_add_object(&b,
+                                         SPA_TYPE_OBJECT_ParamBuffers, SPA_PARAM_Buffers,
+                                         SPA_PARAM_BUFFERS_dataType, SPA_POD_CHOICE_FLAGS_Int((1<<SPA_DATA_MemPtr)));
+    pw_stream_update_params(pw->stream, &params, 1);
 }
 
 static void on_stream_state_changed(void *_data, enum pw_stream_state old,
@@ -237,11 +242,20 @@ static void destroy_dev(void *dev) {
     pw_data_t *pw = (pw_data_t *)dev;
     if (pw->stream) {
         pw_stream_destroy(pw->stream);
+        pw->stream = NULL;
     }
     if (pw->loop) {
         pw_loop_destroy(pw->loop);
+        pw->loop = NULL;
     }
     map_free(pw->stored_values);
+    pw->stored_values = NULL;
+    
+    pw->pct = NULL;
+    pw->settings = NULL;
+    pw->capture_idx = 0;
+    pw->with_err = false;
+    
     if (!strcmp(pw->node.action, UDEV_ACTION_RM)) {
         int found_idx = -1;
         for (int i = 0; i < nodes_len; i++) {
@@ -306,6 +320,7 @@ static const struct pw_registry_events registry_events = {
 };
 
 static int init_monitor(void) {
+    // FIXME: improve this...?
     DIR *d = opendir("/run/user/");
     if (d) {
         struct dirent *dir;
@@ -360,13 +375,12 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
     pw_data_t *pw = (pw_data_t *)dev;
     pw->pct = pct;
     pw->settings = settings;
-    if (!pw->stored_values) {
-        pw->stored_values = map_new(true, free);
-    }
+    pw->capture_idx = 0;
+    pw->with_err = false;
+    pw->stored_values = map_new(true, free);
     set_camera_settings(pw);
     pw_loop_enter(pw->loop);
     while (pw->capture_idx < num_captures && !pw->with_err) {
-        printf("top %d\n", pw->capture_idx);
         if (pw_loop_iterate(pw->loop, -1) < 0) {
             break;
         }
@@ -468,7 +482,7 @@ static void set_camera_settings(pw_data_t *pw) {
 static void restore_camera_settings(pw_data_t *pw) {
     for (map_itr_t *itr = map_itr_new(pw->stored_values); itr; itr = map_itr_next(itr)) {
         struct v4l2_control *old_ctrl = map_itr_get_data(itr);
-        const char *ctrl_name = map_itr_get_key(itr); 
+        const char *ctrl_name = map_itr_get_key(itr);
         INFO("Restoring setting for '%s'\n", ctrl_name)
         set_camera_setting(pw, old_ctrl->id, old_ctrl->value, false);
     }
