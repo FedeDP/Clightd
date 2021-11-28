@@ -10,6 +10,7 @@
 #include <module/map.h>
 #include <math.h>
 #include "gamma.h"
+#include "bus_utils.h"
 
 static unsigned short get_red(int temp);
 static unsigned short get_green(int temp);
@@ -269,6 +270,8 @@ static int method_setgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
     if (temp < 1000 || temp > 10000) {
         error = EINVAL;
     } else {
+        bus_sender_fill_creds(m);
+        
         gamma_client *sc = map_get(clients, display);
         if (!sc) {
             sc = fetch_client(userdata, display, env, &error);
@@ -310,6 +313,8 @@ static int method_getgamma(sd_bus_message *m, void *userdata, sd_bus_error *ret_
         m_log("Failed to parse parameters: %s\n", strerror(-r));
         return r;
     }
+    
+    bus_sender_fill_creds(m); // used by PW plugin
     
     gamma_client *cl = map_get(clients, display);
     if (cl) {

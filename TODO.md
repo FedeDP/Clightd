@@ -45,7 +45,6 @@
 
 ### Sensor
 - [x] Only emit Sensor.Changed signal for added/removed devices
-- [ ] Add a List method in Sensor api to list all available devices ("as")
 
 ### Pipewire
 - [x] Support pipewire for Camera sensor? This would allow multiple application sharing camera
@@ -56,7 +55,7 @@
 - [x] Fix subsequent Capture
 - [ ] Check if installing it on system causes pipewire module to be disabled because clightd starts before /run/user/1000 is created!
 -> in case, disable monitor for now and instead rely upon user-provided interface string or PW_ID_ANY
-- [ ] Use caller uid instead of defaulting to first found user during Capture!
+- [x] Use caller uid instead of defaulting to first found user during Capture!
 - [x] Use a map to store list of nodes?
 - [x] Free list of nodes upon exit!
 - [ ] Fix xdg_runtime_dir set to create monitor
@@ -65,12 +64,9 @@
 ### Generic
 - [x] When built with ddcutil, clightd.service should be started after systemd-modules-load.service
 - [x] Show commit hash in version
-- [ ] All api that require eg Xauth or xdg rutime user, fallback at automatically fetching a default value given the caller:
-> unsigned int uid;
-//     sd_bus_creds *c;
-//     sd_bus_query_sender_creds(m, SD_BUS_CREDS_EUID, &c);
-//     sd_bus_creds_get_euid(c, &uid); (/run/user/1000)
-// Function fill_bus_creds() -> fills a global "runtime_dir", "xauth_dir" etc etc given a sd_bus_message, then exposes "sender_get_runtime_dir() etc etc"
+- [x] All api that require eg Xauth or xdg rutime user, fallback at automatically fetching a default value given the caller:
+- [x] test X
+- [ ] test wl
 
 ## 5.x
 - [ ] Keep it up to date with possible ddcutil api changes

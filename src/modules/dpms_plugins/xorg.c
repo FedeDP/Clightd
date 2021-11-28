@@ -1,6 +1,7 @@
-#include <X11/Xlib.h>
+#include "xorg_utils.h"
 #include <X11/extensions/dpms.h>
 #include "dpms.h"
+#include "bus_utils.h"
 
 DPMS("Xorg");
 
@@ -17,9 +18,7 @@ static int get(const char **display, const char *xauthority) {
     CARD16 s;
     int ret = WRONG_PLUGIN;
     
-    setenv("XAUTHORITY", xauthority, 1);
-    
-    Display *dpy = XOpenDisplay(*display);
+    Display *dpy = fetch_xorg_display(display, xauthority);
     if (dpy) {
         if (DPMSCapable(dpy)) {
             DPMSInfo(dpy, &s, &onoff);
@@ -28,19 +27,14 @@ static int get(const char **display, const char *xauthority) {
             ret = UNSUPPORTED;
         }
         XCloseDisplay(dpy);
-    }
-    
-    unsetenv("XAUTHORITY");
+    }    
     return ret;
 }
 
 static int set(const char **display, const char *xauthority, int dpms_level) {
     int ret = WRONG_PLUGIN;
     
-    /* set xauthority cookie */
-    setenv("XAUTHORITY", xauthority, 1);
-    
-    Display *dpy = XOpenDisplay(*display);
+    Display *dpy = fetch_xorg_display(display, xauthority);
     if (dpy) {
         if (DPMSCapable(dpy)) {
             DPMSEnable(dpy);
@@ -52,8 +46,5 @@ static int set(const char **display, const char *xauthority, int dpms_level) {
         }
         XCloseDisplay(dpy);
     }
-    
-    /* Drop xauthority cookie */
-    unsetenv("XAUTHORITY");
     return ret;
 }

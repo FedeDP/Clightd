@@ -2,6 +2,7 @@
 
 #include "dpms.h"
 #include "polkit.h"
+#include "bus_utils.h"
 
 static int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
@@ -94,6 +95,8 @@ static int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
         return r;
     }
     
+    bus_sender_fill_creds(m); // used by PW plugin
+    
     /*
      * Note: this is freed by drm plugin if it is an empty string
      * to get a default drm device.
@@ -147,6 +150,8 @@ static int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
         sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Wrong DPMS level value.");
         return -EINVAL;
     }
+    
+    bus_sender_fill_creds(m); // used by PW plugin
     
     /*
      * Note: this is freed by drm plugin if it is an empty string

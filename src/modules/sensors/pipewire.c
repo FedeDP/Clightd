@@ -1,6 +1,7 @@
 #ifdef PIPEWIRE_PRESENT
 
 #include "camera.h"
+#include "bus_utils.h"
 #include <dirent.h>
 #include <spa/param/video/format-utils.h>
 #include <spa/debug/types.h>
@@ -77,9 +78,13 @@ static void _dtor_ destroy_libpipewire(void) {
 }
 
 static void set_env() {
-    char path[64];
-    snprintf(path, sizeof(path), "/run/user/%d", uid);
-    setenv("XDG_RUNTIME_DIR", path, 1);;
+    if (bus_sender_runtime_dir()) {
+        setenv("XDG_RUNTIME_DIR", bus_sender_runtime_dir(), 1);
+    } else {
+        char path[64];
+        snprintf(path, sizeof(path), "/run/user/%d", uid);
+        setenv("XDG_RUNTIME_DIR", path, 1);;
+    }
 }
 
 static void on_process(void *_data) {
@@ -169,7 +174,7 @@ static void on_stream_state_changed(void *_data, enum pw_stream_state old,
 static const struct pw_stream_events stream_events = {
     PW_VERSION_STREAM_EVENTS,
     .param_changed = on_stream_param_changed,
-    .state_changed = on_stream_state_changed,
+//     .state_changed = on_stream_state_changed,
     .process = on_process,
 };
 
@@ -199,51 +204,18 @@ static void fetch_dev(const char *interface, void **dev) {
     pw_data_t *pw = NULL;
     if (interface && strlen(interface)) {
         uint32_t id = atoi(interface);
-        map_itr_t *itr;
-        for (itr = map_itr_new(nodes); itr && pw; itr = map_itr_next(itr)) {
+        for (map_itr_t *itr = map_itr_new(nodes); itr; itr = map_itr_next(itr)) {
             pw_data_t *node = map_itr_get_data(itr);
             if (node->node.id == id) {
                 pw = node;
+                free(itr);
+                break;
             }
         }
     } else {
         pw = first_node;
     }
-
-    if (pw) {
-        set_env();
-        
-        const struct spa_pod *params;
-        uint8_t buffer[1024];
-        struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, sizeof(buffer));
-        
-        pw->loop = pw_loop_new(NULL);
-        pw->stream = pw_stream_new_simple(pw->loop,
-                                        "clightd-camera-pw",
-                                        pw_properties_new(
-                                            PW_KEY_MEDIA_TYPE, "Video",
-                                            PW_KEY_MEDIA_CATEGORY, "Capture",
-                                            PW_KEY_MEDIA_ROLE, "Camera",
-                                            NULL),
-                                        &stream_events,
-                                        pw);
-        build_format(&b, &params);
-        int res;
-        if ((res = pw_stream_connect(pw->stream,
-                                    PW_DIRECTION_INPUT,
-                                    pw->node.id,
-                                    PW_STREAM_FLAG_AUTOCONNECT |    /* try to automatically connect this stream */
-                                    PW_STREAM_FLAG_INACTIVE |
-                                    PW_STREAM_FLAG_MAP_BUFFERS,     /* mmap the buffer data for us */
-                                    &params, 1))                  /* extra parameters, see above */ < 0) {
-
-            fprintf(stderr, "can't connect: %s\n", spa_strerror(res));
-            free(pw);
-        } else {
-            *dev = pw;
-        }
-        unsetenv("XDG_RUNTIME_DIR");
-    }
+    *dev = pw;
 }
 
 static void fetch_props_dev(void *dev, const char **node, const char **action) {
@@ -267,6 +239,8 @@ static void destroy_dev(void *dev) {
         pw->loop = NULL;
     }
     map_free(pw->cap_set.stored_values);
+    pw->cap_set.stored_values = NULL;
+    
     memset(&pw->cap_set, 0, sizeof(pw->cap_set));
     
     if (pw->node.action && !strcmp(pw->node.action, UDEV_ACTION_RM)) {
@@ -277,9 +251,8 @@ static void destroy_dev(void *dev) {
 
 static void removed_proxy(void *data) {
     pw_data_t *pw = (pw_data_t *)data;
-    pw->node.action = UDEV_ACTION_RM;
+    pw->node.action = UDEV_ACTION_RM; // this will kill our module during destroy_dev() call!
     INFO("Removed node %d\n", pw->node.id);
-    pw_proxy_destroy(pw->node.proxy);
     last_recved = pw;
 }
 
@@ -386,15 +359,45 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
     pw->cap_set.pct = pct;
     pw->cap_set.settings = settings;
     pw->cap_set.stored_values = map_new(true, free);
-    set_camera_settings(pw);
-    pw_loop_enter(pw->loop);
-    while (pw->cap_set.capture_idx < num_captures && !pw->cap_set.with_err) {
-        if (pw_loop_iterate(pw->loop, -1) < 0) {
-            break;
+    
+    set_env();
+    
+    const struct spa_pod *params;
+    uint8_t buffer[1024];
+    struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, sizeof(buffer));
+    
+    pw->loop = pw_loop_new(NULL);
+    pw->stream = pw_stream_new_simple(pw->loop,
+                                      "clightd-camera-pw",
+                                      pw_properties_new(
+                                          PW_KEY_MEDIA_TYPE, "Video",
+                                          PW_KEY_MEDIA_CATEGORY, "Capture",
+                                          PW_KEY_MEDIA_ROLE, "Camera",
+                                          NULL),
+                                      &stream_events,
+                                      pw);
+    build_format(&b, &params);
+    int res;
+    if ((res = pw_stream_connect(pw->stream,
+        PW_DIRECTION_INPUT,
+        pw->node.id,
+        PW_STREAM_FLAG_AUTOCONNECT |    /* try to automatically connect this stream */
+        PW_STREAM_FLAG_MAP_BUFFERS,     /* mmap the buffer data for us */
+        &params, 1))                  /* extra parameters, see above */ < 0) {
+        
+        fprintf(stderr, "Can't connect: %s\n", spa_strerror(res));
+    } else {
+        set_camera_settings(pw);
+        pw_loop_enter(pw->loop);
+        while (pw->cap_set.capture_idx < num_captures && !pw->cap_set.with_err) {
+            if (pw_loop_iterate(pw->loop, -1) < 0) {
+                break;
+            }
         }
+        pw_loop_leave(pw->loop);
+        restore_camera_settings(pw);
     }
-    pw_loop_leave(pw->loop);
-    restore_camera_settings(pw);
+    unsetenv("XDG_RUNTIME_DIR");
     return pw->cap_set.capture_idx;
 }
 

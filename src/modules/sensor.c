@@ -1,5 +1,6 @@
 #include <sensor.h>
 #include <polkit.h>
+#include "bus_utils.h"
 
 #define SENSOR_MAX_CAPTURES    20
 
@@ -186,7 +187,7 @@ static int method_issensoravailable(sd_bus_message *m, void *userdata, sd_bus_er
 
 static int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     ASSERT_AUTH();
-    
+        
     const char *interface = NULL;
     char *settings = NULL;
     const int num_captures;
@@ -200,6 +201,8 @@ static int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error 
         sd_bus_error_set_const(ret_error, SD_BUS_ERROR_INVALID_ARGS, "Number of captures should be between 1 and 20.");
         return -EINVAL;
     }
+    
+    bus_sender_fill_creds(m); // used by PW plugin
     
     void *dev = NULL;
     sensor_t *sensor = NULL;

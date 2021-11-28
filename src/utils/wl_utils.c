@@ -2,8 +2,11 @@
 
 #include "wl_utils.h"
 #include "commons.h"
+#include "bus_utils.h"
 #include <module/map.h>
 #include <sys/syscall.h>
+
+#define WL_DISPLAY_DEF "wayland-0"
 
 typedef struct {
     struct wl_display *dpy;
@@ -30,6 +33,12 @@ static void wl_info_dtor(void *data) {
 }
 
 struct wl_display *fetch_wl_display(const char *display, const char *env) {
+    if (!env || env[0] == 0) {
+        env = bus_sender_runtime_dir();
+    }
+    if (!display || display[0] == 0) {
+        display = WL_DISPLAY_DEF;
+    }
     if (env) {
         wl_info *info = map_get(wl_map, display);
         if (!info) {

@@ -1,5 +1,7 @@
 #include "gamma.h"
 #include <commons.h>
+#include "bus_utils.h"
+#include "xorg_utils.h"
 #include <X11/extensions/Xrandr.h>
 
 typedef struct {
@@ -12,9 +14,7 @@ GAMMA("Xorg");
 static int validate(const char **id, const char *env, void **priv_data) {
     int ret = WRONG_PLUGIN;
     
-    setenv("XAUTHORITY", env, 1);
-    
-    Display *dpy = XOpenDisplay(*id);
+    Display *dpy = fetch_xorg_display(id, env);
     if (dpy) {
         int screen = DefaultScreen(dpy);
         Window root = RootWindow(dpy, screen);
@@ -30,8 +30,6 @@ static int validate(const char **id, const char *env, void **priv_data) {
             XCloseDisplay(dpy);
         }
     }
-    
-    unsetenv("XAUTHORITY");
     return ret;
 }
 

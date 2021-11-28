@@ -1,6 +1,7 @@
 #ifdef SCREEN_PRESENT
 
 #include "screen.h"
+#include "bus_utils.h"
 
 #define MONITOR_ILL_MAX              255
 
@@ -116,6 +117,8 @@ static int method_getbrightness(sd_bus_message* m, void* userdata, sd_bus_error*
         m_log("Failed to parse parameters: %s\n", strerror(-r));
         return r;
     }
+    
+    bus_sender_fill_creds(m);
     
     screen_plugin *plugin = userdata;
     int br = WRONG_PLUGIN;
