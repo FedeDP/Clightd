@@ -57,9 +57,10 @@
 - [ ] Check if installing it on system causes pipewire module to be disabled because clightd starts before /run/user/1000 is created!
 -> in case, disable monitor for now and instead rely upon user-provided interface string or PW_ID_ANY
 - [ ] Use caller uid instead of defaulting to first found user during Capture!
-- [ ] Use a map to store list of nodes?
-- [ ] Free list of nodes upon exit!
+- [x] Use a map to store list of nodes?
+- [x] Free list of nodes upon exit!
 - [ ] Fix xdg_runtime_dir set to create monitor
+- [ ] Fix memleaks
 
 ### Generic
 - [x] When built with ddcutil, clightd.service should be started after systemd-modules-load.service

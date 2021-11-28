@@ -8,6 +8,9 @@
 #include <pipewire/pipewire.h>
 
 #define PW_NAME                 "Pipewire"
+#define BUILD_KEY(id) \
+    char key[20]; \
+    snprintf(key, sizeof(key), "Node%d", id);
 
 typedef struct {
     uint32_t id;
@@ -17,19 +20,23 @@ typedef struct {
 } pw_node_t;
 
 typedef struct {
-    pw_node_t node;
-    struct pw_loop *loop;
-    struct pw_stream *stream;
-    struct spa_video_info format;
     double *pct;
     int capture_idx;
     char *settings;
     map_t *stored_values;
     bool with_err;
+} capture_settings_t;
+
+typedef struct {
+    pw_node_t node;
+    struct pw_loop *loop;
+    struct pw_stream *stream;
+    struct spa_video_info format;
+    capture_settings_t cap_set;
 } pw_data_t;
 
 typedef struct {
-    struct pw_loop *mon_loop;
+    struct pw_loop *loop;
     struct pw_context *context;
     struct pw_core *core;
     struct pw_registry *registry;
@@ -47,16 +54,25 @@ static void restore_camera_settings(pw_data_t *pw);
 SENSOR(PW_NAME);
 
 static pw_mon_t pw_mon;
-static pw_data_t *last_recved;
-static pw_data_t **nodes;
-static int nodes_len;
+static pw_data_t *last_recved, *first_node;
+static map_t *nodes;
 static int uid;
+
+static void free_node(void *dev) {
+    pw_data_t *pw = (pw_data_t *)dev;
+    pw->node.action = NULL; // see destroy_dev() impl
+    destroy_dev(pw);
+    pw_proxy_destroy(pw->node.proxy);
+    free(pw);
+}
 
 static void _ctor_ init_libpipewire(void) {
     pw_init(NULL, NULL);
+    nodes = map_new(true, free_node);
 }
 
 static void _dtor_ destroy_libpipewire(void) {
+    map_free(nodes);
     pw_deinit();
 }
 
@@ -89,12 +105,12 @@ static void on_process(void *_data) {
         .col_end = pw->format.info.raw.size.width,
     };
     
-    pw->pct[pw->capture_idx++] = get_frame_brightness(sdata, NULL, &full, is_yuv);
+    pw->cap_set.pct[pw->cap_set.capture_idx++] = get_frame_brightness(sdata, NULL, &full, is_yuv);
     pw_stream_queue_buffer(pw->stream, b);
     return;
     
 err:
-    pw->with_err = true;
+    pw->cap_set.with_err = true;
 }
 
 static void on_stream_param_changed(void *_data, uint32_t id, const struct spa_pod *param) {
@@ -108,19 +124,19 @@ static void on_stream_param_changed(void *_data, uint32_t id, const struct spa_p
         &pw->format.media_type,
         &pw->format.media_subtype) < 0) {
         
-        pw->with_err = true;
+        pw->cap_set.with_err = true;
         return;
     }
         
     if (pw->format.media_type != SPA_MEDIA_TYPE_video ||
         pw->format.media_subtype != SPA_MEDIA_SUBTYPE_raw) {
         
-        pw->with_err = true;
+        pw->cap_set.with_err = true;
         return;
     }
             
     if (spa_format_video_raw_parse(param, &pw->format.info.raw) < 0) {
-        pw->with_err = true;
+        pw->cap_set.with_err = true;
         return;
     }
     
@@ -138,7 +154,7 @@ static void on_stream_state_changed(void *_data, enum pw_stream_state old,
     INFO("Stream state: \"%s\"\n", pw_stream_state_as_string(state));
     switch (state) {
         case PW_STREAM_STATE_UNCONNECTED:
-            pw->with_err = true;
+            pw->cap_set.with_err = true;
             break;
         case PW_STREAM_STATE_PAUSED:
             /* because we started inactive, activate ourselves now */
@@ -183,13 +199,15 @@ static void fetch_dev(const char *interface, void **dev) {
     pw_data_t *pw = NULL;
     if (interface && strlen(interface)) {
         uint32_t id = atoi(interface);
-        for (int i = 0; i < nodes_len && !pw; i++) {
-            if (nodes[i]->node.id == id) {
-                pw = nodes[i];
+        map_itr_t *itr;
+        for (itr = map_itr_new(nodes); itr && pw; itr = map_itr_next(itr)) {
+            pw_data_t *node = map_itr_get_data(itr);
+            if (node->node.id == id) {
+                pw = node;
             }
         }
-    } else if (nodes_len > 0) {
-        pw = nodes[0];
+    } else {
+        pw = first_node;
     }
 
     if (pw) {
@@ -248,27 +266,12 @@ static void destroy_dev(void *dev) {
         pw_loop_destroy(pw->loop);
         pw->loop = NULL;
     }
-    map_free(pw->stored_values);
-    pw->stored_values = NULL;
+    map_free(pw->cap_set.stored_values);
+    memset(&pw->cap_set, 0, sizeof(pw->cap_set));
     
-    pw->pct = NULL;
-    pw->settings = NULL;
-    pw->capture_idx = 0;
-    pw->with_err = false;
-    
-    if (!strcmp(pw->node.action, UDEV_ACTION_RM)) {
-        int found_idx = -1;
-        for (int i = 0; i < nodes_len; i++) {
-            if (found_idx != -1) {
-                nodes[i - 1] = nodes[i];
-                nodes[i] = NULL;
-            }
-            if (pw == nodes[i]) {
-                found_idx = i;
-            }
-        }
-        free(pw);
-        nodes = realloc(nodes, --nodes_len);
+    if (pw->node.action && !strcmp(pw->node.action, UDEV_ACTION_RM)) {
+        BUILD_KEY(pw->node.id);
+        map_remove(nodes, key);
     }
 }
 
@@ -293,12 +296,6 @@ static void registry_event_global(void *data, uint32_t id,
         const char *mc = spa_dict_lookup(props, PW_KEY_MEDIA_CLASS);
         const char *mr = spa_dict_lookup(props, PW_KEY_MEDIA_ROLE);
         if (mc && mr &&  !strcmp(mc, "Video/Source") && !strcmp(mr, "Camera")) {
-            void *tmp = realloc(nodes, ++nodes_len);
-            if (!tmp) {
-                return;
-            }
-            nodes = tmp;
-            
             pw_data_t *pw = calloc(1, sizeof(pw_data_t));
             if (!pw) {
                 return;
@@ -309,7 +306,11 @@ static void registry_event_global(void *data, uint32_t id,
             pw->node.proxy = pw_registry_bind(pw_mon.registry, id, type, PW_VERSION_NODE, sizeof(pw_data_t));
             pw_proxy_add_listener(pw->node.proxy, &pw->node.proxy_listener, &proxy_events, pw);
             last_recved = pw; // used by recv_monitor
-            nodes[nodes_len - 1] = pw;
+            if (map_length(nodes) == 0) {
+                first_node = pw;
+            }
+            BUILD_KEY(id);
+            map_put(nodes, key, pw);
         }
     }
 }
@@ -342,16 +343,16 @@ static int init_monitor(void) {
     
     set_env();
     
-    pw_mon.mon_loop = pw_loop_new(NULL);
-    pw_mon.context = pw_context_new(pw_mon.mon_loop, NULL, 0);
+    pw_mon.loop = pw_loop_new(NULL);
+    pw_mon.context = pw_context_new(pw_mon.loop, NULL, 0);
     pw_mon.core = pw_context_connect(pw_mon.context, NULL, 0);
     pw_mon.registry = pw_core_get_registry(pw_mon.core, PW_VERSION_REGISTRY, 0);
     
     spa_zero(pw_mon.registry_listener);
     pw_registry_add_listener(pw_mon.registry, &pw_mon.registry_listener, &registry_events, NULL);
     
-    int fd = pw_loop_get_fd(pw_mon.mon_loop);
-    pw_loop_enter(pw_mon.mon_loop);
+    int fd = pw_loop_get_fd(pw_mon.loop);
+    pw_loop_enter(pw_mon.loop);
 
     unsetenv("XDG_RUNTIME_DIR");
     return fd;
@@ -359,35 +360,42 @@ static int init_monitor(void) {
 
 static void recv_monitor(void **dev) {
     last_recved = NULL;
-    pw_loop_iterate(pw_mon.mon_loop, 0);
+    pw_loop_iterate(pw_mon.loop, 0);
     *dev = last_recved;
 }
 
 static void destroy_monitor(void) {
-    pw_loop_leave(pw_mon.mon_loop);
-    pw_proxy_destroy((struct pw_proxy*)pw_mon.registry);
-    pw_core_disconnect(pw_mon.core);
-    pw_context_destroy(pw_mon.context);
-    pw_loop_destroy(pw_mon.mon_loop);
+    if (pw_mon.registry) {
+        pw_proxy_destroy((struct pw_proxy*)pw_mon.registry);
+    }
+    if (pw_mon.core) {
+        pw_core_disconnect(pw_mon.core);
+        pw_core_destroy(pw_mon.core, NULL);
+    }
+    if (pw_mon.context) {
+        pw_context_destroy(pw_mon.context);
+    }
+    if (pw_mon.loop) {
+        pw_loop_leave(pw_mon.loop);
+        pw_loop_destroy(pw_mon.loop);
+    }
 }
 
 static int capture(void *dev, double *pct, const int num_captures, char *settings) {
     pw_data_t *pw = (pw_data_t *)dev;
-    pw->pct = pct;
-    pw->settings = settings;
-    pw->capture_idx = 0;
-    pw->with_err = false;
-    pw->stored_values = map_new(true, free);
+    pw->cap_set.pct = pct;
+    pw->cap_set.settings = settings;
+    pw->cap_set.stored_values = map_new(true, free);
     set_camera_settings(pw);
     pw_loop_enter(pw->loop);
-    while (pw->capture_idx < num_captures && !pw->with_err) {
+    while (pw->cap_set.capture_idx < num_captures && !pw->cap_set.with_err) {
         if (pw_loop_iterate(pw->loop, -1) < 0) {
             break;
         }
     }
     pw_loop_leave(pw->loop);
     restore_camera_settings(pw);
-    return pw->capture_idx;
+    return pw->cap_set.capture_idx;
 }
 
 // Stolen from https://github.com/PipeWire/pipewire/blob/master/spa/plugins/v4l2/v4l2-utils.c#L1017
@@ -431,7 +439,7 @@ static void set_camera_setting(pw_data_t *pw, uint32_t op, float val, bool store
                 struct v4l2_control *v = malloc(sizeof(struct v4l2_control));
                 v->value = old_val;
                 v->id = op;
-                map_put(pw->stored_values, ctrl->name, v);
+                map_put(pw->cap_set.stored_values, ctrl->name, v);
             }
         } else {
             INFO("Value %2.lf for '%s' already set.\n", val, ctrl->name);
@@ -462,9 +470,9 @@ static void set_camera_settings_def(pw_data_t *pw) {
 static void set_camera_settings(pw_data_t *pw) {
     /* Set default values */
     set_camera_settings_def(pw);
-    if (pw->settings && strlen(pw->settings)) {
+    if (pw->cap_set.settings && strlen(pw->cap_set.settings)) {
         char *token; 
-        char *rest = pw->settings; 
+        char *rest = pw->cap_set.settings; 
         
         while ((token = strtok_r(rest, ",", &rest))) {
             uint32_t v4l2_op;
@@ -480,7 +488,7 @@ static void set_camera_settings(pw_data_t *pw) {
 }
 
 static void restore_camera_settings(pw_data_t *pw) {
-    for (map_itr_t *itr = map_itr_new(pw->stored_values); itr; itr = map_itr_next(itr)) {
+    for (map_itr_t *itr = map_itr_new(pw->cap_set.stored_values); itr; itr = map_itr_next(itr)) {
         struct v4l2_control *old_ctrl = map_itr_get_data(itr);
         const char *ctrl_name = map_itr_get_key(itr);
         INFO("Restoring setting for '%s'\n", ctrl_name)
