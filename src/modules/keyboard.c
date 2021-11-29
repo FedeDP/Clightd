@@ -72,7 +72,7 @@ static bool evaluate(void) {
 }
 
 static void init(void) {
-    kbds = map_new(true, dtor_kbd);
+    kbds = map_new(false, dtor_kbd);
     sd_bus_add_object_manager(bus, NULL, object_path);
     int r = sd_bus_add_object_vtable(bus,
                                  NULL,
@@ -141,6 +141,7 @@ static void destroy(void) {
 static void dtor_kbd(void *data) {
     kbd_t *k = (kbd_t *)data;
     sd_bus_slot_unref(k->slot);
+    free((void *)k->sysname);
     free(k);
 }
 

@@ -122,3 +122,86 @@ static double get_frame_brightness(uint8_t *img_data, rect_info_t *crop, rect_in
     return (double)brightness / CAMERA_ILL_MAX;
 }
 
+// typedef enum { X_AXIS, Y_AXIS, MAX_AXIS } crop_axis;
+// typedef enum { DISABLED, CROP_API, SELECTION_API, MANUAL} crop_type_t;
+// 
+// typedef struct {
+//     bool enabled;
+//     double area_pct[2]; // start - end
+// } crop_info_t;
+
+// extern void set_camera_settings_def(void *priv);
+// extern void set_camera_setting(void *priv, uint32_t op, float val, bool store);
+// 
+// #define SET_V4L2(id, val)           set_camera_setting(id, val, #id, true)
+// 
+// static void set_camera_settings(void *priv, char *settings, crop_info_t *crop, crop_type_t *crop_type) {
+//     /* Set default values */
+//     set_camera_settings_def(priv);
+//     if (settings && strlen(settings)) {
+//         char *token; 
+//         char *rest = settings;
+//         
+//         while ((token = strtok_r(rest, ",", &rest))) {
+//             uint32_t v4l2_op;
+//             int32_t v4l2_val;
+//             char axis;
+//             double area_pct[2];
+//             
+//             if (sscanf(token, "%u=%d", &v4l2_op, &v4l2_val) == 2) {
+//                 SET_V4L2(v4l2_op, v4l2_val);
+//             } else if (sscanf(token, "%c=%lf-%lf", &axis, &area_pct[0], &area_pct[1]) == 3) {
+//                 int8_t crop_idx = -1;
+//                 if (area_pct[0] >= area_pct[1]) {
+//                     fprintf(stderr, "Start should be lesser than end: %lf-%lf\n", area_pct[0], area_pct[1]);
+//                 } else {
+//                     switch (axis) {
+//                         case 'x':
+//                             crop_idx = X_AXIS;
+//                             break;
+//                         case 'y':
+//                             crop_idx = Y_AXIS;
+//                             break;
+//                         default:
+//                             fprintf(stderr, "wrong axis specified: %c; 'x' or 'y' supported.\n", axis);
+//                             break;
+//                     }
+//                 }
+//                 if (crop_idx != -1 && !crop[crop_idx].enabled) {
+//                     crop[crop_idx].enabled = true;
+//                     crop[crop_idx].area_pct[0] = area_pct[0];
+//                     crop[crop_idx].area_pct[1] = area_pct[1];
+//                 }
+//             } else {
+//                 fprintf(stderr, "Expected a=b format in '%s' token.\n", token);
+//             }
+//         }
+//         if (crop[X_AXIS].enabled || crop[Y_AXIS].enabled) {
+//             if (try_set_crop(state.crop) != 0) {
+//                 INFO("Unsupported crop/selection v4l2 API; fallback at manually skipping pixels.\n")
+//                 *crop_type = MANUAL;
+//             }
+//         }
+//     }
+// }
+// 
+// static void restore_camera_settings(map_t *stored_values, crop_type_t crop_type) {
+//     for (map_itr_t *itr = map_itr_new(stored_values); itr; itr = map_itr_next(itr)) {
+//         struct v4l2_control *old_ctrl = map_itr_get_data(itr);
+//         const char *ctrl_name = map_itr_get_key(itr); 
+//         INFO("Restoring setting for '%s'\n", ctrl_name)
+//         set_camera_setting(old_ctrl->id, old_ctrl->value, ctrl_name, false);
+//     }
+//     
+//     // Restore crop if needed
+//     switch (crop_type) {
+//         case SELECTION_API:
+//             set_selection(NULL);
+//             break;
+//         case CROP_API:
+//             set_crop(NULL);
+//             break;
+//         default:
+//             break;
+//     }
+// }

@@ -30,7 +30,7 @@
 - [x] Drop bl_store_vpcode() and only load vpcode from CLIGHTD_BL_VCP env?
 - [x] Add CLIGHTD_BL_VCP Environment variable to systemd script with a comment thus it is simple to update it if needed
 - [x] Expose Max and Internal properties
-- [ ] Update dbus api wiki
+- [x] Update dbus api wiki
 - [x] add a page about monitor hotplugging (dep on ddcutil >= 1.2.0 and refresh time!)
 - [x] Investigate memleaks (related to ddca_redetect_displays()?) -> see here: https://github.com/rockowitz/ddcutil/issues/202
 - [x] Instead of 30s sleep, use an udev_monitor on drm subsystem?
@@ -38,6 +38,7 @@
 ### KbdBacklight
 - [x] call sd_bus_emit_object_added() sd_bus_emit_object_removed() When object path are created/deleted
 - [x] Fix: udev_reference is a snapshot of an udev device at a current time. Wrong!
+- [x] Fixed (small) memleak
 
 ### ALS
 - [x] Fix: avoid using cached udev_dev reference in loop (thus always returning same ambient brightness read during a Capture request)
@@ -54,12 +55,12 @@
 - [x] Fix segfault
 - [x] Fix subsequent Capture
 - [ ] Check if installing it on system causes pipewire module to be disabled because clightd starts before /run/user/1000 is created!
--> in case, disable monitor for now and instead rely upon user-provided interface string or PW_ID_ANY
+-> in case, disable monitor for now and instead rely upon user-provided interface string or PW_ID_ANY (?) -> we lose IsAvailable...
 - [x] Use caller uid instead of defaulting to first found user during Capture!
 - [x] Use a map to store list of nodes?
 - [x] Free list of nodes upon exit!
-- [ ] Fix xdg_runtime_dir set to create monitor
-- [ ] Fix memleaks
+- [x] Fix xdg_runtime_dir set to create monitor
+- [x] Fix memleaks
 
 ### Generic
 - [x] When built with ddcutil, clightd.service should be started after systemd-modules-load.service
@@ -67,6 +68,8 @@
 - [x] All api that require eg Xauth or xdg rutime user, fallback at automatically fetching a default value given the caller:
 - [x] test X
 - [ ] test wl
+- [x] Fix clightd not cleanly exiting when built with DDC or YOCTOLIGHT (most probably libusb or whatever is creating another thread that is stealing the signal!)
+DDC?
 
 ## 5.x
 - [ ] Keep it up to date with possible ddcutil api changes

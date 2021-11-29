@@ -2,7 +2,7 @@
 
 #include "camera.h"
 #include "bus_utils.h"
-#include <dirent.h>
+#include <pwd.h>
 #include <spa/param/video/format-utils.h>
 #include <spa/debug/types.h>
 #include <spa/utils/result.h>
@@ -153,28 +153,10 @@ static void on_stream_param_changed(void *_data, uint32_t id, const struct spa_p
     pw_stream_update_params(pw->stream, &params, 1);
 }
 
-static void on_stream_state_changed(void *_data, enum pw_stream_state old,
-                                    enum pw_stream_state state, const char *error) {
-    pw_data_t *pw = _data;
-    INFO("Stream state: \"%s\"\n", pw_stream_state_as_string(state));
-    switch (state) {
-        case PW_STREAM_STATE_UNCONNECTED:
-            pw->cap_set.with_err = true;
-            break;
-        case PW_STREAM_STATE_PAUSED:
-            /* because we started inactive, activate ourselves now */
-            pw_stream_set_active(pw->stream, true);
-            break;
-        default:
-            break;
-    }
-}
-
 /* these are the stream events we listen for */
 static const struct pw_stream_events stream_events = {
     PW_VERSION_STREAM_EVENTS,
     .param_changed = on_stream_param_changed,
-//     .state_changed = on_stream_state_changed,
     .process = on_process,
 };
 
@@ -294,20 +276,22 @@ static const struct pw_registry_events registry_events = {
 };
 
 static int init_monitor(void) {
-    // FIXME: improve this...?
-    DIR *d = opendir("/run/user/");
-    if (d) {
-        struct dirent *dir;
-        while ((dir = readdir(d)) != NULL) {
-            if (dir->d_type == DT_DIR) {
-                if (sscanf(dir->d_name, "%d", &uid) == 1) {
-                    printf("Found user %d\n", uid);
-                    break;
-                }
-            }
+    /* 
+     * Pipewire needs an XDG_RUNTIME_DIR set;
+     * at this phase, we are not being called by anyone;
+     * thus we need to workaround this by fetching
+     * a real user id, and use it to build the XDG_RUNTIME_DIR env.
+     */
+    setpwent();
+    char path[64];
+    for (struct passwd *p = getpwent(); p; p = getpwent()) {
+        snprintf(path, sizeof(path), "/run/user/%d/", p->pw_uid);
+        if (access(path, F_OK) == 0) {
+            uid = p->pw_uid;
+            break;
         }
-        closedir(d);
     }
+    endpwent();
     
     // Unsupported... can this happen?
     if (uid == 0) {
@@ -317,9 +301,21 @@ static int init_monitor(void) {
     set_env();
     
     pw_mon.loop = pw_loop_new(NULL);
+    if (!pw_mon.loop) {
+        return -1;
+    }
     pw_mon.context = pw_context_new(pw_mon.loop, NULL, 0);
+    if (!pw_mon.context) {
+        return -1;
+    }
     pw_mon.core = pw_context_connect(pw_mon.context, NULL, 0);
+    if (!pw_mon.core) {
+        return -1;
+    }
     pw_mon.registry = pw_core_get_registry(pw_mon.core, PW_VERSION_REGISTRY, 0);
+    if (!pw_mon.registry) {
+        return -1;
+    }
     
     spa_zero(pw_mon.registry_listener);
     pw_registry_add_listener(pw_mon.registry, &pw_mon.registry_listener, &registry_events, NULL);
@@ -343,13 +339,11 @@ static void destroy_monitor(void) {
     }
     if (pw_mon.core) {
         pw_core_disconnect(pw_mon.core);
-        pw_core_destroy(pw_mon.core, NULL);
     }
     if (pw_mon.context) {
         pw_context_destroy(pw_mon.context);
     }
     if (pw_mon.loop) {
-        pw_loop_leave(pw_mon.loop);
         pw_loop_destroy(pw_mon.loop);
     }
 }

@@ -5,8 +5,17 @@
 
 MODULE("SIGNAL");
 
-static void module_pre_start(void) {
-    
+static sigset_t mask;
+
+/*
+ * Block signals for any thread spawned,
+ * so that only main thread will indeed receive SIGTERM/SIGINT signals
+ */
+static _ctor_sig_ void block_signals(void) {
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGINT);
+    sigaddset(&mask, SIGTERM);
+    sigprocmask(SIG_BLOCK, &mask, NULL);
 }
 
 static bool check(void) {
@@ -18,11 +27,6 @@ static bool evaluate(void) {
 }
 
 static void init(void) {
-    sigset_t mask;
-    sigemptyset(&mask);
-    sigaddset(&mask, SIGINT);
-    sigaddset(&mask, SIGTERM);
-    sigprocmask(SIG_BLOCK, &mask, NULL);
     m_register_fd(signalfd(-1, &mask, 0), true, NULL);
 }
 
