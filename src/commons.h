@@ -21,15 +21,8 @@
 
 #define SIZE(x) (sizeof(x) / sizeof(*x))
 
-/*
- * Used for the signal blocking ctor; 
- * it is needed as some libraries (libusb, libddcutil, libpipewire) spawn threads
- * that would mess with the signal receiving mechanism of Clightd
- */
-#define _ctor_sig_     __attribute__((constructor (101)))
-
-#define _ctor_     __attribute__((constructor (102))) // Used for plugins registering (sensor, gamma, dpms, screen) and libusb/libpipewire init
-#define _dtor_     __attribute__((destructor (102)))  // Used for libusb and libpipewire dtor
+#define _ctor_     __attribute__((constructor (101))) // Used for plugins registering (sensor, gamma, dpms, screen) and libusb/libpipewire init
+#define _dtor_     __attribute__((destructor (101)))  // Used for libusb and libpipewire dtor
 
 /* Used by dpms, gamma and screen*/
 #define UNSUPPORTED             INT_MIN 

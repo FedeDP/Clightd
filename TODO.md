@@ -69,7 +69,6 @@
 - [x] test X
 - [ ] test wl
 - [x] Fix clightd not cleanly exiting when built with DDC or YOCTOLIGHT (most probably libusb or whatever is creating another thread that is stealing the signal!)
-DDC?
 
 ## 5.x
 - [ ] Keep it up to date with possible ddcutil api changes

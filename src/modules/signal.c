@@ -7,16 +7,26 @@ MODULE("SIGNAL");
 
 static sigset_t mask;
 
-/*
- * Block signals for any thread spawned,
- * so that only main thread will indeed receive SIGTERM/SIGINT signals
- */
-static _ctor_sig_ void block_signals(void) {
+
+static void block_signals(void) {
     sigemptyset(&mask);
     sigaddset(&mask, SIGINT);
     sigaddset(&mask, SIGTERM);
     sigprocmask(SIG_BLOCK, &mask, NULL);
 }
+
+/*
+ * Block signals for any thread spawned,
+ * so that only main thread will indeed receive SIGTERM/SIGINT signals
+ *
+ * It is needed as some libraries (libusb, libddcutil, libpipewire) spawn threads
+ * that would mess with the signal receiving mechanism of Clightd
+ * 
+ * NOTE: we cannot use a normal constructor because libraries ctor are
+ * always run before program ctor, as expected;
+ * see: https://github.com/lattera/glibc/blob/895ef79e04a953cac1493863bcae29ad85657ee1/elf/dl-init.c#L109
+ */
+__attribute__((section(".preinit_array"), used)) static typeof(block_signals) *preinit_p = block_signals;
 
 static bool check(void) {
     return true;
