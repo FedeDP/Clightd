@@ -23,9 +23,9 @@ typedef struct {
 typedef struct {
     double *pct;
     int capture_idx;
-    char *settings;
-    map_t *stored_values;
     bool with_err;
+    uint32_t width; // real width, can be cropped
+    uint32_t height; // real height, can be cropped
 } capture_settings_t;
 
 typedef struct {
@@ -44,13 +44,8 @@ typedef struct {
     struct spa_hook registry_listener;
 } pw_mon_t;
 
-extern const struct pw_stream_control *pw_stream_get_control(struct pw_stream *stream, uint32_t id);
 static void build_format(struct spa_pod_builder *b, const struct spa_pod **params);
 static uint32_t control_to_prop_id(uint32_t control_id);
-static void set_camera_setting(pw_data_t *pw, uint32_t op, float val, bool store);
-static void set_camera_settings_def(pw_data_t *pw);
-static void set_camera_settings(pw_data_t *pw);
-static void restore_camera_settings(pw_data_t *pw);
 
 SENSOR(PW_NAME);
 
@@ -105,12 +100,11 @@ static void on_process(void *_data) {
     
     rect_info_t full = {
         .row_start = 0,
-        .row_end = pw->format.info.raw.size.height,
+        .row_end = pw->cap_set.height,
         .col_start = 0,
-        .col_end = pw->format.info.raw.size.width,
+        .col_end = pw->cap_set.width,
     };
-    
-    pw->cap_set.pct[pw->cap_set.capture_idx++] = get_frame_brightness(sdata, NULL, &full, is_yuv);
+    pw->cap_set.pct[pw->cap_set.capture_idx++] = get_frame_brightness(sdata, &full, is_yuv);
     pw_stream_queue_buffer(pw->stream, b);
     return;
     
@@ -151,6 +145,12 @@ static void on_stream_param_changed(void *_data, uint32_t id, const struct spa_p
                                          SPA_TYPE_OBJECT_ParamBuffers, SPA_PARAM_Buffers,
                                          SPA_PARAM_BUFFERS_dataType, SPA_POD_CHOICE_FLAGS_Int((1<<SPA_DATA_MemPtr)));
     pw_stream_update_params(pw->stream, &params, 1);
+    
+    pw->cap_set.width = pw->format.info.raw.size.width;
+    pw->cap_set.height =  pw->format.info.raw.size.height;
+    
+    INFO("Image fmt: %d\n", pw->format.info.raw.format);
+    INFO("Image res: %d x %d\n", pw->cap_set.width, pw->cap_set.height);
 }
 
 /* these are the stream events we listen for */
@@ -220,8 +220,6 @@ static void destroy_dev(void *dev) {
         pw_loop_destroy(pw->loop);
         pw->loop = NULL;
     }
-    map_free(pw->cap_set.stored_values);
-    pw->cap_set.stored_values = NULL;
     
     memset(&pw->cap_set, 0, sizeof(pw->cap_set));
     
@@ -351,9 +349,7 @@ static void destroy_monitor(void) {
 static int capture(void *dev, double *pct, const int num_captures, char *settings) {
     pw_data_t *pw = (pw_data_t *)dev;
     pw->cap_set.pct = pct;
-    pw->cap_set.settings = settings;
-    pw->cap_set.stored_values = map_new(true, free);
-    
+
     set_env();
     
     const struct spa_pod *params;
@@ -381,11 +377,14 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
         
         fprintf(stderr, "Can't connect: %s\n", spa_strerror(res));
     } else {
-        set_camera_settings(pw);
         pw_loop_enter(pw->loop);
         while (pw->cap_set.capture_idx < num_captures && !pw->cap_set.with_err) {
             if (pw_loop_iterate(pw->loop, -1) < 0) {
                 break;
+            }
+            if (pw->cap_set.width != 0) {
+                // Settings must be set once we receive on_params_changed()
+                set_camera_settings(pw, settings);
             }
         }
         pw_loop_leave(pw->loop);
@@ -395,8 +394,8 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
     return pw->cap_set.capture_idx;
 }
 
-// Stolen from https://github.com/PipeWire/pipewire/blob/master/spa/plugins/v4l2/v4l2-utils.c#L1017
-static uint32_t control_to_prop_id(uint32_t control_id) {
+// Stolen from https://github.com/PipeWire/pipewire/blob/master/spa/plugins/v4l2/v4l2-utils.c#L1049
+static inline enum spa_prop control_to_prop_id(uint32_t control_id) {
     switch (control_id) {
         case V4L2_CID_BRIGHTNESS:
             return SPA_PROP_brightness;
@@ -419,78 +418,65 @@ static uint32_t control_to_prop_id(uint32_t control_id) {
     }
 }
 
-static void set_camera_setting(pw_data_t *pw, uint32_t op, float val, bool store) {
+static struct v4l2_control *set_camera_setting(void *priv, uint32_t op, float val, const char *op_name, bool store) {
+    pw_data_t *pw = (pw_data_t *)priv;
     enum spa_prop pw_op = control_to_prop_id(op);
     const struct pw_stream_control *ctrl = pw_stream_get_control(pw->stream, pw_op);
     if (ctrl) {
-        INFO("%s (%u) default val: %.2lf\n", ctrl->name, op, ctrl->def);
+        INFO("%s (%u) default val: %.2lf\n", op_name, pw_op, ctrl->def);
         if (val < 0) {
             val = ctrl->def;
         }
         if (ctrl->values[0] != val) {
             float old_val = ctrl->values[0];
-            pw_stream_set_control(pw->stream, pw_op, 1, &val);
-            INFO("Set '%s' val: %.2lf\n", ctrl->name, val);
-            if (store) {
-                INFO("Storing initial setting for '%s': %.2lf\n", ctrl->name, old_val);
-                struct v4l2_control *v = malloc(sizeof(struct v4l2_control));
-                v->value = old_val;
-                v->id = op;
-                map_put(pw->cap_set.stored_values, ctrl->name, v);
+            int ret = pw_stream_set_control(pw->stream, pw_op, 1, &val);
+            if (ret == 0) {
+                INFO("Set '%s' val: %.2lf\n", op_name, val);
+                if (store) {
+                    INFO("Storing initial setting for '%s': %.2lf\n", op_name, old_val);
+                    struct v4l2_control *v = malloc(sizeof(struct v4l2_control));
+                    v->value = old_val;
+                    v->id = op;
+                    return v;
+                }
+            } else {
+                INFO("Failed to set '%s'.\n", op_name);
             }
         } else {
             INFO("Value %2.lf for '%s' already set.\n", val, ctrl->name);
         }
     } else {
-        INFO("%u unsupported\n", op);
+        INFO("'%s' unsupported\n", op_name);
     }
+    return NULL;
 }
 
-static void set_camera_settings_def(pw_data_t *pw) {
-    set_camera_setting(pw, V4L2_CID_SCENE_MODE, -1, true);
-    set_camera_setting(pw, V4L2_CID_AUTO_WHITE_BALANCE, -1, true);
-    set_camera_setting(pw, V4L2_CID_EXPOSURE_AUTO, -1, true);
-    set_camera_setting(pw, V4L2_CID_AUTOGAIN, -1, true);
-    set_camera_setting(pw, V4L2_CID_ISO_SENSITIVITY_AUTO, -1, true);
-    set_camera_setting(pw, V4L2_CID_BACKLIGHT_COMPENSATION, -1, true);
-    set_camera_setting(pw, V4L2_CID_AUTOBRIGHTNESS, -1, true);
+static int try_set_crop(void *priv, crop_info_t *crop, crop_type_t *crop_type)  {
+    pw_data_t *pw = (pw_data_t *)priv;
+    uint8_t params_buffer[1024];
     
-    set_camera_setting(pw, V4L2_CID_WHITE_BALANCE_TEMPERATURE, -1, true);
-    set_camera_setting(pw, V4L2_CID_EXPOSURE_ABSOLUTE, -1, true);
-    set_camera_setting(pw, V4L2_CID_IRIS_ABSOLUTE, -1, true);
-    set_camera_setting(pw, V4L2_CID_GAIN, -1, true);
-    set_camera_setting(pw, V4L2_CID_ISO_SENSITIVITY, -1, true);
-    set_camera_setting(pw, V4L2_CID_BRIGHTNESS, -1, true);
-}
-
-/* Parse settings string! */
-static void set_camera_settings(pw_data_t *pw) {
-    /* Set default values */
-    set_camera_settings_def(pw);
-    if (pw->cap_set.settings && strlen(pw->cap_set.settings)) {
-        char *token; 
-        char *rest = pw->cap_set.settings; 
-        
-        while ((token = strtok_r(rest, ",", &rest))) {
-            uint32_t v4l2_op;
-            int32_t v4l2_val;
-            if (sscanf(token, "%u=%d", &v4l2_op, &v4l2_val) == 2) {
-                float val = v4l2_val;
-                set_camera_setting(pw, v4l2_op, val, true);
-            } else {
-                fprintf(stderr, "Expected a=b format in '%s' token.\n", token);
-            }
-        }
+    struct spa_meta_region *reg = NULL;
+    if (crop != NULL) {
+        reg = malloc(sizeof(struct spa_meta_region));
+        reg->region.size.width = (crop[X_AXIS].area_pct[1] - crop[X_AXIS].area_pct[0]) * pw->format.info.raw.size.width;
+        reg->region.size.height = (crop[Y_AXIS].area_pct[1] - crop[Y_AXIS].area_pct[0]) * pw->format.info.raw.size.height;
+        reg->region.position.x = crop[X_AXIS].area_pct[0] * pw->format.info.raw.size.width;
+        reg->region.position.y = crop[Y_AXIS].area_pct[0] * pw->format.info.raw.size.height;
     }
-}
-
-static void restore_camera_settings(pw_data_t *pw) {
-    for (map_itr_t *itr = map_itr_new(pw->cap_set.stored_values); itr; itr = map_itr_next(itr)) {
-        struct v4l2_control *old_ctrl = map_itr_get_data(itr);
-        const char *ctrl_name = map_itr_get_key(itr);
-        INFO("Restoring setting for '%s'\n", ctrl_name)
-        set_camera_setting(pw, old_ctrl->id, old_ctrl->value, false);
+    struct spa_pod_builder b = SPA_POD_BUILDER_INIT(params_buffer, sizeof(params_buffer));
+    const struct spa_pod *params = spa_pod_builder_add_object(&b,
+                                                              SPA_TYPE_OBJECT_ParamMeta, SPA_PARAM_Meta, 
+                                                              SPA_PARAM_META_type, SPA_POD_Id(SPA_META_VideoCrop), 
+                                                              SPA_PARAM_META_size, SPA_POD_Int(sizeof(struct spa_meta_region)), reg);
+    free(reg);
+    int ret = pw_stream_update_params(pw->stream, &params, 1);
+    if (ret >= 0) {
+        *crop_type = CROP_API;
+        pw->cap_set.width *= crop[X_AXIS].area_pct[1] - crop[X_AXIS].area_pct[0];
+        pw->cap_set.height *= crop[Y_AXIS].area_pct[1] - crop[Y_AXIS].area_pct[0];
+        ret = 0;
     }
+    return ret; 
 }
 
 #endif

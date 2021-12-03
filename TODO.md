@@ -50,7 +50,7 @@
 ### Pipewire
 - [x] Support pipewire for Camera sensor? This would allow multiple application sharing camera
 - [x] Pipewire run as root needs XDG_RUNTIME_DIR env -> workaround: find the first /run/user folder and use that
-- [ ] Unify camera settings between camera and pipewire sensors... ?
+- [x] Unify camera settings between camera and pipewire sensors... ?
 - [x] Support monitor sensor api for pipewire
 - [x] Fix segfault
 - [x] Fix subsequent Capture
@@ -61,13 +61,16 @@
 - [x] Free list of nodes upon exit!
 - [x] Fix xdg_runtime_dir set to create monitor
 - [x] Fix memleaks
+- [x] Support crop settings
+- [ ] Fix set_camera_setting() impl? seems like a bug in pipewire -> maybe use v4l2 plugin? https://gitlab.freedesktop.org/pipewire/pipewire/-/blob/master/spa/plugins/v4l2/v4l2-source.c#L353 ?
+
 
 ### Generic
 - [x] When built with ddcutil, clightd.service should be started after systemd-modules-load.service
 - [x] Show commit hash in version
 - [x] All api that require eg Xauth or xdg rutime user, fallback at automatically fetching a default value given the caller:
 - [x] test X
-- [ ] test wl
+- [x] test wl
 - [x] Fix clightd not cleanly exiting when built with DDC or YOCTOLIGHT (most probably libusb or whatever is creating another thread that is stealing the signal!)
 
 ## 5.x
