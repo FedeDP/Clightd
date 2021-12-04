@@ -24,8 +24,7 @@ typedef struct {
     double *pct;
     int capture_idx;
     bool with_err;
-    uint32_t width; // real width, can be cropped
-    uint32_t height; // real height, can be cropped
+    bool has_media_info;
 } capture_settings_t;
 
 typedef struct {
@@ -100,9 +99,9 @@ static void on_process(void *_data) {
     
     rect_info_t full = {
         .row_start = 0,
-        .row_end = pw->cap_set.height,
+        .row_end = pw->format.info.raw.size.height,
         .col_start = 0,
-        .col_end = pw->cap_set.width,
+        .col_end = pw->format.info.raw.size.width,
     };
     pw->cap_set.pct[pw->cap_set.capture_idx++] = get_frame_brightness(sdata, &full, is_yuv);
     pw_stream_queue_buffer(pw->stream, b);
@@ -146,11 +145,8 @@ static void on_stream_param_changed(void *_data, uint32_t id, const struct spa_p
                                          SPA_PARAM_BUFFERS_dataType, SPA_POD_CHOICE_FLAGS_Int((1<<SPA_DATA_MemPtr)));
     pw_stream_update_params(pw->stream, &params, 1);
     
-    pw->cap_set.width = pw->format.info.raw.size.width;
-    pw->cap_set.height =  pw->format.info.raw.size.height;
-    
     INFO("Image fmt: %d\n", pw->format.info.raw.format);
-    INFO("Image res: %d x %d\n", pw->cap_set.width, pw->cap_set.height);
+    INFO("Image res: %d x %d\n", pw->format.info.raw.size.width, pw->format.info.raw.size.height);
 }
 
 /* these are the stream events we listen for */
@@ -382,7 +378,7 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
             if (pw_loop_iterate(pw->loop, -1) < 0) {
                 break;
             }
-            if (pw->cap_set.width != 0) {
+            if (pw->cap_set.has_media_info) {
                 // Settings must be set once we receive on_params_changed()
                 set_camera_settings(pw, settings);
             }
@@ -472,8 +468,6 @@ static int try_set_crop(void *priv, crop_info_t *crop, crop_type_t *crop_type)  
     int ret = pw_stream_update_params(pw->stream, &params, 1);
     if (ret >= 0) {
         *crop_type = CROP_API;
-        pw->cap_set.width *= crop[X_AXIS].area_pct[1] - crop[X_AXIS].area_pct[0];
-        pw->cap_set.height *= crop[Y_AXIS].area_pct[1] - crop[Y_AXIS].area_pct[0];
         ret = 0;
     }
     return ret; 

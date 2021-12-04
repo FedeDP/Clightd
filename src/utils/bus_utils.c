@@ -25,6 +25,7 @@ int bus_sender_fill_creds(sd_bus_message *m) {
             }
             endpwent();
         }
+        free(c);
     }
     return ret;
 }

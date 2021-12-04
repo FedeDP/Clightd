@@ -231,10 +231,6 @@ static int try_set_crop(void *priv, crop_info_t *crop, crop_type_t *crop_type) {
     } while (ret != 0 && *crop_type != cr_type--);
     if (ret == 0) {
         *crop_type = cr_type;
-        
-        // Update our pixel size as we are cropping
-        state.width *= crop[X_AXIS].area_pct[1] - crop[X_AXIS].area_pct[0];
-        state.height *= crop[Y_AXIS].area_pct[1] - crop[Y_AXIS].area_pct[0];
     }
     return ret;
 }

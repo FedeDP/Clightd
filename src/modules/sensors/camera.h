@@ -62,7 +62,8 @@ static double get_frame_brightness(uint8_t *img_data, rect_info_t *full, bool is
     const int inc = 1 + is_yuv;
     
     rect_info_t crop_rect = *full;
-    if (crop_type == MANUAL) {
+    switch (crop_type) {
+    case MANUAL:
         if (crop[X_AXIS].enabled) {
             crop_rect.col_start = crop[X_AXIS].area_pct[0] * full->col_end;
             crop_rect.col_end = crop[X_AXIS].area_pct[1] * full->col_end;
@@ -73,6 +74,15 @@ static double get_frame_brightness(uint8_t *img_data, rect_info_t *full, bool is
         }
         INFO("Manual crop: rows[%d-%d], cols[%d-%d]\n", crop_rect.row_start, crop_rect.row_end, 
                                                         crop_rect.col_start, crop_rect.col_end);
+        break;
+    case SELECTION_API:
+    case CROP_API:
+        // Update crop size
+        crop_rect.col_end *= crop[X_AXIS].area_pct[1] - crop[X_AXIS].area_pct[0];
+        crop_rect.row_end *= crop[Y_AXIS].area_pct[1] - crop[Y_AXIS].area_pct[0];
+        break;
+    default:
+        break;
     }
     
     /* Find minimum and maximum brightness */
