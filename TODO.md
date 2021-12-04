@@ -62,7 +62,7 @@
 - [x] Fix xdg_runtime_dir set to create monitor
 - [x] Fix memleaks
 - [x] Support crop settings
-- [ ] Fix set_camera_setting() impl? seems like a bug in pipewire -> maybe use v4l2 plugin? https://gitlab.freedesktop.org/pipewire/pipewire/-/blob/master/spa/plugins/v4l2/v4l2-source.c#L353 ?
+- [ ] Fix set_camera_setting() impl? seems like a bug in pipewire (?)
 
 
 ### Generic

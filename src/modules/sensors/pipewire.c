@@ -145,6 +145,7 @@ static void on_stream_param_changed(void *_data, uint32_t id, const struct spa_p
                                          SPA_PARAM_BUFFERS_dataType, SPA_POD_CHOICE_FLAGS_Int((1<<SPA_DATA_MemPtr)));
     pw_stream_update_params(pw->stream, &params, 1);
     
+    pw->cap_set.has_media_info = true;
     INFO("Image fmt: %d\n", pw->format.info.raw.format);
     INFO("Image res: %d x %d\n", pw->format.info.raw.size.width, pw->format.info.raw.size.height);
 }
