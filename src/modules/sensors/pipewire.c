@@ -2,16 +2,21 @@
 
 #include "camera.h"
 #include "bus_utils.h"
-#include <pwd.h>
 #include <spa/param/video/format-utils.h>
 #include <spa/debug/types.h>
 #include <spa/utils/result.h>
 #include <pipewire/pipewire.h>
+#include <sys/eventfd.h>
+#include <sys/inotify.h>
+
+#define EVENT_SIZE  ( sizeof (struct inotify_event) )
+#define EVENT_BUF_LEN     ( 1024 * ( EVENT_SIZE + 16 ) )
 
 #define PW_NAME                 "Pipewire"
+#define PW_ENV_NAME             "CLIGHTD_PIPEWIRE_RUNTIME_DIR"
 #define BUILD_KEY(id) \
-    char key[20]; \
-    snprintf(key, sizeof(key), "Node%d", id);
+    char key[10]; \
+    snprintf(key, sizeof(key), "%d", id);
 
 typedef struct {
     uint32_t id;
@@ -43,15 +48,63 @@ typedef struct {
     struct spa_hook registry_listener;
 } pw_mon_t;
 
+static void free_node(void *dev);
 static void build_format(struct spa_pod_builder *b, const struct spa_pod **params);
 static uint32_t control_to_prop_id(uint32_t control_id);
+static int register_monitor_fd(const char *pw_runtime_dir);
 
 SENSOR(PW_NAME);
+
+MODULE(PW_NAME);
 
 static pw_mon_t pw_mon;
 static pw_data_t *last_recved, *first_node;
 static map_t *nodes;
-static int uid;
+static int efd = -1;
+
+static void module_pre_start(void) {
+    
+}
+
+static bool check(void) {
+    return true;
+}
+
+static bool evaluate(void) {
+    return true;
+}
+
+static void init(void) {
+    nodes = map_new(true, free_node);
+}
+
+static void receive(const msg_t *msg, const void *userdata) {
+    if (!msg->is_pubsub) {
+        if (msg->fd_msg->userptr != NULL) {
+            // Pipewire monitor event! Notify Sensor
+            uint64_t u = 1;
+            write(efd, &u, sizeof(uint64_t));
+        } else {
+            // Inotify event!
+            char buffer[EVENT_BUF_LEN];
+            size_t len = read(msg->fd_msg->fd, buffer, EVENT_BUF_LEN);
+            int i = 0;
+            while (i < len) {
+                struct inotify_event *event = (struct inotify_event *)&buffer[i];
+                if (event->len && strcmp(event->name, "pipewire-0") == 0) {
+                    if (register_monitor_fd(getenv(PW_ENV_NAME)) != 0) {
+                        fprintf(stderr, "Failed to start pipewire monitor.\n");
+                    }
+                }
+                i += EVENT_SIZE + event->len;
+            }
+        }
+    }
+}
+
+static void destroy(void) {
+    map_free(nodes);
+}
 
 static void free_node(void *dev) {
     pw_data_t *pw = (pw_data_t *)dev;
@@ -59,26 +112,6 @@ static void free_node(void *dev) {
     destroy_dev(pw);
     pw_proxy_destroy(pw->node.proxy);
     free(pw);
-}
-
-static void _ctor_ init_libpipewire(void) {
-    pw_init(NULL, NULL);
-    nodes = map_new(true, free_node);
-}
-
-static void _dtor_ destroy_libpipewire(void) {
-    map_free(nodes);
-    pw_deinit();
-}
-
-static void set_env() {
-    if (bus_sender_runtime_dir()) {
-        setenv("XDG_RUNTIME_DIR", bus_sender_runtime_dir(), 1);
-    } else {
-        char path[64];
-        snprintf(path, sizeof(path), "/run/user/%d", uid);
-        setenv("XDG_RUNTIME_DIR", path, 1);;
-    }
 }
 
 static void on_process(void *_data) {
@@ -182,15 +215,7 @@ static bool validate_dev(void *dev) {
 static void fetch_dev(const char *interface, void **dev) {
     pw_data_t *pw = NULL;
     if (interface && strlen(interface)) {
-        uint32_t id = atoi(interface);
-        for (map_itr_t *itr = map_itr_new(nodes); itr; itr = map_itr_next(itr)) {
-            pw_data_t *node = map_itr_get_data(itr);
-            if (node->node.id == id) {
-                pw = node;
-                free(itr);
-                break;
-            }
-        }
+        pw = map_get(nodes, interface);
     } else {
         pw = first_node;
     }
@@ -270,65 +295,106 @@ static const struct pw_registry_events registry_events = {
     .global = registry_event_global,
 };
 
-static int init_monitor(void) {
-    /* 
-     * Pipewire needs an XDG_RUNTIME_DIR set;
-     * at this phase, we are not being called by anyone;
-     * thus we need to workaround this by fetching
-     * a real user id, and use it to build the XDG_RUNTIME_DIR env.
-     */
-    setpwent();
-    char path[64];
-    for (struct passwd *p = getpwent(); p; p = getpwent()) {
-        snprintf(path, sizeof(path), "/run/user/%d/", p->pw_uid);
-        if (access(path, F_OK) == 0) {
-            uid = p->pw_uid;
+static int register_monitor_fd(const char *pw_runtime_dir) {
+    setenv("XDG_RUNTIME_DIR", pw_runtime_dir, 1);
+    
+    pw_init(NULL, NULL);
+    int ret = -1;
+    do {
+        pw_mon.loop = pw_loop_new(NULL);
+        if (!pw_mon.loop) {
             break;
         }
-    }
-    endpwent();
+        pw_mon.context = pw_context_new(pw_mon.loop, NULL, 0);
+        if (!pw_mon.context) {
+            break;
+        }
+        pw_mon.core = pw_context_connect(pw_mon.context, NULL, 0);
+        if (!pw_mon.core) {
+            break;
+        }
+        pw_mon.registry = pw_core_get_registry(pw_mon.core, PW_VERSION_REGISTRY, 0);
+        if (!pw_mon.registry) {
+            break;
+        }
+        
+        spa_zero(pw_mon.registry_listener);
+        pw_registry_add_listener(pw_mon.registry, &pw_mon.registry_listener, &registry_events, NULL);
+        
+        int fd = pw_loop_get_fd(pw_mon.loop);
+        m_register_fd(fd, false, &pw_mon);
+        
+        pw_loop_enter(pw_mon.loop);
+        ret = 0;
+    } while (false);
     
-    // Unsupported... can this happen?
-    if (uid == 0) {
-        return -1;
-    }
-    
-    set_env();
-    
-    pw_mon.loop = pw_loop_new(NULL);
-    if (!pw_mon.loop) {
-        return -1;
-    }
-    pw_mon.context = pw_context_new(pw_mon.loop, NULL, 0);
-    if (!pw_mon.context) {
-        return -1;
-    }
-    pw_mon.core = pw_context_connect(pw_mon.context, NULL, 0);
-    if (!pw_mon.core) {
-        return -1;
-    }
-    pw_mon.registry = pw_core_get_registry(pw_mon.core, PW_VERSION_REGISTRY, 0);
-    if (!pw_mon.registry) {
-        return -1;
-    }
-    
-    spa_zero(pw_mon.registry_listener);
-    pw_registry_add_listener(pw_mon.registry, &pw_mon.registry_listener, &registry_events, NULL);
-    
-    int fd = pw_loop_get_fd(pw_mon.loop);
-    pw_loop_enter(pw_mon.loop);
-
     unsetenv("XDG_RUNTIME_DIR");
-    return fd;
+    if (ret == -1) {
+        destroy_monitor();
+    }
+    return ret;
+}
+
+static int init_monitor(void) {
+    const char *pw_runtime_dir = getenv(PW_ENV_NAME);
+    if (pw_runtime_dir && strlen(pw_runtime_dir)) {
+        struct stat s;
+        if (stat(pw_runtime_dir, &s) == -1 || !S_ISDIR(s.st_mode)) {
+            fprintf(stderr, "Failed to stat '%s' or not a folder. Killing pipewire.\n", pw_runtime_dir);
+            goto err;
+        }
+        
+        /* 
+        * Pipewire needs an XDG_RUNTIME_DIR set;
+        * at this phase, we are not being called by anyone;
+        * thus we need to workaround this by fetching the pipewire socket
+        * for the XDG_RUNTIME_DIR specified in CLIGHTD_PIPEWIRE_RUNTIME_DIR env variable;
+        * eventually being notified of socket creation using inotify mechanism.
+        */
+        char path[256];
+        snprintf(path, sizeof(path), "%s/pipewire-0", pw_runtime_dir);
+        if (access(path, F_OK) == 0) {
+            // Pipewire socket already present! Register the monitor right away
+            if (register_monitor_fd(pw_runtime_dir) == -1) {
+                fprintf(stderr, "Failed to register monitor. Killing pipewire.\n");
+                goto err;
+            }
+        } else {
+            // Register an inotify watcher
+            int inot_fd = inotify_init();
+            if (inotify_add_watch(inot_fd, pw_runtime_dir, IN_CREATE) >= 0) {
+                m_register_fd(inot_fd, true, NULL);
+            } else {
+                fprintf(stderr, "Failed to watch folder '%s': %m\n", pw_runtime_dir);
+                close(inot_fd);
+                goto err;
+            }
+        }
+        
+        // Return an eventfd to notify Sensor for new devices
+        efd = eventfd(0, 0);
+        return efd;
+    }
+    // Env not found. Disable.
+    fprintf(stderr, "No '" PW_ENV_NAME "' env found. Killing pipewire.\n");
+    
+err:
+    return -1;
 }
 
 static void recv_monitor(void **dev) {
+    // Consume the eventfd
+    uint64_t u;
+    read(efd, &u, sizeof(uint64_t));
+    
+    // Actually search for new nodes
     last_recved = NULL;
     pw_loop_iterate(pw_mon.loop, 0);
     *dev = last_recved;
 }
 
 static void destroy_monitor(void) {
+    printf("destroy_mon\n");
     if (pw_mon.registry) {
         pw_proxy_destroy((struct pw_proxy*)pw_mon.registry);
     }
@@ -341,13 +407,20 @@ static void destroy_monitor(void) {
     if (pw_mon.loop) {
         pw_loop_destroy(pw_mon.loop);
     }
+    memset(&pw_mon, 0, sizeof(pw_mon));
+    
+    if (efd != -1) {
+        close(efd);
+    }
+    
+    pw_deinit();
 }
 
 static int capture(void *dev, double *pct, const int num_captures, char *settings) {
     pw_data_t *pw = (pw_data_t *)dev;
     pw->cap_set.pct = pct;
 
-    set_env();
+    setenv("XDG_RUNTIME_DIR", bus_sender_runtime_dir(), 1);
     
     const struct spa_pod *params;
     uint8_t buffer[1024];

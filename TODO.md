@@ -54,8 +54,7 @@
 - [x] Support monitor sensor api for pipewire
 - [x] Fix segfault
 - [x] Fix subsequent Capture
-- [ ] Check if installing it on system causes pipewire module to be disabled because clightd starts before /run/user/1000 is created!
--> in case, disable monitor for now and instead rely upon user-provided interface string or PW_ID_ANY (?) -> we lose IsAvailable...
+- [x] Add a CLIGHTD_PW_RUNTIME_DIR env variable (in clightd.service, see CLIGHTD_BL_CODE) that defaults to /run/user/1000/. If the env variable is empty -> disable pipewire. If folder does not exist: disable pipewire. Otherwise: inotify on folder to wait for socket to appear. If socket is already there, immediately start monitoring.
 - [x] Use caller uid instead of defaulting to first found user during Capture!
 - [x] Use a map to store list of nodes?
 - [x] Free list of nodes upon exit!

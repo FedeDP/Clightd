@@ -9,6 +9,7 @@ BusName=org.clightd.clightd
 User=root
 # Default backlight vcp code; update if needed
 Environment=CLIGHTD_BL_VCP=0x10
+Environment=CLIGHTD_PIPEWIRE_RUNTIME_DIR="/run/user/1000/"
 ExecStart=@CMAKE_INSTALL_FULL_LIBEXECDIR@/clightd
 Restart=on-failure
 RestartSec=5
