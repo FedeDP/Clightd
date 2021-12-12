@@ -112,7 +112,7 @@ set_target_properties(
 
 # Installation of targets (must be before file configuration to work)
 install(TARGETS ${PROJECT_NAME}
-        RUNTIME DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}")
+        RUNTIME DESTINATION "${CMAKE_INSTALL_FULL_LIBEXECDIR}")
 
 set(SCRIPT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Scripts")
 
@@ -143,6 +143,8 @@ if(SYSTEMD_BASE_FOUND)
 
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/clightd.service
         DESTINATION ${SYSTEMD_SERVICE_DIR})
+
+    set(SYSTEMD_SERVICE "SystemdService=clightd.service")
 endif()
 
 # Install dbus service
