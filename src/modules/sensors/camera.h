@@ -196,7 +196,7 @@ static void set_camera_settings(void *priv, char *settings) {
     
     /* Set default values */
     set_camera_settings_def(priv);
-    if (settings && strlen(settings)) {
+    if (settings && settings[0] != '\0') {
         char *token; 
         char *rest = settings;
         

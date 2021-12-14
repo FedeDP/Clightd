@@ -15,7 +15,7 @@ static int get_frame_brightness(const char *id, const char *env) {
     int ret = WRONG_PLUGIN;
     
     struct udev_device *dev = NULL;
-    if (!id || !strlen(id)) {
+    if (id == NULL || id[0] == '\0') {
         /* Fetch first matching device from udev */
         get_udev_device(NULL, FB_SUBSYSTEM, NULL, NULL, &dev);
         if (!dev) {

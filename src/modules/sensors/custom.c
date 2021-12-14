@@ -22,7 +22,7 @@ static bool validate_dev(void *dev) {
 static void fetch_dev(const char *interface, void **dev) {
     *dev = NULL;
 
-    if (interface && strlen(interface) > 0) {
+    if (interface && interface[0] != '\0') {
         char fullpath[PATH_MAX + 1] = {0};
 
         /* User gave us a relative path! prepend CUSTOM_FLD as prefix! */
@@ -104,7 +104,7 @@ static void parse_settings(char *settings, int *min, int *max, int *interval) {
     *max = CUSTOM_ILL_MAX;
     *interval = CUSTOM_INTERVAL;
 
-    if (settings && strlen(settings)) {
+    if (settings && settings[0] != '\0') {
         char *token; 
         char *rest = settings; 
 

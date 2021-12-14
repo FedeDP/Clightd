@@ -58,9 +58,10 @@ SENSOR(PW_NAME);
 MODULE(PW_NAME);
 
 static pw_mon_t pw_mon;
-static pw_data_t *last_recved, *first_node;
+static pw_data_t *last_recved;
 static map_t *nodes;
 static int efd = -1;
+static bool pw_inited;
 
 static void module_pre_start(void) {
     
@@ -94,6 +95,10 @@ static void receive(const msg_t *msg, const void *userdata) {
                 if (event->len && strcmp(event->name, "pipewire-0") == 0) {
                     if (register_monitor_fd(getenv(PW_ENV_NAME)) != 0) {
                         fprintf(stderr, "Failed to start pipewire monitor.\n");
+                    } else {
+                        // We're done with the inotify fd; close it.
+                        m_deregister_fd(msg->fd_msg->fd);
+                        break;
                     }
                 }
                 i += EVENT_SIZE + event->len;
@@ -214,10 +219,15 @@ static bool validate_dev(void *dev) {
 
 static void fetch_dev(const char *interface, void **dev) {
     pw_data_t *pw = NULL;
-    if (interface && strlen(interface)) {
+    if (interface && interface[0] != '\0') {
         pw = map_get(nodes, interface);
     } else {
-        pw = first_node;
+        // Peek first pw node found
+        map_itr_t *itr = map_itr_new(nodes);
+        if (itr) {
+            pw = map_itr_get_data(itr);
+            free(itr);
+        }
     }
     *dev = pw;
 }
@@ -281,9 +291,6 @@ static void registry_event_global(void *data, uint32_t id,
             pw->node.proxy = pw_registry_bind(pw_mon.registry, id, type, PW_VERSION_NODE, sizeof(pw_data_t));
             pw_proxy_add_listener(pw->node.proxy, &pw->node.proxy_listener, &proxy_events, pw);
             last_recved = pw; // used by recv_monitor
-            if (map_length(nodes) == 0) {
-                first_node = pw;
-            }
             BUILD_KEY(id);
             map_put(nodes, key, pw);
         }
@@ -299,6 +306,7 @@ static int register_monitor_fd(const char *pw_runtime_dir) {
     setenv("XDG_RUNTIME_DIR", pw_runtime_dir, 1);
     
     pw_init(NULL, NULL);
+    pw_inited = true;
     int ret = -1;
     do {
         pw_mon.loop = pw_loop_new(NULL);
@@ -337,7 +345,7 @@ static int register_monitor_fd(const char *pw_runtime_dir) {
 
 static int init_monitor(void) {
     const char *pw_runtime_dir = getenv(PW_ENV_NAME);
-    if (pw_runtime_dir && strlen(pw_runtime_dir)) {
+    if (pw_runtime_dir && pw_runtime_dir[0] != '\0') {
         struct stat s;
         if (stat(pw_runtime_dir, &s) == -1 || !S_ISDIR(s.st_mode)) {
             fprintf(stderr, "Failed to stat '%s' or not a folder. Killing pipewire.\n", pw_runtime_dir);
@@ -394,7 +402,10 @@ static void recv_monitor(void **dev) {
 }
 
 static void destroy_monitor(void) {
-    printf("destroy_mon\n");
+    if (!pw_inited) {
+        return;
+    }
+
     if (pw_mon.registry) {
         pw_proxy_destroy((struct pw_proxy*)pw_mon.registry);
     }

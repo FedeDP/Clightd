@@ -111,7 +111,7 @@ MODULE("BACKLIGHT2");
     }
 
     static void get_info_id(char *id, const int size, const DDCA_Display_Info *dinfo) {
-        if (!strlen(dinfo->sn) || !strcasecmp(dinfo->sn, "Unspecified")) {
+        if ((dinfo->sn[0] == '\0') || !strcasecmp(dinfo->sn, "Unspecified")) {
             switch(dinfo->path.io_mode) {
                 case DDCA_IO_I2C:
                     snprintf(id, size, "/dev/i2c-%d", dinfo->path.path.i2c_busno);
