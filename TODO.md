@@ -34,6 +34,7 @@
 - [x] add a page about monitor hotplugging (dep on ddcutil >= 1.2.0 and refresh time!)
 - [x] Investigate memleaks (related to ddca_redetect_displays()?) -> see here: https://github.com/rockowitz/ddcutil/issues/202
 - [x] Instead of 30s sleep, use an udev_monitor on drm subsystem?
+- [x] Add support for monitor id specific CLIGHTD_BL_VCP env
 
 ### KbdBacklight
 - [x] call sd_bus_emit_object_added() sd_bus_emit_object_removed() When object path are created/deleted
@@ -62,7 +63,7 @@
 - [x] Fix xdg_runtime_dir set to create monitor
 - [x] Fix memleaks
 - [x] Support crop settings
-- [ ] Fix set_camera_setting() impl? seems like a bug in pipewire (?) (get works, but set doesn't)
+- [ ] Fix set_camera_setting() impl? seems like a bug in pipewire (?) (pw_stream_get_control does not work -> open issue?)
 
 ### Generic
 - [x] When built with ddcutil, clightd.service should be started after systemd-modules-load.service

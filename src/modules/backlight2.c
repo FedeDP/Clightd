@@ -6,6 +6,7 @@
 
 #define BL_SUBSYSTEM        "backlight"
 #define DRM_SUBSYSTEM       "drm"
+#define BL_VCP_ENV          "CLIGHTD_BL_VCP"
 
 typedef struct {
     double target_pct;
@@ -104,9 +105,9 @@ MODULE("BACKLIGHT2");
     static DDCA_Vcp_Feature_Code br_code = 0x10;
 
     static void bl_load_vpcode(void) {
-        if (getenv("CLIGHTD_BL_VCP")) {
-            br_code = strtol(getenv("CLIGHTD_BL_VCP"), NULL, 16);
-            m_log("Set 0x%x vcp code.\n", br_code);
+        if (getenv(BL_VCP_ENV)) {
+            br_code = strtol(getenv(BL_VCP_ENV), NULL, 16);
+            m_log("Set default 0x%x vcp code.\n", br_code);
         }
     }
 
@@ -423,9 +424,17 @@ static int set_external_backlight(bl_t *bl, int value) {
 #ifdef DDC_PRESENT
     DDCA_Display_Handle dh = NULL;
     if (!ddca_open_display2(bl->dev, false, &dh)) {
+        DDCA_Vcp_Feature_Code specific_br_code;
+        char specific_br_env[64];
+        snprintf(specific_br_env, sizeof(specific_br_env), BL_VCP_ENV"_%s", bl->sn);
+        if (getenv(specific_br_env)) {
+            specific_br_code = strtol(getenv(specific_br_env), NULL, 16);
+        } else {
+            specific_br_code = br_code;
+        }
         int8_t new_sh = (value >> 8) & 0xff;
         int8_t new_sl = value & 0xff;
-        ret = ddca_set_non_table_vcp_value(dh, br_code, new_sh, new_sl);
+        ret = ddca_set_non_table_vcp_value(dh, specific_br_code, new_sh, new_sl);
         ddca_close_display(dh);
     }
 #endif
