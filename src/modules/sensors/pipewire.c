@@ -29,7 +29,7 @@ typedef struct {
     double *pct;
     int capture_idx;
     bool with_err;
-    bool has_media_info;
+    char *settings;
 } capture_settings_t;
 
 typedef struct {
@@ -119,6 +119,15 @@ static void free_node(void *dev) {
     free(pw);
 }
 
+static void on_state_changed(void *_data, enum pw_stream_state old,
+                                   enum pw_stream_state state, const char *error) {
+    pw_data_t *pw = _data;
+    if (state == PW_STREAM_STATE_STREAMING) {
+        /* Camera entered streaming mode; set settings */
+        set_camera_settings(pw, pw->cap_set.settings);
+    }
+}
+
 static void on_process(void *_data) {
     pw_data_t *pw = _data;
     
@@ -183,7 +192,6 @@ static void on_stream_param_changed(void *_data, uint32_t id, const struct spa_p
                                          SPA_PARAM_BUFFERS_dataType, SPA_POD_CHOICE_FLAGS_Int((1<<SPA_DATA_MemPtr)));
     pw_stream_update_params(pw->stream, &params, 1);
     
-    pw->cap_set.has_media_info = true;
     INFO("Image fmt: %d\n", pw->format.info.raw.format);
     INFO("Image res: %d x %d\n", pw->format.info.raw.size.width, pw->format.info.raw.size.height);
 }
@@ -191,6 +199,7 @@ static void on_stream_param_changed(void *_data, uint32_t id, const struct spa_p
 /* these are the stream events we listen for */
 static const struct pw_stream_events stream_events = {
     PW_VERSION_STREAM_EVENTS,
+    .state_changed = on_state_changed,
     .param_changed = on_stream_param_changed,
     .process = on_process,
 };
@@ -430,7 +439,8 @@ static void destroy_monitor(void) {
 static int capture(void *dev, double *pct, const int num_captures, char *settings) {
     pw_data_t *pw = (pw_data_t *)dev;
     pw->cap_set.pct = pct;
-
+    pw->cap_set.settings = settings;
+    
     setenv("XDG_RUNTIME_DIR", bus_sender_runtime_dir(), 1);
     
     const struct spa_pod *params;
@@ -462,10 +472,6 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
         while (pw->cap_set.capture_idx < num_captures && !pw->cap_set.with_err) {
             if (pw_loop_iterate(pw->loop, -1) < 0) {
                 break;
-            }
-            if (pw->cap_set.has_media_info) {
-                // Settings must be set once we receive on_params_changed()
-                set_camera_settings(pw, settings);
             }
         }
         pw_loop_leave(pw->loop);
@@ -506,6 +512,7 @@ static struct v4l2_control *set_camera_setting(void *priv, uint32_t op, float va
     if (ctrl) {
         INFO("%s (%u) default val: %.2lf\n", op_name, pw_op, ctrl->def);
         if (val < 0) {
+            /* Set default value */
             val = ctrl->def;
         }
         if (ctrl->values[0] != val) {

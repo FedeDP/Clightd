@@ -129,6 +129,15 @@ static struct v4l2_control *set_camera_setting(void *priv, uint32_t id, float va
         return NULL;
     }
     
+    if (v < 0) {
+        /* Set default value */
+        struct v4l2_queryctrl arg = {0};
+        arg.id = id;
+        xioctl(VIDIOC_QUERYCTRL, &arg);
+        INFO("%s (%u) default val: %d\n", name, id, arg.default_value);
+        v = arg.default_value;
+    }
+    
     if (old_ctrl.value != v) {
         struct v4l2_control ctrl ={0};
         ctrl.id = id;
