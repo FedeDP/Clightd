@@ -28,7 +28,6 @@ struct state {
     struct mjpeg_dec *decoder;
 };
 
-static void inline fill_crop_rect(crop_info_t *cr, struct v4l2_rect *rect);
 static int set_camera_fmt(void);
 static int check_camera_caps(void);
 static void create_decoder(void);
@@ -171,77 +170,6 @@ static void inline fill_crop_rect(crop_info_t *cr, struct v4l2_rect *rect) {
     const double width_pct = cr[X_AXIS].area_pct[1] - cr[X_AXIS].area_pct[0];
     rect->width = width_pct * state.width;
     rect->left = cr[X_AXIS].area_pct[0] * state.width;
-}
-
-// https://www.kernel.org/doc/html/v4.12/media/uapi/v4l/vidioc-g-selection.html
-static int set_selection(crop_info_t *cr) {
-    struct v4l2_selection selection = {0};
-    selection.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    selection.target = V4L2_SEL_TGT_CROP;
-    if (-1 == xioctl(VIDIOC_G_SELECTION, &selection)) {
-        INFO("VIDIOC_G_SELECTION failed: %m\n");
-        return -errno;
-    }    
-    if (cr) {
-        fill_crop_rect(cr, &selection.r);
-    } else {
-        // Reset default
-        selection.target = V4L2_SEL_TGT_CROP_DEFAULT;
-    }
-    if (-1 == xioctl(VIDIOC_S_SELECTION, &selection)) {
-        INFO("VIDIOC_S_SELECTION failed: %m\n");
-        return -errno;
-    }
-    return 0;
-}
-
-// https://www.kernel.org/doc/html/v4.14/media/uapi/v4l/crop.html
-static int set_crop(crop_info_t *cr) {
-    struct v4l2_crop crop = {0};
-    crop.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    if (-1 == xioctl(VIDIOC_G_CROP, &crop)) {
-        INFO("VIDIOC_G_CROP failed: %m\n");
-        return -errno;
-    }
-    
-    if (cr) {
-        fill_crop_rect(cr, &crop.c);
-    } else {
-        // Reset default
-        struct v4l2_cropcap cropcap = {0};
-        cropcap.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        if (-1 == xioctl(VIDIOC_CROPCAP, &cropcap)) {
-            INFO("VIDIOC_CROPCAP failed: %m\n");
-            return -errno;
-        }
-        crop.c = cropcap.defrect;
-    }
-    if (-1 == xioctl(VIDIOC_S_CROP, &crop)) {
-        INFO("VIDIOC_S_CROP failed: %m\n");
-        return -errno;
-    }
-    return 0;
-}
-
-static int try_set_crop(void *priv, crop_info_t *crop, crop_type_t *crop_type) {
-    int ret;
-    int cr_type = *crop_type > 0 ? *crop_type : SELECTION_API;
-    do {
-        switch (cr_type) {
-        case SELECTION_API:
-            ret = set_selection(crop);
-            break;
-        case CROP_API:
-            ret = set_crop(crop);
-            break;
-        default:
-            break;
-        }
-    } while (ret != 0 && *crop_type != cr_type--);
-    if (ret == 0) {
-        *crop_type = cr_type;
-    }
-    return ret;
 }
 
 static int set_camera_fmt(void) {

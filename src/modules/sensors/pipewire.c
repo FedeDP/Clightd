@@ -302,6 +302,10 @@ static void registry_event_global(void *data, uint32_t id,
             last_recved = pw; // used by recv_monitor
             BUILD_KEY(id);
             map_put(nodes, key, pw);
+            
+//             pw_node_enum_params((struct pw_node*)pw->node.proxy, 0,
+//                                 SPA_PARAM_Props, 0, 0, NULL);
+            
         }
     }
 }
@@ -464,7 +468,7 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
         pw->node.id,
         PW_STREAM_FLAG_AUTOCONNECT |    /* try to automatically connect this stream */
         PW_STREAM_FLAG_MAP_BUFFERS,     /* mmap the buffer data for us */
-        &params, 1))                  /* extra parameters, see above */ < 0) {
+        &params, 1))                    /* extra parameters, see above */ < 0) {
         
         fprintf(stderr, "Can't connect: %s\n", spa_strerror(res));
     } else {
@@ -508,6 +512,16 @@ static inline enum spa_prop control_to_prop_id(uint32_t control_id) {
 static struct v4l2_control *set_camera_setting(void *priv, uint32_t op, float val, const char *op_name, bool store) {
     pw_data_t *pw = (pw_data_t *)priv;
     enum spa_prop pw_op = control_to_prop_id(op);
+//     if (val > 0) {
+//         uint8_t params_buffer[1024];
+//         struct spa_pod_builder b = SPA_POD_BUILDER_INIT(params_buffer, sizeof(params_buffer));
+//         const struct spa_pod *params = spa_pod_builder_add_object(&b, 
+//                                                                   SPA_TYPE_OBJECT_Props,  SPA_PARAM_Props,
+//                                                                   pw_op, SPA_POD_Int(val), 0);
+//         int ret = pw_node_set_param(pw->node.proxy, SPA_PARAM_Props, 0, params);
+//         printf("top %d\n", ret);
+//     }
+    
     const struct pw_stream_control *ctrl = pw_stream_get_control(pw->stream, pw_op);
     if (ctrl) {
         INFO("%s (%u) default val: %.2lf\n", op_name, pw_op, ctrl->def);
@@ -537,32 +551,6 @@ static struct v4l2_control *set_camera_setting(void *priv, uint32_t op, float va
         INFO("'%s' unsupported\n", op_name);
     }
     return NULL;
-}
-
-static int try_set_crop(void *priv, crop_info_t *crop, crop_type_t *crop_type)  {
-    pw_data_t *pw = (pw_data_t *)priv;
-    uint8_t params_buffer[1024];
-    
-    struct spa_meta_region *reg = NULL;
-    if (crop != NULL) {
-        reg = malloc(sizeof(struct spa_meta_region));
-        reg->region.size.width = (crop[X_AXIS].area_pct[1] - crop[X_AXIS].area_pct[0]) * pw->format.info.raw.size.width;
-        reg->region.size.height = (crop[Y_AXIS].area_pct[1] - crop[Y_AXIS].area_pct[0]) * pw->format.info.raw.size.height;
-        reg->region.position.x = crop[X_AXIS].area_pct[0] * pw->format.info.raw.size.width;
-        reg->region.position.y = crop[Y_AXIS].area_pct[0] * pw->format.info.raw.size.height;
-    }
-    struct spa_pod_builder b = SPA_POD_BUILDER_INIT(params_buffer, sizeof(params_buffer));
-    const struct spa_pod *params = spa_pod_builder_add_object(&b,
-                                                              SPA_TYPE_OBJECT_ParamMeta, SPA_PARAM_Meta, 
-                                                              SPA_PARAM_META_type, SPA_POD_Id(SPA_META_VideoCrop), 
-                                                              SPA_PARAM_META_size, SPA_POD_Int(sizeof(struct spa_meta_region)), reg);
-    free(reg);
-    int ret = pw_stream_update_params(pw->stream, &params, 1);
-    if (ret >= 0) {
-        *crop_type = CROP_API;
-        ret = 0;
-    }
-    return ret; 
 }
 
 #endif

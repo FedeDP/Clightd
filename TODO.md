@@ -64,6 +64,8 @@
 - [x] Fix memleaks
 - [x] Support crop settings
 - [ ] Fix set_camera_setting() impl? seems like a bug in pipewire (?) (pw_stream_get_control does not work -> open issue?)
+- [x] Test crop
+- [x] Drop crop API support for pipewire or webcam; they add lots of complexity while giving no real perf improvements considering we are using small frames
 
 ### Generic
 - [x] When built with ddcutil, clightd.service should be started after systemd-modules-load.service

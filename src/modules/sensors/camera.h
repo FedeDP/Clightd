@@ -35,7 +35,6 @@ struct histogram {
 };
 
 typedef enum { X_AXIS, Y_AXIS, MAX_AXIS } crop_axis;
-typedef enum { DISABLED, CROP_API, SELECTION_API, MANUAL} crop_type_t;
 
 typedef struct {
     bool enabled;
@@ -43,11 +42,9 @@ typedef struct {
 } crop_info_t;
 
 static struct v4l2_control *set_camera_setting(void *priv, uint32_t op, float val, const char *op_name, bool store);
-static int try_set_crop(void *priv, crop_info_t *crop, crop_type_t *crop_type);
 
 static map_t *stored_values;
 static crop_info_t crop[MAX_AXIS];
-static crop_type_t crop_type;
 static bool camera_set;
 
 static double get_frame_brightness(uint8_t *img_data, rect_info_t *full, bool is_yuv) {
@@ -62,33 +59,21 @@ static double get_frame_brightness(uint8_t *img_data, rect_info_t *full, bool is
     const int inc = 1 + is_yuv;
     
     rect_info_t crop_rect = *full;
-    switch (crop_type) {
-    case MANUAL:
-        if (crop[X_AXIS].enabled) {
-            crop_rect.col_start = crop[X_AXIS].area_pct[0] * full->col_end;
-            crop_rect.col_end = crop[X_AXIS].area_pct[1] * full->col_end;
-        }
-        if (crop[Y_AXIS].enabled) {
-            crop_rect.row_start = crop[Y_AXIS].area_pct[0] * full->row_end;
-            crop_rect.row_end = crop[Y_AXIS].area_pct[1] * full->row_end;
-        }
-        INFO("Manual crop: rows[%d-%d], cols[%d-%d]\n", crop_rect.row_start, crop_rect.row_end, 
-                                                        crop_rect.col_start, crop_rect.col_end);
-        break;
-    case SELECTION_API:
-    case CROP_API:
-        // Update crop size
-        crop_rect.col_end *= crop[X_AXIS].area_pct[1] - crop[X_AXIS].area_pct[0];
-        crop_rect.row_end *= crop[Y_AXIS].area_pct[1] - crop[Y_AXIS].area_pct[0];
-        break;
-    default:
-        break;
+    if (crop[X_AXIS].enabled) {
+        crop_rect.col_start = crop[X_AXIS].area_pct[0] * full->col_end;
+        crop_rect.col_end = crop[X_AXIS].area_pct[1] * full->col_end;
     }
+    if (crop[Y_AXIS].enabled) {
+        crop_rect.row_start = crop[Y_AXIS].area_pct[0] * full->row_end;
+        crop_rect.row_end = crop[Y_AXIS].area_pct[1] * full->row_end;
+    }
+    INFO("Rect: rows[%d-%d], cols[%d-%d]\n", crop_rect.row_start, crop_rect.row_end, 
+                                                        crop_rect.col_start, crop_rect.col_end);
     
     /* Find minimum and maximum brightness */
     int total = 0; // compute total used pixels
     for (int row = crop_rect.row_start; row < crop_rect.row_end; row++) {
-        for (int col = crop_rect.col_start; col < crop_rect.col_end * inc; col += inc) {
+        for (int col = crop_rect.col_start * inc; col < crop_rect.col_end * inc; col += inc) {
             const int idx = (row * full->col_end * inc) + col;
             if (img_data[idx] < min) {
                 min = img_data[idx];
@@ -110,7 +95,7 @@ static double get_frame_brightness(uint8_t *img_data, rect_info_t *full, bool is
     struct histogram hist[HISTOGRAM_STEPS] = {0};
     const double step_size = (max - min) / HISTOGRAM_STEPS;
     for (int row = crop_rect.row_start; row < crop_rect.row_end; row++) {
-        for (int col = crop_rect.col_start; col < crop_rect.col_end * inc; col += inc) {
+        for (int col = crop_rect.col_start * inc; col < crop_rect.col_end * inc; col += inc) {
             const int idx = (row * full->col_end * inc) + col;
             int bucket = (img_data[idx] - min) / step_size;
             if (bucket >= 0 && bucket < HISTOGRAM_STEPS) {
@@ -234,14 +219,6 @@ static void set_camera_settings(void *priv, char *settings) {
                 fprintf(stderr, "Expected a=b format in '%s' token.\n", token);
             }
         }
-        if (crop[X_AXIS].enabled || crop[Y_AXIS].enabled) {
-            if (try_set_crop(priv, crop, &crop_type) != 0) {
-                INFO("Unsupported crop/selection v4l2 API; fallback at manually skipping pixels.\n")
-                crop_type = MANUAL;
-            }
-        } else {
-            crop_type = DISABLED;
-        }
     }
     camera_set = true;
 }
@@ -254,15 +231,9 @@ static void restore_camera_settings(void *priv) {
         set_camera_setting(priv, old_ctrl->id, old_ctrl->value, ctrl_name, false);
     }
     
-    // Restore crop if needed
-    if (crop_type != DISABLED && crop_type != MANUAL) {
-        try_set_crop(priv, NULL, &crop_type);
-    }
-    
     map_free(stored_values);
     stored_values = NULL;
     
     memset(crop, 0, sizeof(crop));
-    crop_type = -1;
     camera_set = false;
 }
