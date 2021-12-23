@@ -63,9 +63,9 @@
 - [x] Fix xdg_runtime_dir set to create monitor
 - [x] Fix memleaks
 - [x] Support crop settings
-- [ ] Fix set_camera_setting() impl? seems like a bug in pipewire (?) (pw_stream_get_control does not work -> open issue?)
 - [x] Test crop
-- [x] Drop crop API support for pipewire or webcam; they add lots of complexity while giving no real perf improvements considering we are using small frames
+- [x] Drop crop API support for both pipewire and webcam; they add lots of complexity while giving no real perf improvements considering we are using small frames
+- [ ] Fix: pipewire capture while webcam is already owned by another app freezes during pw_loop_iterate()
 
 ### Generic
 - [x] When built with ddcutil, clightd.service should be started after systemd-modules-load.service
@@ -79,6 +79,9 @@
 
 ## 5.x
 - [ ] Keep it up to date with possible ddcutil api changes
+
+### Pipewire
+- [ ] Fix set_camera_setting() impl -> how to get current value? how to set a new value?
 
 ## 6.x (api break release)
 

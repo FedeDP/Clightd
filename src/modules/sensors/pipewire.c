@@ -1,5 +1,7 @@
 #ifdef PIPEWIRE_PRESENT
 
+#warning "Experimental support. Camera settings are not supported. Possible freezes."
+
 #include "camera.h"
 #include "bus_utils.h"
 #include <spa/param/video/format-utils.h>
@@ -21,6 +23,7 @@
 typedef struct {
     uint32_t id;
     struct spa_hook proxy_listener;
+    struct spa_hook object_listener;
     struct pw_proxy *proxy;
     const char *action;
 } pw_node_t;
@@ -123,8 +126,10 @@ static void on_state_changed(void *_data, enum pw_stream_state old,
                                    enum pw_stream_state state, const char *error) {
     pw_data_t *pw = _data;
     if (state == PW_STREAM_STATE_STREAMING) {
-        /* Camera entered streaming mode; set settings */
-        set_camera_settings(pw, pw->cap_set.settings);
+        /* Camera entered streaming mode; set settings. TODO: unsupported atm */
+//         set_camera_settings(pw, pw->cap_set.settings);
+    } else if (state == PW_STREAM_STATE_ERROR) {
+        pw->cap_set.with_err = true;
     }
 }
 
@@ -282,6 +287,105 @@ static const struct pw_proxy_events proxy_events = {
     .removed = removed_proxy,
 };
 
+// see https://gitlab.freedesktop.org/pipewire/pipewire/-/blob/master/spa/include/spa/debug/pod.h
+static void parse_props(pw_data_t *pw, const struct spa_pod *pod)
+{
+    struct spa_pod_prop *prop;
+    struct spa_pod_object *obj = (struct spa_pod_object *)pod;
+    SPA_POD_OBJECT_FOREACH(obj, prop) {
+        printf("top %d\n", prop->key);
+        switch (prop->key) {
+        case SPA_PROP_device: {
+            const char *str = NULL;
+            spa_pod_get_string(&prop->value, &str);
+            printf("String \"%s\"\n", str);
+            break;
+        }
+        case SPA_PROP_INFO_id: {
+            uint32_t id;
+            if (spa_pod_get_id(&prop->value, &id) < 0) {
+                break;
+            }
+            printf("ID: %d\n", id);
+            break;
+        }
+        case SPA_PROP_INFO_name: {
+            const char *name;
+            if (spa_pod_get_string(&prop->value, &name) < 0) {
+                break;
+            }
+            printf("Name: %s\n", name);
+            break;
+        }
+        case SPA_PROP_INFO_type: {
+            if (spa_pod_is_choice(&prop->value)) {
+                struct spa_pod_object_body *body = (struct spa_pod_object_body *)SPA_POD_BODY(&prop->value);
+                struct spa_pod_choice_body *b = (struct spa_pod_choice_body *)body;
+                const struct spa_type_info *ti = spa_debug_type_find(spa_type_choice, b->type);
+                void *p;
+                uint32_t size = SPA_POD_BODY_SIZE(&prop->value);
+                
+                // TODO: store default values somewhere (easy)
+                // TODO: find current values??
+                printf("Choice: type %s\n", ti ? ti->name : "unknown");
+                SPA_POD_CHOICE_BODY_FOREACH(b, size, p) {
+                    switch (b->child.type) {
+                        case SPA_TYPE_Bool:
+                            printf("\tBool %s\n", (*(int32_t *) p) ? "true" : "false");
+                            break;
+                        case SPA_TYPE_Int:
+                            printf("\tInt %d\n", *(int32_t *) p);
+                            break;
+                        default:
+                            INFO("Unmanaged type: %d\n", b->child.type);
+                            break;
+                    }
+                }
+            }
+            break;
+        }
+        default:
+            break;
+        }
+    }
+    printf("\n");
+}
+
+static void node_event_param(void *object, int seq,
+                             uint32_t id, uint32_t index, uint32_t next,
+                             const struct spa_pod *param)
+{
+    switch (id) {
+    case SPA_PARAM_PropInfo:
+        parse_props(object, param);
+        break;
+    default:
+        break;
+    }
+}
+
+static void node_event_info(void *object, const struct pw_node_info *info) {
+    pw_data_t *pw = (pw_data_t *)object;
+    const struct spa_dict_item *prop;
+    spa_dict_for_each(prop, info->props) {
+        printf("'%s' -> '%s'\n", prop->key, prop->value);
+    }
+    printf("\n");
+
+    // TODO: store the device path and use it before calling capture to check
+    // if device is actually available? Shouldn't pipewire handle this?
+    const char *str;
+    if ((str = spa_dict_lookup(info->props, PW_KEY_OBJECT_PATH))) {
+        printf("ObjectPath: %s\n", str);
+    }
+}
+
+static const struct pw_node_events node_events = {
+    PW_VERSION_NODE_EVENTS,
+    .info = node_event_info,
+    .param = node_event_param,
+};
+
 static void registry_event_global(void *data, uint32_t id,
                                 uint32_t permissions, const char *type, uint32_t version,
                                 const struct spa_dict *props) {
@@ -299,13 +403,16 @@ static void registry_event_global(void *data, uint32_t id,
             pw->node.action = UDEV_ACTION_ADD;
             pw->node.proxy = pw_registry_bind(pw_mon.registry, id, type, PW_VERSION_NODE, sizeof(pw_data_t));
             pw_proxy_add_listener(pw->node.proxy, &pw->node.proxy_listener, &proxy_events, pw);
+//             pw_proxy_add_object_listener(pw->node.proxy,
+//                                          &pw->node.object_listener,
+//                                          &node_events, pw);
+            
             last_recved = pw; // used by recv_monitor
             BUILD_KEY(id);
             map_put(nodes, key, pw);
             
 //             pw_node_enum_params((struct pw_node*)pw->node.proxy, 0,
-//                                 SPA_PARAM_Props, 0, 0, NULL);
-            
+//                                 SPA_PARAM_PropInfo, 0, 0, NULL);
         }
     }
 }
@@ -479,7 +586,7 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
             }
         }
         pw_loop_leave(pw->loop);
-        restore_camera_settings(pw);
+//         restore_camera_settings(pw);
     }
     unsetenv("XDG_RUNTIME_DIR");
     return pw->cap_set.capture_idx;
@@ -509,6 +616,7 @@ static inline enum spa_prop control_to_prop_id(uint32_t control_id) {
     }
 }
 
+// TODO: unsupported in pipewire right now
 static struct v4l2_control *set_camera_setting(void *priv, uint32_t op, float val, const char *op_name, bool store) {
     pw_data_t *pw = (pw_data_t *)priv;
     enum spa_prop pw_op = control_to_prop_id(op);
@@ -516,10 +624,9 @@ static struct v4l2_control *set_camera_setting(void *priv, uint32_t op, float va
 //         uint8_t params_buffer[1024];
 //         struct spa_pod_builder b = SPA_POD_BUILDER_INIT(params_buffer, sizeof(params_buffer));
 //         const struct spa_pod *params = spa_pod_builder_add_object(&b, 
-//                                                                   SPA_TYPE_OBJECT_Props,  SPA_PARAM_Props,
-//                                                                   pw_op, SPA_POD_Int(val), 0);
-//         int ret = pw_node_set_param(pw->node.proxy, SPA_PARAM_Props, 0, params);
-//         printf("top %d\n", ret);
+//                                                                   SPA_TYPE_OBJECT_Props,  0,
+//                                                                   SPA_PROP_brightness, SPA_POD_Float(140));
+//         pw_node_set_param(pw->node.proxy, SPA_PARAM_Props, 0, params);
 //     }
     
     const struct pw_stream_control *ctrl = pw_stream_get_control(pw->stream, pw_op);
