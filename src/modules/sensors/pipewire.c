@@ -39,6 +39,7 @@ typedef struct {
     pw_node_t node;
     struct pw_loop *loop;
     struct pw_stream *stream;
+    struct spa_source *timer;
     struct spa_video_info format;
     capture_settings_t cap_set;
 } pw_data_t;
@@ -258,6 +259,9 @@ static void fetch_props_dev(void *dev, const char **node, const char **action) {
 
 static void destroy_dev(void *dev) {
     pw_data_t *pw = (pw_data_t *)dev;
+    if (pw->timer) {
+        pw_loop_destroy_source(pw->loop, pw->timer);
+    }
     if (pw->stream) {
         pw_stream_destroy(pw->stream);
         pw->stream = NULL;
@@ -547,6 +551,12 @@ static void destroy_monitor(void) {
     pw_deinit();
 }
 
+static void on_timeout(void *userdata, uint64_t expirations) {
+    pw_data_t *pw = (pw_data_t *)userdata;
+    INFO("Stream timed out. Leaving.\n");
+    pw->cap_set.with_err = true;
+}
+
 static int capture(void *dev, double *pct, const int num_captures, char *settings) {
     pw_data_t *pw = (pw_data_t *)dev;
     pw->cap_set.pct = pct;
@@ -579,6 +589,10 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
         
         fprintf(stderr, "Can't connect: %s\n", spa_strerror(res));
     } else {
+        /* Use a 2s timeout to avoid locking on the pw_loop_iterate() loop! */
+        struct timespec timeout = { .tv_sec = 2 };
+        pw->timer = pw_loop_add_timer(pw->loop, on_timeout, pw);
+        pw_loop_update_timer(pw->loop, pw->timer, &timeout, NULL, false);
         pw_loop_enter(pw->loop);
         while (pw->cap_set.capture_idx < num_captures && !pw->cap_set.with_err) {
             if (pw_loop_iterate(pw->loop, -1) < 0) {
