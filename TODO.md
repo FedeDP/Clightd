@@ -56,7 +56,7 @@
 - [x] Fix segfault
 - [x] Fix subsequent Capture
 - [x] Add a CLIGHTD_PW_RUNTIME_DIR env variable (in clightd.service, see CLIGHTD_BL_CODE) that defaults to /run/user/1000/. If the env variable is empty -> disable pipewire. If folder does not exist: disable pipewire. Otherwise: inotify on folder to wait for socket to appear. If socket is already there, immediately start monitoring.
-- [ ] Document the new env variable!
+- [x] Document the new env variable!
 - [x] Use caller uid instead of defaulting to first found user during Capture!
 - [x] Use a map to store list of nodes?
 - [x] Free list of nodes upon exit!
@@ -65,7 +65,7 @@
 - [x] Support crop settings
 - [x] Test crop
 - [x] Drop crop API support for both pipewire and webcam; they add lots of complexity while giving no real perf improvements considering we are using small frames
-- [ ] Fix: pipewire capture while webcam is already owned by another app freezes during pw_loop_iterate()
+- [x] Fix: pipewire capture while webcam is already owned by another app freezes during pw_loop_iterate()
 
 ### Generic
 - [x] When built with ddcutil, clightd.service should be started after systemd-modules-load.service
@@ -73,7 +73,7 @@
 - [x] All api that require eg Xauth or xdg rutime user, fallback at automatically fetching a default value given the caller:
 - [x] test X
 - [x] test wl
-- [ ] Document the new behavior!
+- [x] Document the new behavior!
 - [x] Fix clightd not cleanly exiting when built with DDC or YOCTOLIGHT (most probably libusb or whatever is creating another thread that is stealing the signal!)
 - [x] do not use strlen() to only check that strign is not empty
 
