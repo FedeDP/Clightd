@@ -25,7 +25,7 @@ static inline void parse_settings(char *settings, int *interval) {
     /* Default value */
     *interval = ALS_INTERVAL;
 
-    if (settings && strlen(settings)) {
+    if (settings && settings[0] != '\0') {
         char *token; 
         char *rest = settings; 
 

@@ -1,5 +1,6 @@
 #include <sensor.h>
 #include <polkit.h>
+#include "bus_utils.h"
 
 #define SENSOR_MAX_CAPTURES    20
 
@@ -44,14 +45,20 @@ static void init(void) {
                                     NULL);
     for (int i = 0; i < SENSOR_NUM && !r; i++) {
         if (sensors[i]) {
-            snprintf(sensors[i]->obj_path, sizeof(sensors[i]->obj_path) - 1, "%s/%s", object_path, sensors[i]->name);
-            r += sd_bus_add_object_vtable(bus,
-                                        NULL,
-                                        sensors[i]->obj_path,
-                                        bus_interface,
-                                        vtable,
-                                        sensors[i]);
-            r += m_register_fd(sensors[i]->init_monitor(), false, sensors[i]);
+            int fd = sensors[i]->init_monitor();
+            if (fd != -1) {
+                snprintf(sensors[i]->obj_path, sizeof(sensors[i]->obj_path) - 1, "%s/%s", object_path, sensors[i]->name);
+                r += sd_bus_add_object_vtable(bus,
+                                            NULL,
+                                            sensors[i]->obj_path,
+                                            bus_interface,
+                                            vtable,
+                                            sensors[i]);
+                r += m_register_fd(fd, false, sensors[i]);
+            } else {
+                fprintf(stderr, "Sensor '%s' unsupported.\n", sensors[i]->name);
+                sensors[i] = NULL;
+            }
         }
     }
     if (r < 0) {
@@ -90,7 +97,7 @@ static void destroy(void) {
 
 void sensor_register_new(sensor_t *sensor) {
     const char *sensor_names[] = {
-    #define X(name, val) #name,
+    #define X(name) #name,
         _SENSORS
     #undef X
     };
@@ -180,7 +187,7 @@ static int method_issensoravailable(sd_bus_message *m, void *userdata, sd_bus_er
 
 static int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     ASSERT_AUTH();
-    
+        
     const char *interface = NULL;
     char *settings = NULL;
     const int num_captures;
@@ -194,6 +201,8 @@ static int method_capturesensor(sd_bus_message *m, void *userdata, sd_bus_error 
         sd_bus_error_set_const(ret_error, SD_BUS_ERROR_INVALID_ARGS, "Number of captures should be between 1 and 20.");
         return -EINVAL;
     }
+    
+    bus_sender_fill_creds(m); // used by PW plugin
     
     void *dev = NULL;
     sensor_t *sensor = NULL;

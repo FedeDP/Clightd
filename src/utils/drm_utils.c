@@ -7,7 +7,7 @@
 #define DRM_SUBSYSTEM "drm"
 
 int drm_open_card(const char **card) {
-    if (!*card || !strlen(*card)) {
+    if (*card == NULL || *card[0] == '\0') {
         /* Fetch first matching device from udev */
         struct udev_device *dev = NULL;
         get_udev_device(NULL, DRM_SUBSYSTEM, NULL, NULL, &dev);

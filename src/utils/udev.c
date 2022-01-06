@@ -33,7 +33,7 @@ void get_udev_device(const char *interface, const char *subsystem, const udev_ma
                             sd_bus_error **ret_error, struct udev_device **dev) {
     *dev = NULL;
     /* if no interface is specified, try to get first matching device */
-    if (!interface || !strlen(interface)) {
+    if (interface == NULL || interface[0] == '\0') {
         get_first_matching_device(dev, subsystem, match);
     } else {
         char *name = strrchr(interface, '/');

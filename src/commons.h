@@ -20,8 +20,9 @@
 #include <module/module_easy.h>
 
 #define SIZE(x) (sizeof(x) / sizeof(*x))
-#define _ctor_     __attribute__((constructor (101))) // Used for Sensors registering
-#define _dtor_     __attribute__((destructor (101)))  // Used for libusb dtor
+
+#define _ctor_     __attribute__((constructor (101))) // Used for plugins registering (sensor, gamma, dpms, screen) and libusb/libpipewire init
+#define _dtor_     __attribute__((destructor (101)))  // Used for libusb and libpipewire dtor
 
 /* Used by dpms, gamma and screen*/
 #define UNSUPPORTED             INT_MIN 

@@ -30,21 +30,58 @@
 - [x] Drop bl_store_vpcode() and only load vpcode from CLIGHTD_BL_VCP env?
 - [x] Add CLIGHTD_BL_VCP Environment variable to systemd script with a comment thus it is simple to update it if needed
 - [x] Expose Max and Internal properties
-- [ ] Update dbus api wiki
+- [x] Update dbus api wiki
 - [x] add a page about monitor hotplugging (dep on ddcutil >= 1.2.0 and refresh time!)
 - [x] Investigate memleaks (related to ddca_redetect_displays()?) -> see here: https://github.com/rockowitz/ddcutil/issues/202
 - [x] Instead of 30s sleep, use an udev_monitor on drm subsystem?
+- [x] Add support for monitor id specific CLIGHTD_BL_VCP env
 
 ### KbdBacklight
 - [x] call sd_bus_emit_object_added() sd_bus_emit_object_removed() When object path are created/deleted
 - [x] Fix: udev_reference is a snapshot of an udev device at a current time. Wrong!
+- [x] Fixed (small) memleak
+
+### ALS
+- [x] Fix: avoid using cached udev_dev reference in loop (thus always returning same ambient brightness read during a Capture request)
+- [x] Fixed EIO errors
+
+### Sensor
+- [x] Only emit Sensor.Changed signal for added/removed devices
+
+### Pipewire
+- [x] Support pipewire for Camera sensor? This would allow multiple application sharing camera
+- [x] Pipewire run as root needs XDG_RUNTIME_DIR env -> workaround: find the first /run/user folder and use that
+- [x] Unify camera settings between camera and pipewire sensors... ?
+- [x] Support monitor sensor api for pipewire
+- [x] Fix segfault
+- [x] Fix subsequent Capture
+- [x] Add a CLIGHTD_PW_RUNTIME_DIR env variable (in clightd.service, see CLIGHTD_BL_CODE) that defaults to /run/user/1000/. If the env variable is empty -> disable pipewire. If folder does not exist: disable pipewire. Otherwise: inotify on folder to wait for socket to appear. If socket is already there, immediately start monitoring.
+- [x] Document the new env variable!
+- [x] Use caller uid instead of defaulting to first found user during Capture!
+- [x] Use a map to store list of nodes?
+- [x] Free list of nodes upon exit!
+- [x] Fix xdg_runtime_dir set to create monitor
+- [x] Fix memleaks
+- [x] Support crop settings
+- [x] Test crop
+- [x] Drop crop API support for both pipewire and webcam; they add lots of complexity while giving no real perf improvements considering we are using small frames
+- [x] Fix: pipewire capture while webcam is already owned by another app freezes during pw_loop_iterate()
 
 ### Generic
 - [x] When built with ddcutil, clightd.service should be started after systemd-modules-load.service
 - [x] Show commit hash in version
+- [x] All api that require eg Xauth or xdg rutime user, fallback at automatically fetching a default value given the caller:
+- [x] test X
+- [x] test wl
+- [x] Document the new behavior!
+- [x] Fix clightd not cleanly exiting when built with DDC or YOCTOLIGHT (most probably libusb or whatever is creating another thread that is stealing the signal!)
+- [x] do not use strlen() to only check that strign is not empty
 
 ## 5.x
 - [ ] Keep it up to date with possible ddcutil api changes
+
+### Pipewire
+- [ ] Fix set_camera_setting() impl -> how to get current value? how to set a new value?
 
 ## 6.x (api break release)
 
@@ -54,9 +91,15 @@
 - [ ] Drop old BACKLIGHT module -> in case, drop {Lower,Raise,Set}All from clightd polkit policy
 - [ ] Rename Backlight2 to Backlight
 
-### Pipewire
-- [ ] merge pipewire work
+### Move to user service (?)
 - [ ] move clightd to user service
+- [ ] Drop polkit and use sd_session_is_active() 
+- [ ] Add udev rules for yoctolight, als, keyboard and backlight modules for "clightd" 
+- [ ] Drop useless API params (eg: DISPLAY, XAUTHORITY, XDG_RUNTIME_DIR etc etc)
+- [ ] # groupadd clightd
+- [ ] # usermod -aG clightd myusername
+- [ ] # echo 'KERNEL=="i2c-[0-9]*", GROUP="clightd"' >> /etc/udev/rules.d/10-local_i2c_group.rules
+... would break https://github.com/FedeDP/Clight/issues/144 ...
 
 ## Ideas
 - [ ] follow ddcci kernel driver and in case, drop ddcutil and add the kernel driver as clightd opt-dep

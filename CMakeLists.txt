@@ -99,6 +99,7 @@ optional_dep(DPMS "x11;xext;libdrm;wayland-client" "DPMS" protocol/org_kde_kwin_
 optional_dep(SCREEN "x11" "screen emitted brightness" protocol/wlr-screencopy-unstable-v1.xml src/modules/screen_plugins)
 optional_dep(DDC "ddcutil>=0.9.5" "external monitor backlight")
 optional_dep(YOCTOLIGHT "libusb-1.0" "Yoctolight usb als devices support")
+optional_dep(PIPEWIRE "libpipewire-0.3" "Enable pipewire camera sensor support")
 
 # Convert ld flag list from list to space separated string.
 string(REPLACE ";" " " COMBINED_LDFLAGS "${COMBINED_LDFLAGS}")
@@ -111,7 +112,7 @@ set_target_properties(
 
 # Installation of targets (must be before file configuration to work)
 install(TARGETS ${PROJECT_NAME}
-        RUNTIME DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}")
+        RUNTIME DESTINATION "${CMAKE_INSTALL_FULL_LIBEXECDIR}")
 
 set(SCRIPT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Scripts")
 
@@ -142,6 +143,8 @@ if(SYSTEMD_BASE_FOUND)
 
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/clightd.service
         DESTINATION ${SYSTEMD_SERVICE_DIR})
+
+    set(SYSTEMD_SERVICE "SystemdService=clightd.service")
 endif()
 
 # Install dbus service

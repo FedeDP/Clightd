@@ -1,20 +1,13 @@
 #include "screen.h"
+#include "bus_utils.h"
+#include "xorg_utils.h"
 #include <X11/Xutil.h>
-
-static int getRootBrightness(const char *screen_name);
 
 SCREEN("Xorg");
 
-static int get_frame_brightness(const char *id, const char *env) {
-    setenv("XAUTHORITY", env, 1);
-    const int br = getRootBrightness(id);
-    unsetenv("XAUTHORITY");
-    return br;
-}
-
 /* Robbed from calise source code, thanks!! */
-static int getRootBrightness(const char *screen_name) {
-    Display *dpy = XOpenDisplay(screen_name);
+static int get_frame_brightness(const char *id, const char *env) {
+    Display *dpy = fetch_xorg_display(&id, env);
     if (!dpy) {
         return WRONG_PLUGIN;
     }

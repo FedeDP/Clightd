@@ -1,3 +1,5 @@
+#pragma once
+
 #include <wayland-client.h>
 #include <sys/mman.h>
 

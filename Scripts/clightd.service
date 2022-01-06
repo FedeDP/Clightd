@@ -7,8 +7,14 @@ Requires=@POLKIT_NAME@.service
 Type=dbus
 BusName=org.clightd.clightd
 User=root
-# Default backlight vcp code; update if needed
+# Default backlight vcp code; update if needed.
+# Moreover, you can also specify per-monitor BL VCP value,
+# using CLIGHTD_BL_VCP_$mon_id, where mon_id is the monitor identifier 
+# as seen by Clightd; you can explore them using: 
+# $ busctl call org.clightd.clightd /org/clightd/clightd/Backlight2 org.clightd.clightd.Backlight2 Get
 Environment=CLIGHTD_BL_VCP=0x10
+# Default pipewire runtime dir watched by Clightd
+Environment=CLIGHTD_PIPEWIRE_RUNTIME_DIR=/run/user/1000/
 ExecStart=@CMAKE_INSTALL_FULL_LIBEXECDIR@/clightd
 Restart=on-failure
 RestartSec=5
