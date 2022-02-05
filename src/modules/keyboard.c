@@ -1,6 +1,7 @@
 #include <polkit.h>
 #include <udev.h>
 #include <math.h>
+#include <bus_utils.h>
 #include <module/map.h>
 
 #define KBD_SUBSYSTEM           "leds"
@@ -155,15 +156,7 @@ static int kbd_new(struct udev_device *dev, void *userdata) {
     k->max = atoi(udev_device_get_sysattr_value(dev, "max_brightness"));
     k->sysname = strdup(udev_device_get_sysname(dev));
     
-    /*
-     * Substitute wrong chars, eg: dell::kbd_backlight -> dell__kbd_backlight
-     * See spec: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-marshaling-object-path
-     */
-    snprintf(k->obj_path, sizeof(k->obj_path) - 1, "%s/%s", object_path, k->sysname);
-    char *ptr = NULL;
-    while ((ptr = strchr(k->obj_path, ':'))) {
-        *ptr = '_';
-    }
+    make_valid_obj_path(k->obj_path, sizeof(k->obj_path), object_path, k->sysname);
     
     int r = sd_bus_add_object_vtable(bus, &k->slot, k->obj_path, bus_interface, vtable, k);
     if (r < 0) {

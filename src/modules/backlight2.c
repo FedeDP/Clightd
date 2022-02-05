@@ -1,5 +1,6 @@
 #include <polkit.h>
 #include <udev.h>
+#include <bus_utils.h>
 #include <math.h>
 #include <module/map.h>
 #include <linux/fb.h>
@@ -153,7 +154,7 @@ MODULE("BACKLIGHT2");
                             d->sn = strdup(id);
                             d->max = VALREC_MAX_VAL(valrec);
                             d->cookie = curr_cookie;
-                            snprintf(d->obj_path, sizeof(d->obj_path) - 1, "%s/%s", object_path, d->sn);
+                            make_valid_obj_path(d->obj_path, sizeof(d->obj_path), object_path, d->sn);
                             int r = sd_bus_add_object_vtable(bus, &d->slot, d->obj_path, bus_interface, vtable, d);
                             if (r < 0) {
                                 m_log("Failed to add object vtable on path '%s': %d\n", d->obj_path, r);
@@ -365,7 +366,7 @@ static int store_internal_device(struct udev_device *dev, void *userdata) {
         d->sn = strdup(id);
         // Unused. But receive() callback expects brightness value to be cached
         udev_device_get_sysattr_value(dev, "brightness");
-        snprintf(d->obj_path, sizeof(d->obj_path) - 1, "%s/%s", object_path, d->sn);
+        make_valid_obj_path(d->obj_path, sizeof(d->obj_path), object_path, d->sn);
         ret = sd_bus_add_object_vtable(bus, &d->slot, d->obj_path, bus_interface, vtable, d);
         if (ret < 0) {
             m_log("Failed to add object vtable on path '%s': %d\n", d->obj_path, ret);

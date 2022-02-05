@@ -43,3 +43,24 @@ const char *bus_sender_xauth(void) {
     }
     return NULL;
 }
+
+void make_valid_obj_path(char *storage, size_t size, const char *root, const char *basename) {
+    /*
+     * Substitute wrong chars, eg: dell::kbd_backlight -> dell__kbd_backlight
+     * See spec: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-marshaling-object-path
+     */
+    const char *valid_chars = "ABCDEFGHIJKLMNOPQRSTUWXYZabcdefghijklmnopqrstuvwxyz0123456789_";
+    
+    snprintf(storage, size, "%s/%s", root, basename);
+    
+    char *path = storage + strlen(root) + 1;
+    const int full_len = strlen(path);
+    
+    while (true) {
+        int len = strspn(path, valid_chars);
+        if (len == full_len) {
+            break;
+        }
+        path[len] = '_';
+    }
+}
