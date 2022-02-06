@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.14)
 
-project(clightd VERSION 5.6 LANGUAGES C)
+project(clightd VERSION 5.7 LANGUAGES C)
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
