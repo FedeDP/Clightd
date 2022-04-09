@@ -41,6 +41,12 @@ void get_udev_device(const char *interface, const char *subsystem, const udev_ma
             return get_udev_device(++name, subsystem, match, ret_error, dev);
         }
         *dev = udev_device_new_from_subsystem_sysname(udev, subsystem, interface);
+        if (!*dev) {
+            // Try it as device ATTR{name}
+            static udev_match m = { .sysattr_key = "name" };
+            m.sysattr_val = interface;
+            return get_udev_device(NULL, subsystem, &m, ret_error, dev);
+        }
     }
     if (!(*dev) && ret_error) {
         sd_bus_error_set_errno(*ret_error, ENODEV);
