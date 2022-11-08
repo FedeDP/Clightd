@@ -39,7 +39,7 @@ static void check_opts(int argc, char *argv[]) {
             printf("Clightd: dbus API to easily set screen backlight, gamma temperature and get ambient brightness through webcam frames capture or ALS devices.\n");
             printf("* Current version: %s\n", VERSION);
             printf("* https://github.com/FedeDP/Clightd\n");
-            printf("* Copyright (C) 2021  Federico Di Pierro <nierro92@gmail.com>\n");
+            printf("* Copyright (C) 2022  Federico Di Pierro <nierro92@gmail.com>\n");
             exit(EXIT_SUCCESS);
         } else {
             fprintf(stderr, "Unrecognized option: %s.\n", argv[i]);

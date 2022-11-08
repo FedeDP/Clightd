@@ -162,23 +162,14 @@ static struct v4l2_control *set_camera_setting(void *priv, uint32_t id, float va
     return NULL;
 }
 
-static void inline fill_crop_rect(crop_info_t *cr, struct v4l2_rect *rect) {
-    const double height_pct = cr[Y_AXIS].area_pct[1] - cr[Y_AXIS].area_pct[0];
-    rect->height = height_pct * state.height;
-    rect->top = cr[Y_AXIS].area_pct[0] * state.height;
-
-    const double width_pct = cr[X_AXIS].area_pct[1] - cr[X_AXIS].area_pct[0];
-    rect->width = width_pct * state.width;
-    rect->left = cr[X_AXIS].area_pct[0] * state.width;
-}
-
 static int set_camera_fmt(void) {
     struct v4l2_format fmt = {0};
     fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     fmt.fmt.pix.width = 160;
     fmt.fmt.pix.height = 120;
-    fmt.fmt.pix.field = V4L2_FIELD_INTERLACED;   
+    fmt.fmt.pix.field = V4L2_FIELD_INTERLACED;
     fmt.fmt.pix.pixelformat = state.pixelformat;
+    
     if (-1 == xioctl(VIDIOC_S_FMT, &fmt)) {
         perror("Setting Pixel Format");
         return -1;
@@ -210,12 +201,6 @@ static int check_camera_caps(void) {
         return -1;
     }
     
-    /* Try to set lowest device priority level. No need to quit if this is not supported. */
-    enum v4l2_priority priority = V4L2_PRIORITY_BACKGROUND;
-    if (-1 == xioctl(VIDIOC_S_PRIORITY, &priority)) {
-        INFO("Failed to set priority\n");
-    }
-    
     /* Check supported formats */
     struct v4l2_fmtdesc fmtdesc = {0};
     fmtdesc.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -227,7 +212,7 @@ static int check_camera_caps(void) {
         }
         fmtdesc.index++;
     }
-    
+
     /* No supported formats found? */
     if (state.pixelformat == 0) {
         perror("Device does not support neither GREY nor YUYV nor MJPEG pixelformats.");
