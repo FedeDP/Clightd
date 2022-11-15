@@ -1,9 +1,6 @@
 ## 5.x
 - [ ] Keep it up to date with possible ddcutil api changes
 
-### Camera 
-- [x] Fix capture -> avoid setting priority to a low value
-
 ### Pipewire
 - [ ] Fix set_camera_setting() impl -> how to get current value? how to set a new value?
 
