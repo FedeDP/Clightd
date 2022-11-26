@@ -57,4 +57,10 @@ typedef struct _gamma_plugin {
 void gamma_register_new(gamma_plugin *plugin);
 double clamp(double x, double min, double max);
 int get_temp(const unsigned short R, const unsigned short B);
-void fill_gamma_table(uint16_t *r, uint16_t *g, uint16_t *b, uint32_t ramp_size, int temp);
+void fill_gamma_table(uint16_t *r, uint16_t *g, uint16_t *b, double br, uint32_t ramp_size, int temp);
+
+/* Gamma brightness related (ie: emulated backlight) */
+void store_gamma_brightness(const char *id, double brightness);
+double fetch_gamma_brightness(const char *id);
+void clean_gamma_brightness(const char *id);
+int refresh_gamma(void);

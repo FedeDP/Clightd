@@ -22,6 +22,7 @@ static gamma_client *fetch_client(gamma_plugin *plugin, const char *display, con
 static int start_client(gamma_client *sc, int temp, bool is_smooth, unsigned int smooth_step, unsigned int smooth_wait);
 
 static map_t *clients;
+static map_t *gamma_brightness;
 static gamma_plugin *plugins[GAMMA_NUM];
 static const char object_path[] = "/org/clightd/clightd/Gamma";
 static const char bus_interface[] = "org.clightd.clightd.Gamma";
@@ -66,6 +67,7 @@ static void init(void) {
         m_log("Failed to issue method call: %s\n", strerror(-r));
     } else {
         clients = map_new(false, client_dtor);
+        gamma_brightness = map_new(false, free);
     }
 }
 
@@ -109,6 +111,7 @@ static void receive(const msg_t *msg, const void *userdata) {
 
 static void destroy(void) {
     map_free(clients);
+    map_free(gamma_brightness);
 }
 
 /** Exposed API in gamma.h **/
@@ -227,18 +230,53 @@ int get_temp(const unsigned short R, const unsigned short B) {
     return temperature;
 }
 
-void fill_gamma_table(uint16_t *r, uint16_t *g, uint16_t *b, uint32_t ramp_size, int temp) {
+void fill_gamma_table(uint16_t *r, uint16_t *g, uint16_t *b, double br, uint32_t ramp_size, int temp) {
     const double red = get_red(temp) / (double)UINT8_MAX;
     const double green = get_green(temp) / (double)UINT8_MAX;
     const double blue = get_blue(temp) / (double)UINT8_MAX;
     
     for (uint32_t i = 0; i < ramp_size; ++i) {
         const double val = UINT16_MAX * i / ramp_size;
-        r[i] = val * red;
-        g[i] = val * green;
-        b[i] = val * blue;
+        r[i] = val * red * br;
+        g[i] = val * green * br;
+        b[i] = val * blue * br;
     }
 }
+
+void store_gamma_brightness(const char *id, double brightness) {
+    if (!gamma_brightness) {
+        return;
+    }
+    double *b = malloc(sizeof(double));
+    *b = brightness;
+    map_put(gamma_brightness, id, b);
+}
+
+double fetch_gamma_brightness(const char *id) {
+    double *b = map_get(gamma_brightness, id);
+    if (!b) {
+        return 1.0;
+    }
+    return *b;
+}
+
+void clean_gamma_brightness(const char *id) {
+    map_remove(gamma_brightness, id);
+}
+
+/* Utility function to refresh gamma levels. */
+int refresh_gamma(void) {
+    int error;
+    gamma_client *sc = map_get(clients, NULL);
+    if (!sc) {
+        sc = fetch_client(NULL, "", "", &error);
+    }
+    if (sc) {
+        return start_client(sc, sc->current_temp, false, 0, 0);
+    }
+    return -ENOENT;
+}
+
 /** **/
 
 static void client_dtor(void *c) {
