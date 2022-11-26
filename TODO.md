@@ -9,6 +9,7 @@
 - [ ] wl
 - [x] Fix xorg gamma Get (account for known brightness!)
 - [ ] Split backlight in plugins: sysfs/ddc/emulated (xrandr or wlrandr or drm(?)) Init,set,get api
+- [ ] TODO only build the new features if libs are present, just like we do for gamma
 
 ### Generic
 - [ ] Drop is_smooth options for gamma
