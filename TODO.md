@@ -4,10 +4,11 @@
 - [x] Drop old backlight API
 - [x] Move Backlight2 to Backlight
 - [x] Drop {Lower,Raise,Set}All from clightd polkit policy
-- [ ] Add support for X and Wl to Backlight (ie: brightness emulation, like xrandr)
-- - [ ] Xorg: https://stackoverflow.com/questions/5811279/possible-to-change-screen-brightness-with-c
-- - [ ] Wl: https://gitlab.com/chinstrap/gammastep/-/blob/master/src/redshift.c
-- - [ ] Native.{Internal,DDC}
+- [ ] Add support for brightness emulation through gamma -> fix Xorg naming differing from /sys/class/drm one... :/
+- [x] drm
+- [ ] wl
+- [x] Fix xorg gamma Get (account for known brightness!)
+- [ ] Split backlight in plugins: sysfs/ddc/emulated (xrandr or wlrandr or drm(?)) Init,set,get api
 
 ### Generic
 - [ ] Drop is_smooth options for gamma

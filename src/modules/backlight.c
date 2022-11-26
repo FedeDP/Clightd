@@ -4,6 +4,7 @@
 #include <math.h>
 #include <module/map.h>
 #include <linux/fb.h>
+#include <gamma.h>
 
 #define BL_SUBSYSTEM        "backlight"
 #define DRM_SUBSYSTEM       "drm"
@@ -20,8 +21,9 @@ typedef struct {
     int fd;
 } smooth_t;
 
-typedef struct {
+typedef struct bl {
     int is_internal;
+    int is_ddc;
     void *dev; // differs between struct udev_device (internal devices) and DDCA_Display_Ref for external ones
     int max; // cached device max backlight value
     char obj_path[100];
@@ -29,6 +31,8 @@ typedef struct {
     sd_bus_slot *slot;
     smooth_t *smooth; // when != NULL -> smoothing
     uint64_t cookie;
+    int (*set)(struct bl *b, int value);
+    double (*get)(struct bl *b);
 } bl_t;
 
 /* Device manager */
@@ -39,12 +43,10 @@ static void store_external_devices(void);
 
 /* Getters */
 static double get_internal_backlight(bl_t *bl);
-static double get_external_backlight(bl_t *bl);
 map_ret_code get_backlight(void *userdata, const char *key, void *data);
 
 /* Setters */
 static int set_internal_backlight(bl_t *bl, int value);
-static int set_external_backlight(bl_t *bl, int value);
 static int set_backlight_value(bl_t *bl, double *target_pct, double smooth_step);
 static map_ret_code set_backlight(void *userdata, const char *key, void *data);
 
@@ -86,6 +88,7 @@ static const sd_bus_vtable vtable[] = {
     SD_BUS_METHOD("Lower", "d(du)", NULL, method_lowerbrightness, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_PROPERTY("Max", "i", NULL, offsetof(bl_t, max), SD_BUS_VTABLE_PROPERTY_CONST),
     SD_BUS_PROPERTY("Internal", "b", NULL, offsetof(bl_t, is_internal), SD_BUS_VTABLE_PROPERTY_CONST),
+    SD_BUS_PROPERTY("DDC", "b", NULL, offsetof(bl_t, is_ddc), SD_BUS_VTABLE_PROPERTY_CONST),
     SD_BUS_SIGNAL("Changed", "d", 0),
     SD_BUS_VTABLE_END
 };
@@ -103,11 +106,11 @@ MODULE("BACKLIGHT");
     static void bl_load_vpcode(void) {
         if (getenv(BL_VCP_ENV)) {
             br_code = strtol(getenv(BL_VCP_ENV), NULL, 16);
-            m_log("Set default 0x%x vcp code.\n", br_code);
+            m_log("Overridden default 0x%x vcp code.\n", br_code);
         }
     }
 
-    static void get_info_id(char *id, const int size, const DDCA_Display_Info *dinfo) {
+    static void get_ddc_id(char *id, const int size, const DDCA_Display_Info *dinfo) {
         if ((dinfo->sn[0] == '\0') || !strcasecmp(dinfo->sn, "Unspecified")) {
             switch(dinfo->path.io_mode) {
                 case DDCA_IO_I2C:
@@ -125,60 +128,141 @@ MODULE("BACKLIGHT");
         }
     }
     
+    static int set_ddc_backlight(bl_t *bl, int value) {
+        int ret = -1;
+        DDCA_Display_Handle dh = NULL;
+        if (!ddca_open_display2(bl->dev, false, &dh)) {
+            DDCA_Vcp_Feature_Code specific_br_code;
+            char specific_br_env[64];
+            snprintf(specific_br_env, sizeof(specific_br_env), BL_VCP_ENV"_%s", bl->sn);
+            if (getenv(specific_br_env)) {
+                specific_br_code = strtol(getenv(specific_br_env), NULL, 16);
+            } else {
+                specific_br_code = br_code;
+            }
+            int8_t new_sh = (value >> 8) & 0xff;
+            int8_t new_sl = value & 0xff;
+            ret = ddca_set_non_table_vcp_value(dh, specific_br_code, new_sh, new_sl);
+            ddca_close_display(dh);
+        }
+        return ret;
+    }
+    
+    static double get_ddc_backlight(bl_t *bl) {
+        double value = 0.0;
+        DDCA_Display_Handle dh = NULL;
+        if (ddca_open_display2(bl->dev, false, &dh) == 0) {
+            DDCA_Any_Vcp_Value *valrec = NULL;
+            if (!ddca_get_any_vcp_value_using_explicit_type(dh, br_code, DDCA_NON_TABLE_VCP_VALUE, &valrec)) {
+                value = (double)VALREC_CUR_VAL(valrec) / bl->max;
+                ddca_free_any_vcp_value(valrec);
+            }
+            ddca_close_display(dh);
+        }
+        return value;
+    }
+    
+    #include <glob.h>
+    
+    static void get_emulated_id(char *id, const int size, int i2c_node) {
+        glob_t gl = {0};
+        if (glob("/sys/class/drm/card0-*", GLOB_NOSORT | GLOB_ERR, NULL, &gl) == 0) {
+            for (int i = 0; i < gl.gl_pathc; i++) {
+                char path[PATH_MAX + 1];
+                snprintf(path, sizeof(path), "%s/ddc/i2c-dev/i2c-%d", gl.gl_pathv[i], i2c_node);
+                if (access(path, F_OK) == 0) {
+                    const char *name = strstr(gl.gl_pathv[i], "card0-") + strlen("card0-");
+                    strncpy(id, name, size);
+                    break;
+                }
+            }
+            globfree(&gl);
+        }
+    }
+
+    static int set_emulated_backlight(bl_t *bl, int value) {
+        store_gamma_brightness(bl->sn, (double)value / bl->max);
+        return refresh_gamma();
+    }
+    
+    static double get_emulated_backlight(bl_t *bl) {
+        return fetch_gamma_brightness(bl->sn);
+    }
+    
+    static void add_new_external_display(const char *id, DDCA_Display_Info *dinfo, DDCA_Any_Vcp_Value *valrec) {
+        bl_t *d = map_get(bls, id);
+        if (!d) {
+            d = calloc(1, sizeof(bl_t));
+            if (d) {
+                d->is_internal = false;
+                d->dev = dinfo->dref;
+                d->sn = strdup(id);
+                d->cookie = curr_cookie;
+                
+                if (valrec != NULL) {
+                    d->is_ddc = true;
+                    d->max = VALREC_MAX_VAL(valrec);
+                    d->set = set_ddc_backlight;
+                    d->get = get_ddc_backlight;
+                } else {
+                    d->max = 100; // perc
+                    d->set = set_emulated_backlight;
+                    d->get = get_emulated_backlight;
+                }
+                make_valid_obj_path(d->obj_path, sizeof(d->obj_path), object_path, d->sn);
+                int r = sd_bus_add_object_vtable(bus, &d->slot, d->obj_path, bus_interface, vtable, d);
+                if (r < 0) {
+                    m_log("Failed to add object vtable on path '%s': %d\n", d->obj_path, r);
+                    bl_dtor(d);
+                } else {
+                    map_put(bls, d->sn, d);
+                    /* Not on first load */
+                    if (d->cookie > 0) {
+                        sd_bus_emit_object_added(bus, d->obj_path);
+                    }
+                }
+            }
+        } else {
+            // Update cookie and dref
+            d->cookie = curr_cookie;
+            d->dev = dinfo->dref;
+        }
+    }
+
     static void store_external_devices(void) {
         DDCA_Display_Info_List *dlist = NULL;
-        ddca_get_display_info_list2(false, &dlist);
-        if (dlist) {
-            for (int ndx = 0; ndx < dlist->ct; ndx++) {
-                DDCA_Display_Info *dinfo = &dlist->info[ndx];
-                DDCA_Display_Ref dref = dinfo->dref;
-                DDCA_Display_Handle dh = NULL;
-                if (ddca_open_display2(dref, false, &dh)) {
-                    continue;
-                }
-                DDCA_Any_Vcp_Value *valrec;
-                if (!ddca_get_any_vcp_value_using_explicit_type(dh, br_code, DDCA_NON_TABLE_VCP_VALUE, &valrec)) {
-                    char id[32];
-                    get_info_id(id, sizeof(id), dinfo);
-                    bl_t *d = map_get(bls, id);
-                    if (!d) {
-                        d = calloc(1, sizeof(bl_t));
-                        if (d) {
-                            d->is_internal = false;
-                            d->dev = dref;
-                            d->sn = strdup(id);
-                            d->max = VALREC_MAX_VAL(valrec);
-                            d->cookie = curr_cookie;
-                            make_valid_obj_path(d->obj_path, sizeof(d->obj_path), object_path, d->sn);
-                            int r = sd_bus_add_object_vtable(bus, &d->slot, d->obj_path, bus_interface, vtable, d);
-                            if (r < 0) {
-                                m_log("Failed to add object vtable on path '%s': %d\n", d->obj_path, r);
-                                bl_dtor(d);
-                            } else {
-                                map_put(bls, d->sn, d);
-                                /* Not on first load */
-                                if (d->cookie > 0) {
-                                    sd_bus_emit_object_added(bus, d->obj_path);
-                                }
-                            }
-                        }
-                    } else {
-                        // Update cookie and dref
-                        d->cookie = curr_cookie;
-                        d->dev = dref;
-                    }
-                    ddca_free_any_vcp_value(valrec);
-                }
-                ddca_close_display(dh);
-            }
-            ddca_free_display_info_list(dlist);
+        ddca_get_display_info_list2(true, &dlist);
+        if (!dlist) {
+            return;
         }
+        for (int ndx = 0; ndx < dlist->ct; ndx++) {
+            DDCA_Display_Info *dinfo = &dlist->info[ndx];
+            DDCA_Display_Ref dref = dinfo->dref;
+            DDCA_Display_Handle dh = NULL;
+            if (ddca_open_display2(dref, false, &dh)) {
+                continue;
+            }
+            DDCA_Any_Vcp_Value *valrec;
+            char id[32];
+            int ret = ddca_get_any_vcp_value_using_explicit_type(dh, br_code, DDCA_NON_TABLE_VCP_VALUE, &valrec);
+            if (ret == 0) {
+                get_ddc_id(id, sizeof(id), dinfo);
+                add_new_external_display(id, dinfo, valrec);
+                ddca_free_any_vcp_value(valrec);
+            } else if (strlen(dinfo->model_name)) {
+                // Laptop internal displays have got empty model name; skip them.
+                get_emulated_id(id, sizeof(id), dinfo->path.path.i2c_busno);
+                add_new_external_display(id, dinfo, NULL);
+            }
+            ddca_close_display(dh);
+        }
+        ddca_free_display_info_list(dlist);
     }
 
 #else
 
     static void store_external_devices(void) { }
-    
+
 #endif
 
 #if DDCUTIL_VMAJOR >= 1 && DDCUTIL_VMINOR >= 2
@@ -343,6 +427,8 @@ static void bl_dtor(void *data) {
     sd_bus_slot_unref(bl->slot);
     if (bl->is_internal) {
         udev_device_unref(bl->dev);
+    } else if (!bl->is_ddc) {
+        clean_gamma_brightness(bl->sn);
     }
     stop_smooth(bl);
     free((void *)bl->sn);
@@ -359,6 +445,8 @@ static int store_internal_device(struct udev_device *dev, void *userdata) {
         d->dev = udev_device_ref(dev);
         d->max = max;
         d->sn = strdup(id);
+        d->set = set_internal_backlight;
+        d->get = get_internal_backlight;
         // Unused. But receive() callback expects brightness value to be cached
         udev_device_get_sysattr_value(dev, "brightness");
         make_valid_obj_path(d->obj_path, sizeof(d->obj_path), object_path, d->sn);
@@ -382,30 +470,10 @@ static double get_internal_backlight(bl_t *bl) {
     return (double)val / bl->max;
 }
 
-static double get_external_backlight(bl_t *bl) {
-    double value = 0.0;
-#ifdef DDC_PRESENT
-    DDCA_Display_Handle dh = NULL;
-    if (ddca_open_display2(bl->dev, false, &dh) == 0) {
-        DDCA_Any_Vcp_Value *valrec = NULL;
-        if (!ddca_get_any_vcp_value_using_explicit_type(dh, br_code, DDCA_NON_TABLE_VCP_VALUE, &valrec)) {
-            value = (double)VALREC_CUR_VAL(valrec) / bl->max;
-            ddca_free_any_vcp_value(valrec);
-        }
-        ddca_close_display(dh);
-    }
-#endif
-    return value;
-}
-
 map_ret_code get_backlight(void *userdata, const char *key, void *data) {
     bl_t *bl = (bl_t *)data;
     double *val = (double *)userdata;
-    if (bl->is_internal) {
-        *val = get_internal_backlight(bl);
-    } else {
-        *val = get_external_backlight(bl);
-    }
+    *val = bl->get(bl);
     return MAP_OK;
 }
 
@@ -415,38 +483,11 @@ static int set_internal_backlight(bl_t *bl, int value) {
     return udev_device_set_sysattr_value(bl->dev, "brightness", val);
 }
 
-static int set_external_backlight(bl_t *bl, int value) {
-    int ret = -1;
-#ifdef DDC_PRESENT
-    DDCA_Display_Handle dh = NULL;
-    if (!ddca_open_display2(bl->dev, false, &dh)) {
-        DDCA_Vcp_Feature_Code specific_br_code;
-        char specific_br_env[64];
-        snprintf(specific_br_env, sizeof(specific_br_env), BL_VCP_ENV"_%s", bl->sn);
-        if (getenv(specific_br_env)) {
-            specific_br_code = strtol(getenv(specific_br_env), NULL, 16);
-        } else {
-            specific_br_code = br_code;
-        }
-        int8_t new_sh = (value >> 8) & 0xff;
-        int8_t new_sl = value & 0xff;
-        ret = ddca_set_non_table_vcp_value(dh, specific_br_code, new_sh, new_sl);
-        ddca_close_display(dh);
-    }
-#endif
-    return ret;
-}
-
 /* Set a target_pct eventually computing smooth step */
 static int set_backlight_value(bl_t *bl, double *target_pct, double smooth_step) {
     const double next_pct = next_backlight_pct(bl, target_pct, smooth_step);
     const int value = (int)round(bl->max * next_pct);
-    int ret;
-    if (bl->is_internal) {
-        ret = set_internal_backlight(bl, value);
-    } else {
-        ret = set_external_backlight(bl, value);
-    }
+    int ret = bl->set(bl, value);
     if (ret == 0) {
         /*
          * For external monitor:
@@ -539,6 +580,8 @@ static inline bool is_smooth(smooth_params_t *params) {
 
 int method_setbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     ASSERT_AUTH();
+    
+    bus_sender_fill_creds(m);
     
     smooth_params_t params = {0};
     int r = sd_bus_message_read(m, "d(du)", &params.target_pct, &params.step, &params.wait);
