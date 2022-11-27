@@ -8,7 +8,6 @@
 
 #define BL_SUBSYSTEM        "backlight"
 #define DRM_SUBSYSTEM       "drm"
-#define BL_VCP_ENV          "CLIGHTD_BL_VCP"
 
 typedef struct {
     double target_pct;
@@ -99,35 +98,48 @@ MODULE("BACKLIGHT");
 
     #include <ddcutil_c_api.h>
     #include <ddcutil_macros.h>
+    #include <glob.h>
+
+    #define ID_MAX_LEN 32
+    #define STR(x) _STR(x)
+    #define _STR(x) #x
+
+    #define BL_VCP_ENV          "CLIGHTD_BL_VCP"
+    #define BL_EMULATED_ENV     "CLIGHTD_BL_EMULATED"
 
     /* Default value */
     static DDCA_Vcp_Feature_Code br_code = 0x10;
+    static bool emulated_backlight_enabled = true;
 
-    static void bl_load_vpcode(void) {
+    static void bl_load_env(void) {
         if (getenv(BL_VCP_ENV)) {
             br_code = strtol(getenv(BL_VCP_ENV), NULL, 16);
-            m_log("Overridden default 0x%x vcp code.\n", br_code);
+            m_log("Overridden default vcp code: 0x%x\n", br_code);
+        }
+        if (getenv(BL_EMULATED_ENV)) {
+            emulated_backlight_enabled = strtol(getenv(BL_EMULATED_ENV), NULL, 10);
+            m_log("Overridden default emulated backlight mode: %d.\n", emulated_backlight_enabled);
         }
     }
 
-    static void get_ddc_id(char *id, const int size, const DDCA_Display_Info *dinfo) {
+    static void get_ddc_id(char *id, const DDCA_Display_Info *dinfo) {
         if ((dinfo->sn[0] == '\0') || !strcasecmp(dinfo->sn, "Unspecified")) {
             switch(dinfo->path.io_mode) {
                 case DDCA_IO_I2C:
-                    snprintf(id, size, "/dev/i2c-%d", dinfo->path.path.i2c_busno);
+                    snprintf(id, ID_MAX_LEN, "/dev/i2c-%d", dinfo->path.path.i2c_busno);
                     break;
                 case DDCA_IO_USB:
-                    snprintf(id, size, "/dev/usb/hiddev%d", dinfo->path.path.hiddev_devno);
+                    snprintf(id, ID_MAX_LEN, "/dev/usb/hiddev%d", dinfo->path.path.hiddev_devno);
                     break;
                 default:
-                    snprintf(id, size, "%d", dinfo->dispno);
+                    snprintf(id, ID_MAX_LEN, "%d", dinfo->dispno);
                     break;
             }
         } else {
-            strncpy(id, dinfo->sn, size);
+            strncpy(id, dinfo->sn, ID_MAX_LEN);
         }
     }
-    
+
     static int set_ddc_backlight(bl_t *bl, int value) {
         int ret = -1;
         DDCA_Display_Handle dh = NULL;
@@ -147,7 +159,7 @@ MODULE("BACKLIGHT");
         }
         return ret;
     }
-    
+
     static double get_ddc_backlight(bl_t *bl) {
         double value = 0.0;
         DDCA_Display_Handle dh = NULL;
@@ -161,18 +173,15 @@ MODULE("BACKLIGHT");
         }
         return value;
     }
-    
-    #include <glob.h>
-    
-    static void get_emulated_id(char *id, const int size, int i2c_node) {
+
+    static void get_emulated_id(char *id, int i2c_node) {
         glob_t gl = {0};
-        if (glob("/sys/class/drm/card0-*", GLOB_NOSORT | GLOB_ERR, NULL, &gl) == 0) {
+        if (glob("/sys/class/drm/card*-*", GLOB_NOSORT | GLOB_ERR, NULL, &gl) == 0) {
             for (int i = 0; i < gl.gl_pathc; i++) {
                 char path[PATH_MAX + 1];
                 snprintf(path, sizeof(path), "%s/ddc/i2c-dev/i2c-%d", gl.gl_pathv[i], i2c_node);
                 if (access(path, F_OK) == 0) {
-                    const char *name = strstr(gl.gl_pathv[i], "card0-") + strlen("card0-");
-                    strncpy(id, name, size);
+                    sscanf(gl.gl_pathv[i], "/sys/class/drm/card%*d-%"STR(ID_MAX_LEN)"s", id);
                     break;
                 }
             }
@@ -243,15 +252,15 @@ MODULE("BACKLIGHT");
                 continue;
             }
             DDCA_Any_Vcp_Value *valrec;
-            char id[32];
+            char id[ID_MAX_LEN];
             int ret = ddca_get_any_vcp_value_using_explicit_type(dh, br_code, DDCA_NON_TABLE_VCP_VALUE, &valrec);
             if (ret == 0) {
-                get_ddc_id(id, sizeof(id), dinfo);
+                get_ddc_id(id, dinfo);
                 add_new_external_display(id, dinfo, valrec);
                 ddca_free_any_vcp_value(valrec);
-            } else if (strlen(dinfo->model_name)) {
+            } else if (emulated_backlight_enabled && strlen(dinfo->model_name)) {
                 // Laptop internal displays have got empty model name; skip them.
-                get_emulated_id(id, sizeof(id), dinfo->path.path.i2c_busno);
+                get_emulated_id(id, dinfo->path.path.i2c_busno);
                 add_new_external_display(id, dinfo, NULL);
             }
             ddca_close_display(dh);
@@ -308,7 +317,7 @@ static bool evaluate(void) {
 
 static void init(void) {
 #ifdef DDC_PRESENT
-    bl_load_vpcode();
+    bl_load_env();
 #endif
     bls = map_new(false, bl_dtor);
     sd_bus_add_object_manager(bus, NULL, object_path);
