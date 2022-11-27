@@ -7,7 +7,7 @@
 - [ ] Add support for brightness emulation through gamma 
 - - [ ] Xorg: fix naming differing from /sys/class/drm one... :/
 - - [x] drm
-- - [ ] wl
+- - [x] wl
 - [x] Fix xorg gamma Get (account for known brightness!)
 - [ ] Split backlight in plugins: sysfs/ddc/emulated (xrandr or wlrandr or drm(?)) Init,set,get api
 - [ ] only build the new features if required libs are present, just like we do for gamma
