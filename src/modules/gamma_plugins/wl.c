@@ -5,12 +5,15 @@
 #include "wl_utils.h"
 #include <module/stack.h>
 
+#define UNIMPLEMENTED(registry_listener) registry_listener {}
+
 struct output {
     struct wl_output *wl_output;
     struct zwlr_gamma_control_v1 *gamma_control;
     uint32_t ramp_size;
     int table_fd;
     uint16_t *table;
+    char *name;
     struct wl_list link;
 };
 
@@ -24,14 +27,44 @@ typedef struct {
 
 static int create_gamma_table(uint32_t ramp_size, uint16_t **table);
 static void destroy_output(struct output *output);
+
+/* WL listeners */
 static void gamma_control_handle_gamma_size(void *data, 
-                                            struct zwlr_gamma_control_v1 *gamma_control, uint32_t ramp_size);
+                                                    struct zwlr_gamma_control_v1 *gamma_control, uint32_t ramp_size);
 static void gamma_control_handle_failed(void *data,
-                                        struct zwlr_gamma_control_v1 *gamma_control);
+                                                    struct zwlr_gamma_control_v1 *gamma_control);
 static void registry_handle_global(void *data, struct wl_registry *registry,
-                                   uint32_t name, const char *interface, uint32_t version);
-static void registry_handle_global_remove(void *data,
-                                          struct wl_registry *registry, uint32_t name);
+                                                    uint32_t name, const char *interface, uint32_t version);
+UNIMPLEMENTED(static void registry_handle_global_remove(void *data,
+                                                    struct wl_registry *registry, uint32_t name))
+static void registry_handle_output_name(void *data,
+                                                    struct wl_output *wl_output,
+                                                    const char *name);
+UNIMPLEMENTED(static void registry_handle_output_geometry(void *data,
+                                                    struct wl_output *wl_output,
+                                                    int32_t x,
+                                                    int32_t y,
+                                                    int32_t physical_width,
+                                                    int32_t physical_height,
+                                                    int32_t subpixel,
+                                                    const char *make,
+                                                    const char *model,
+                                                    int32_t transform))
+UNIMPLEMENTED(static void registry_handle_output_mode(void *data,
+                                                    struct wl_output *wl_output,
+                                                    uint32_t flags,
+                                                    int32_t width,
+                                                    int32_t height,
+                                                    int32_t refresh))
+UNIMPLEMENTED(static void registry_handle_output_scale(void *data,
+                                                    struct wl_output *wl_output,
+                                                    int32_t factor))
+UNIMPLEMENTED(static void registry_handle_output_desc(void *data,
+                                                    struct wl_output *wl_output,
+                                                    const char *description))
+UNIMPLEMENTED(static void registry_handle_output_done(void *data,
+                                                    struct wl_output *wl_output))
+/* */
 
 static const struct zwlr_gamma_control_v1_listener gamma_control_listener = {
     .gamma_size = gamma_control_handle_gamma_size,
@@ -41,6 +74,15 @@ static const struct zwlr_gamma_control_v1_listener gamma_control_listener = {
 static const struct wl_registry_listener registry_listener = {
     .global = registry_handle_global,
     .global_remove = registry_handle_global_remove,
+};
+
+static const struct wl_output_listener output_listener = {
+    .geometry = registry_handle_output_geometry,
+    .mode = registry_handle_output_mode,
+    .scale = registry_handle_output_scale,
+    .name = registry_handle_output_name,
+    .description = registry_handle_output_desc,
+    .done = registry_handle_output_done,
 };
 
 static stack_t *clients;
@@ -144,14 +186,16 @@ err:
 
 static int set(void *priv_data, const int temp) {
     wlr_gamma_priv *priv = (wlr_gamma_priv *)priv_data;
-    
+
     struct output *output;
     wl_list_for_each(output, &priv->outputs, link) {
         lseek(output->table_fd, 0, SEEK_SET);
         uint16_t *r = output->table;
         uint16_t *g = output->table + output->ramp_size;
         uint16_t *b = output->table + 2 * output->ramp_size;
-        fill_gamma_table(r, g, b, 1.0, output->ramp_size, temp);
+
+        const double br = fetch_gamma_brightness(output->name);
+        fill_gamma_table(r, g, b, br, output->ramp_size, temp);
         zwlr_gamma_control_v1_set_gamma(output->gamma_control,
                                         output->table_fd);
     }
@@ -238,6 +282,7 @@ static void destroy_output(struct output *output) {
     if (output->gamma_control) {
         zwlr_gamma_control_v1_destroy(output->gamma_control);
     }
+    free(output->name);
     free(output);
 }
 
@@ -258,16 +303,26 @@ static void registry_handle_global(void *data, struct wl_registry *registry,
     wlr_gamma_priv *priv = (wlr_gamma_priv *)data;
     if (strcmp(interface, wl_output_interface.name) == 0) {
         struct output *output = calloc(1, sizeof(struct output));
+        int v = wl_output_interface.version > version ? version : wl_output_interface.version;
         output->wl_output = wl_registry_bind(registry, name,
-            &wl_output_interface, 1);
+            &wl_output_interface, v);
+        wl_output_add_listener(output->wl_output, &output_listener, priv);
         wl_list_insert(&priv->outputs, &output->link);
     } else if (strcmp(interface, zwlr_gamma_control_manager_v1_interface.name) == 0) {
-        
+        // enforce version 1 since we are using v1 interface
         priv->gamma_control_manager = wl_registry_bind(registry, name, &zwlr_gamma_control_manager_v1_interface, 1);
     }
 }
 
-static void registry_handle_global_remove(void *data,
-                                          struct wl_registry *registry, uint32_t name) {
-    
+static void registry_handle_output_name(void *data,
+                                        struct wl_output *wl_output,
+                                        const char *name) {
+    wlr_gamma_priv *priv = (wlr_gamma_priv *)data;
+    struct output *output;
+    wl_list_for_each(output, &priv->outputs, link) {
+        if (output->wl_output == wl_output) {
+            output->name = strdup(name);
+            break;
+        }
+    }
 }
