@@ -1,200 +1,255 @@
 #include "screen.h"
 #include "wl_utils.h"
+#include "wlr-output-management-unstable-v1-client-protocol.h"
 #include "wlr-screencopy-unstable-v1-client-protocol.h"
 
-static struct wl_buffer *create_shm_buffer(enum wl_shm_format fmt,
-        int width, int height, int stride, void **data_out);
-static void frame_handle_buffer(void *tt, struct zwlr_screencopy_frame_v1 *frame, uint32_t format,
-    uint32_t width, uint32_t height, uint32_t stride);
-static void frame_handle_flags(void*tt, struct zwlr_screencopy_frame_v1 *frame, uint32_t flags);
-static void frame_handle_ready(void *tt, struct zwlr_screencopy_frame_v1 *frame,
-    uint32_t tv_sec_hi, uint32_t tv_sec_low, uint32_t tv_nsec);
-static void frame_handle_failed(void *tt, struct zwlr_screencopy_frame_v1 *frame);
-static void handle_global(void *data, struct wl_registry *registry,
-        uint32_t name, const char *interface, uint32_t version);
-static void handle_global_remove(void *data, struct wl_registry *registry, uint32_t name);
-static void dtor(void);
+struct cl_display {
+    struct wl_display *wl_display;
+    struct wl_registry *wl_registry;
+    struct wl_shm *shm;
+    struct wl_list outputs;
+    struct zwlr_screencopy_manager_v1 *screencopy_manager;
+};
 
-static struct {
+struct cl_buffer {
     struct wl_buffer *wl_buffer;
-    void *data;
-    enum wl_shm_format format;
-    int width, height, stride;
-    bool y_invert;
-} buffer;
+    void *shm_data;
+};
+
+struct cl_frame {
+    enum wl_shm_format shm_format;
+    int32_t width, height, stride, size;
+    int brightness;
+    bool copy_done;
+    bool copy_err;
+};
+
+struct cl_output {
+    struct wl_output *wl_output;
+    struct cl_display *display;
+    struct cl_buffer *buffer;
+    struct cl_frame *frame;
+    struct wl_list link;
+    struct zwlr_screencopy_frame_v1 *screencopy_frame;
+    char *name;
+};
 
 SCREEN("Wl");
 
-static struct zwlr_screencopy_manager_v1 *screencopy_manager;
-static struct wl_output *output;
-static struct wl_shm *shm;
-static struct wl_registry *registry;
-static struct zwlr_screencopy_frame_v1 *frame;
-static bool buffer_copy_done;
-static bool buffer_copy_err;
-
-static const struct zwlr_screencopy_frame_v1_listener frame_listener = {
-    .buffer = frame_handle_buffer,
-    .flags = frame_handle_flags,
-    .ready = frame_handle_ready,
-    .failed = frame_handle_failed,
-};
-
-static const struct wl_registry_listener registry_listener = {
-    .global = handle_global,
-    .global_remove = handle_global_remove,
-};
-
-static int get_frame_brightness(const char *id, const char *env) {
-    struct wl_display *display = fetch_wl_display(id, env);
-    if (display == NULL) {
-        return WRONG_PLUGIN;
-    }
-    
-    int ret = UNSUPPORTED;
-
-    registry = wl_display_get_registry(display);
-    wl_registry_add_listener(registry, &registry_listener, NULL);
-    wl_display_roundtrip(display);
-    
-    if (screencopy_manager == NULL) {
-        ret = COMPOSITOR_NO_PROTOCOL;
-        goto err;
-    }
-    if (shm == NULL) {
-        fprintf(stderr, "compositor is missing wl_shm\n");
-        ret = COMPOSITOR_NO_PROTOCOL;
-        goto err;
-    }
-    if (output == NULL) {
-        fprintf(stderr, "no outputs available\n");
-        goto err;
-    }
-    
-    frame = zwlr_screencopy_manager_v1_capture_output(screencopy_manager, 0, output);
-    zwlr_screencopy_frame_v1_add_listener(frame, &frame_listener, NULL);
-    
-    while (!buffer_copy_done && !buffer_copy_err && wl_display_dispatch(display) != -1) {
-        // This space is intentionally left blank
-    }
-    
-    ret = -EIO;
-    if (buffer_copy_done) {
-        ret = rgb_frame_brightness(buffer.data, buffer.width, buffer.height, buffer.stride);
-    }
-    
-err:
-    dtor();
-    return ret;
+void noop() {
 }
 
-static struct wl_buffer *create_shm_buffer(enum wl_shm_format fmt,
-        int width, int height, int stride, void **data_out) {
-    
-    const int size = stride * height;
-
+struct wl_buffer *create_shm_buffer(struct wl_shm *shm,
+                                    enum wl_shm_format format, int width,
+                                    int height, int stride, int size, void **data_out) {
     int fd = create_anonymous_file(size, "clightd-screen-wlr");
     if (fd < 0) {
         fprintf(stderr, "creating a buffer file for %d B failed: %m\n", size);
         return NULL;
     }
-
     void *data = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (data == MAP_FAILED) {
         fprintf(stderr, "mmap failed: %m\n");
         close(fd);
         return NULL;
     }
-
     struct wl_shm_pool *pool = wl_shm_create_pool(shm, fd, size);
     close(fd);
-    struct wl_buffer *buffer = wl_shm_pool_create_buffer(pool, 0, width, height,
-        stride, fmt);
+    struct wl_buffer *wl_buffer =
+        wl_shm_pool_create_buffer(pool, 0, width, height, stride, format);
     wl_shm_pool_destroy(pool);
-
     *data_out = data;
-    return buffer;
+    return wl_buffer;
 }
 
-static void frame_handle_buffer(void *tt, struct zwlr_screencopy_frame_v1 *frame, uint32_t format,
-    uint32_t width, uint32_t height, uint32_t stride) {
+static void frame_handle_buffer(void *data,
+                                struct zwlr_screencopy_frame_v1 *frame,
+                                enum wl_shm_format format, uint32_t width,
+                                uint32_t height, uint32_t stride) {
+    struct cl_output *output = (struct cl_output *)data;
+    output->frame->shm_format = format;
+    output->frame->width = width;
+    output->frame->height = height;
+    output->frame->stride = stride;
+    output->frame->size = stride * height;
+}
 
-    buffer.format = format;
-    buffer.width = width;
-    buffer.height = height;
-    buffer.stride = stride;
-    buffer.wl_buffer = create_shm_buffer(format, width, height, stride, &buffer.data);
-    if (buffer.wl_buffer == NULL) {
+static void frame_handle_ready(void *data,
+                               struct zwlr_screencopy_frame_v1 *frame,
+                               uint32_t tv_sec_hi, uint32_t tv_sec_low,
+                               uint32_t tv_nsec) {
+    struct cl_output *output = (struct cl_output *)data;
+    ++output->frame->copy_done;
+}
+
+static void frame_handle_failed(void *data,
+                                struct zwlr_screencopy_frame_v1 *frame) {
+    struct cl_output *output = (struct cl_output *)data;
+    fprintf(stderr, "Failed to copy frame\n");
+    ++output->frame->copy_err;
+}
+
+static void frame_handle_buffer_done(void *data,
+                                     struct zwlr_screencopy_frame_v1 *frame) {
+    struct cl_output *output = (struct cl_output *)data;
+    struct cl_buffer *buffer = calloc(1, sizeof(struct cl_buffer));
+    buffer->wl_buffer = create_shm_buffer(
+        output->display->shm, output->frame->shm_format, output->frame->width,
+        output->frame->height, output->frame->stride, output->frame->size,
+        &buffer->shm_data);
+    if (buffer->wl_buffer == NULL) {
         fprintf(stderr, "failed to create buffer\n");
-        buffer_copy_err = true;
+        ++output->frame->copy_err;
     } else {
-        zwlr_screencopy_frame_v1_copy(frame, buffer.wl_buffer);
+        output->buffer = buffer;
+        zwlr_screencopy_frame_v1_copy(frame, output->buffer->wl_buffer);
     }
 }
 
-static void frame_handle_flags(void*tt, struct zwlr_screencopy_frame_v1 *frame, uint32_t flags) {
-    buffer.y_invert = flags & ZWLR_SCREENCOPY_FRAME_V1_FLAGS_Y_INVERT;
-}
+static const struct zwlr_screencopy_frame_v1_listener
+    screencopy_frame_listener = {
+        .buffer = frame_handle_buffer,
+        .flags = noop,
+        .ready = frame_handle_ready,
+        .failed = frame_handle_failed,
+        .buffer_done = frame_handle_buffer_done,
+        .linux_dmabuf = noop,
+};
 
-static void frame_handle_ready(void *tt, struct zwlr_screencopy_frame_v1 *frame,
-    uint32_t tv_sec_hi, uint32_t tv_sec_low, uint32_t tv_nsec) {
-    buffer_copy_done = true;
-}
+static void output_handle_name(void *data, struct wl_output *wl_output,
+                               const char *name) {
+    struct cl_output *output = (struct cl_output *)data;
+    if (output->name != NULL)
+        free(output->name);
+    output->name = strdup(name);
+};
 
-static void frame_handle_failed(void *tt, struct zwlr_screencopy_frame_v1 *frame) {
-    fprintf(stderr, "failed to copy frame\n");
-    buffer_copy_err = true;
-}
+static const struct wl_output_listener wl_output_listener = {
+    .name = output_handle_name,
+    .geometry = noop,
+    .mode = noop,
+    .scale = noop,
+    .description = noop,
+    .done = noop,
+};
 
 static void handle_global(void *data, struct wl_registry *registry,
-        uint32_t name, const char *interface, uint32_t version) {
-
-    // we just use first output
-    if (strcmp(interface, wl_output_interface.name) == 0 && !output) {
-        output = wl_registry_bind(registry, name, &wl_output_interface, 1);
-    }
-    else if (strcmp(interface, wl_shm_interface.name) == 0) {
-        shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
-    }
-    else if (strcmp(interface, zwlr_screencopy_manager_v1_interface.name) == 0) {
-        screencopy_manager = wl_registry_bind(registry, name, &zwlr_screencopy_manager_v1_interface, 2);
+                          uint32_t name, const char *interface,
+                          uint32_t version) {
+    struct cl_display *display = (struct cl_display *)data;
+    struct cl_output *output = calloc(1, sizeof(struct cl_output));
+    output->display = display;
+    if (strcmp(interface, wl_output_interface.name) == 0) {
+        output->wl_output =
+            wl_registry_bind(registry, name, &wl_output_interface, 4);
+        wl_output_add_listener(output->wl_output, &wl_output_listener, output);
+        output->name = NULL;
+        wl_list_insert(&display->outputs, &output->link);
+    } else if (strcmp(interface, wl_shm_interface.name) == 0) {
+        display->shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
+    } else if (strcmp(interface, zwlr_screencopy_manager_v1_interface.name) ==
+               0) {
+        display->screencopy_manager = wl_registry_bind(
+            registry, name, &zwlr_screencopy_manager_v1_interface, 3);
     }
 }
 
-static void handle_global_remove(void *data, struct wl_registry *registry, uint32_t name) {
-    
+static const struct wl_registry_listener registry_listener = {
+    .global = handle_global,
+    .global_remove = noop,
+};
+
+static void wl_cleanup(struct cl_display *display) {
+    struct cl_output *output;
+    struct cl_output *tmp_output;
+    wl_list_for_each_safe(output, tmp_output, &display->outputs, link) {
+        output->frame->copy_done = false;
+        output->frame->copy_err = false;
+        if (output->screencopy_frame != NULL) {
+            zwlr_screencopy_frame_v1_destroy(output->screencopy_frame);
+        }
+        if (output->buffer->shm_data) {
+            munmap(output->buffer->shm_data, output->frame->size);
+        }
+        if (output->buffer->wl_buffer) {
+            wl_buffer_destroy(output->buffer->wl_buffer);
+        }
+        free(output->buffer);
+        wl_output_destroy(output->wl_output);
+        wl_list_remove(&output->link);
+        free(output->name);
+        free(output);
+    }
+    if (display->wl_registry) {
+        wl_registry_destroy(display->wl_registry);
+    }
+    if (display->screencopy_manager) {
+        zwlr_screencopy_manager_v1_destroy(display->screencopy_manager);
+    }
 }
 
-static void dtor(void) {
-    buffer_copy_done = false;
-    buffer_copy_err = false;
-    
-    /* Free everything */
-    if (buffer.wl_buffer) {
-        wl_buffer_destroy(buffer.wl_buffer);
-        buffer.wl_buffer = NULL;
+static int get_frame_brightness(const char *id, const char *env) {
+    struct cl_display display = {};
+    struct cl_output *output;
+    int ret = 0;
+
+    display.wl_display = fetch_wl_display(id, env);
+
+    if (display.wl_display == NULL) {
+        fprintf(stderr, "display error\n");
+        ret = WRONG_PLUGIN;
+        goto err;
     }
-    if (buffer.data) {
-        munmap(buffer.data, (size_t)buffer.height * buffer.stride);
-        buffer.data = NULL;
+    wl_list_init(&display.outputs);
+
+    display.wl_registry = wl_display_get_registry(display.wl_display);
+    wl_registry_add_listener(display.wl_registry, &registry_listener, &display);
+    wl_display_roundtrip(display.wl_display);
+    if (display.shm == NULL) {
+        fprintf(stderr, "Compositor is missing wl_shm\n");
+        ret = COMPOSITOR_NO_PROTOCOL;
+        goto err;
     }
-    if (output) {
-        wl_output_destroy(output);
-        output = NULL;
+    if (display.screencopy_manager == NULL) {
+        fprintf(stderr, "Compositor is screencopy manager\n");
+        ret = COMPOSITOR_NO_PROTOCOL;
+        goto err;
     }
-     if (registry) {
-        wl_registry_destroy(registry);
+    if (wl_list_empty(&display.outputs)) {
+        fprintf(stderr, "No outputs available\n");
+        ret = UNSUPPORTED;
+        goto err;
     }
-    if (frame) {
-        zwlr_screencopy_frame_v1_destroy(frame);
+    int sum = 0;
+    wl_list_for_each(output, &display.outputs, link) {
+        struct cl_frame *frame = calloc(1, sizeof(struct cl_frame));
+        output->frame = frame;
+        output->screencopy_frame = zwlr_screencopy_manager_v1_capture_output(
+            display.screencopy_manager, 0, output->wl_output);
+        zwlr_screencopy_frame_v1_add_listener(
+            output->screencopy_frame, &screencopy_frame_listener, output);
+
+        while (!output->frame->copy_done && !output->frame->copy_err &&
+               wl_display_dispatch(display.wl_display) != -1) {
+            // This space is intentionally left blank
+        }
+        if (output->frame->copy_done) {
+            output->frame->brightness = rgb_frame_brightness(
+                output->buffer->shm_data, output->frame->width,
+                output->frame->height, output->frame->stride);
+            sum += output->frame->brightness;
+        }
     }
-    if (shm) {
-        wl_shm_destroy(shm);
+    if (sum > 0) {
+        sum = sum / wl_list_length(&display.outputs);
     }
-    if (screencopy_manager) {
-        zwlr_screencopy_manager_v1_destroy(screencopy_manager);
+err:
+    wl_cleanup(&display);
+    if (ret != 0) {
+        return ret;
     }
-     // NOTE: dpy is disconnected on program exit to workaround
+    // NOTE: dpy is disconnected on program exit to workaround
     // gamma protocol limitation that resets gamma as soon as display is disconnected.
     // See wl_utils.c
+    return sum;
 }
