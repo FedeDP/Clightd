@@ -13,6 +13,9 @@ typedef struct {
     char *env;
 } wl_info;
 
+void noop() {
+}
+
 static void wl_info_dtor(void *data);
 
 static map_t *wl_map;

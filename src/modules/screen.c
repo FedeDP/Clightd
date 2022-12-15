@@ -105,7 +105,10 @@ int rgb_frame_brightness(const uint8_t *data, const int width, const int height,
     r = (double)r / area;
     g = (double)g / area;
     b = (double)b / area;
-    return 0.299 * r + 0.587 * g + 0.114 * b;
+    /* return 0.299 * r + 0.587 * g + 0.114 * b; */
+    /* https://en.wikipedia.org/wiki/Rec._709#luma_coefficients */
+    /* https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.709-6-201506-I!!PDF-E.pdf */
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
 static int method_getbrightness(sd_bus_message* m, void* userdata, sd_bus_error* ret_error) {

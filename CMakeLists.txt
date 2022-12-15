@@ -96,7 +96,14 @@ endmacro()
 
 optional_dep(GAMMA "x11;xrandr;libdrm;wayland-client" "Gamma correction" protocol/wlr-gamma-control-unstable-v1.xml src/modules/gamma_plugins)
 optional_dep(DPMS "x11;xext;libdrm;wayland-client" "DPMS" protocol/org_kde_kwin_dpms.xml src/modules/dpms_plugins)
-optional_dep(SCREEN "x11" "screen emitted brightness" protocol/wlr-screencopy-unstable-v1.xml src/modules/screen_plugins)
+# I'm not sure how to include the protocols with the current macros you
+# have. In simpler words, it would be useful to include the
+# wlr-output-management-unstable-v1 protocol for all wayland modules.
+optional_dep(SCREEN "x11;wayland-client" "screen emitted brightness" protocol/wlr-output-management-unstable-v1.xml src/modules/screen_plugins)
+# These protocols are necesary only for the SCREEN module
+optional_dep(SCREEN "x11;wayland-client" "screen emitted brightness" protocol/linux-dmabuf-unstable-v1.xml src/modules/screen_plugins)
+optional_dep(SCREEN "x11;wayland-client" "screen emitted brightness" protocol/wlr-export-dmabuf-unstable-v1.xml src/modules/screen_plugins)
+optional_dep(SCREEN "x11;wayland-client" "screen emitted brightness" protocol/wlr-screencopy-unstable-v1.xml src/modules/screen_plugins)
 optional_dep(DDC "ddcutil>=0.9.5" "external monitor backlight")
 optional_dep(YOCTOLIGHT "libusb-1.0" "Yoctolight usb als devices support")
 optional_dep(PIPEWIRE "libpipewire-0.3" "Enable pipewire camera sensor support")
