@@ -43,6 +43,13 @@ static int validate(const char **id, const char *env, void **priv_data) {
     return ret;
 }
 
+static double get_connector_br(drmModeConnectorPtr p) {
+    char drm_name[32];
+    const char *conn_type_name = drmModeGetConnectorTypeName(p->connector_type);
+    snprintf(drm_name, sizeof(drm_name), "%s-%u", conn_type_name ? conn_type_name : "Unknown", p->connector_type_id);
+    return fetch_gamma_brightness(drm_name);
+}
+
 static int set(void *priv_data, const int temp) {
     drm_gamma_priv *priv = (drm_gamma_priv *)priv_data;
     
@@ -54,7 +61,6 @@ static int set(void *priv_data, const int temp) {
         goto end;
     }
     
-    char drm_name[32];
     for (int i = 0; i < priv->res->count_connectors && !ret; i++) {
         drmModeConnectorPtr p = drmModeGetConnector(priv->fd, priv->res->connectors[i]);
         if (!p || p->connection != DRM_MODE_CONNECTED) {
@@ -63,10 +69,7 @@ static int set(void *priv_data, const int temp) {
             }
             continue;
         }
-
-        const char *conn_type_name = drmModeGetConnectorTypeName(p->connector_type);
-        snprintf(drm_name, sizeof(drm_name), "%s-%u", conn_type_name, p->connector_type_id);
-        const double br = fetch_gamma_brightness(drm_name);
+        const double br = get_connector_br(p);
         for (int j = 0; j < p->count_encoders; j++) {
             drmModeEncoderPtr enc = drmModeGetEncoder(priv->fd, p->encoders[j]);
             if (!enc) {
@@ -119,9 +122,7 @@ static int get(void *priv_data) {
             }
             continue;
         }
-        const char *conn_type_name = drmModeGetConnectorTypeName(p->connector_type);
-        snprintf(drm_name, sizeof(drm_name), "%s-%u", conn_type_name, p->connector_type_id);
-        const double br = fetch_gamma_brightness(drm_name);
+        const double br = get_connector_br(p);
         drmModeEncoderPtr enc = drmModeGetEncoder(priv->fd, p->encoders[0]);
         if (!enc) {
             drmModeFreeConnector(p);
