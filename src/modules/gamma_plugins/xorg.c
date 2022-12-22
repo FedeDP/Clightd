@@ -4,6 +4,8 @@
 #include "xorg_utils.h"
 #include <X11/extensions/Xrandr.h>
 
+#define XORG_DRM_MAP_ENV          "CLIGHTD_XORG_TO_DRM"
+
 typedef struct {
     Display *dpy;
     XRRScreenResources *res;
@@ -32,6 +34,37 @@ static int validate(const char **id, const char *env, void **priv_data) {
     return ret;
 }
 
+static double get_output_br(XRROutputInfo *info) {
+    /*
+     * Sometimes Xorg output name differs from
+     * /sys/class/drm node
+     * Eg: drm node is called HDMI-A-1 but xorg sees HDMI-A-0 :/
+     */
+    const char *to_drm_mapper = getenv(XORG_DRM_MAP_ENV);
+    if (to_drm_mapper) {
+        char map[1024];
+        snprintf(map, sizeof(map), "%s", to_drm_mapper);
+        char *s = strtok(map, ",");
+        while (s) {
+            char *val = strchr(s, ':');
+            if (val && strlen(val) > 0) {
+                *val = '\0';
+                val++;
+            } else {
+                fprintf(stderr, "Wrong %s format: %s\n", XORG_DRM_MAP_ENV, s);
+                goto err;
+            }
+            if (strcmp(s, info->name) == 0) {
+                return fetch_gamma_brightness(val);
+            }
+            s = strtok(NULL, ",");
+        }
+    }
+
+err:
+    return fetch_gamma_brightness(info->name);
+}
+
 static int set(void *priv_data, const int temp) {
     xorg_gamma_priv *priv = (xorg_gamma_priv *)priv_data;
     
@@ -44,8 +77,7 @@ static int set(void *priv_data, const int temp) {
             }
             continue;
         }
-        // TODO wtf /sys/class/drm node is called HDMI-A-1 but xorg sees HDMI-A-0 :/
-        const double br = fetch_gamma_brightness(info->name);
+        const double br = get_output_br(info);
         for (int j = 0; j < info->ncrtc; j++) {
             const int crtcxid = info->crtcs[j];
             const int size = XRRGetCrtcGammaSize(priv->dpy, crtcxid);
@@ -73,7 +105,7 @@ static int get(void *priv_data) {
                 }
                 continue;
             }
-            const double br = fetch_gamma_brightness(info->name);
+            const double br = get_output_br(info);
             XRRCrtcGamma *crtc_gamma = XRRGetCrtcGamma(priv->dpy, info->crtcs[0]);
             const int size = crtc_gamma->size;
             const int g = (65535.0 * (size - 1) / size) / 255;
