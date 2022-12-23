@@ -19,6 +19,9 @@
 ### Generic
 - [ ] Drop is_smooth options for gamma
 - [ ] avoid returning boolean where it does not make sense
+- [ ] port CI to gh actions
+
+## 6.1
 
 ### Pipewire
 - [ ] Check pipewire 0.3.60 v4l2 changes 

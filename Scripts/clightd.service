@@ -15,6 +15,15 @@ User=root
 Environment=CLIGHTD_BL_VCP=0x10
 # Default pipewire runtime dir watched by Clightd
 Environment=CLIGHTD_PIPEWIRE_RUNTIME_DIR=/run/user/1000/
+# Default value for emulated backlight support, for screen that do not support
+# DDC protocol, Clightd will use {xorg,wl,drm} emulation (like xrandr tool)
+Environment=CLIGHTD_BL_EMULATED=1
+# Some Xorg output name do not match 1:1 with drm nodes.
+# Clightd internally relies on drm nodes,
+# therefore, you can set the env variable to a comma-separated list
+# of XorgName->drmNodeName mapping, like:
+# CLIGHTD_XORG_TO_DRM=HDMI-A-0:HDMI-A-1,HDMI-A-4:HDMI-A-7
+Environment=CLIGHTD_XORG_TO_DRM=
 ExecStart=@CMAKE_INSTALL_FULL_LIBEXECDIR@/clightd
 Restart=on-failure
 RestartSec=5
