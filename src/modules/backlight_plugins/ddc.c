@@ -35,6 +35,10 @@ static void load_env(void) {
         emulated_backlight_enabled = strtol(getenv(BL_EMULATED_ENV), NULL, 10);
         printf("Overridden default emulated backlight mode: %d.\n", emulated_backlight_enabled);
     }
+#ifndef GAMMA_PRESENT
+    printf("Gamma was not built in. Force-disable emulated backlight support.\n");
+    emulated_backlight_enabled = false;
+#endif
     return;
 }
 

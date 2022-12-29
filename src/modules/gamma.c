@@ -244,12 +244,11 @@ void fill_gamma_table(uint16_t *r, uint16_t *g, uint16_t *b, double br, uint32_t
 }
 
 void store_gamma_brightness(const char *id, double brightness) {
-    if (!gamma_brightness) {
-        return;
-    }
     double *b = malloc(sizeof(double));
     *b = brightness;
-    map_put(gamma_brightness, id, b);
+    if (map_put(gamma_brightness, id, b) != 0) {
+        free(b);
+    }
 }
 
 double fetch_gamma_brightness(const char *id) {

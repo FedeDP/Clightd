@@ -1,9 +1,6 @@
-## 6.0
+## 5.8
 
 ### Backlight
-- [x] Drop old backlight API
-- [x] Move Backlight2 to Backlight
-- [x] Drop {Lower,Raise,Set}All from clightd polkit policy
 - [x] Add support for brightness emulation through gamma 
 - - [x] Xorg: fix naming differing from /sys/class/drm one... :/
 - - [x] drm
@@ -15,6 +12,13 @@
 - [x] fix gamma.Set was not setting gamma on all screens for Xorg
 - [x] Add an env variable to disable emulated backlight, similar to BL_VCP_ENV
 - [x] Check all /sys/class/drm/cardX available, not just card0!
+
+## 6.0 (api break)
+
+### Backlight
+- [ ] Drop old backlight API
+- [ ] Move Backlight2 to Backlight
+- [ ] Drop {Lower,Raise,Set}All from clightd polkit policy
 
 ### Generic
 - [ ] Drop is_smooth options for gamma
