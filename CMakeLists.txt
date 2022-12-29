@@ -15,7 +15,7 @@ execute_process(
 )
 
 # Create program target
-file(GLOB SOURCES src/*.c src/utils/*.c src/modules/*.c src/modules/sensors/*.c)
+file(GLOB SOURCES src/*.c src/utils/*.c src/modules/*.c src/modules/sensors/*.c src/modules/backlight_plugins/*.c)
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 target_include_directories(${PROJECT_NAME} PRIVATE

@@ -4,14 +4,14 @@
 - [x] Drop old backlight API
 - [x] Move Backlight2 to Backlight
 - [x] Drop {Lower,Raise,Set}All from clightd polkit policy
-- [ ] Add support for brightness emulation through gamma 
+- [x] Add support for brightness emulation through gamma 
 - - [x] Xorg: fix naming differing from /sys/class/drm one... :/
 - - [x] drm
 - - [x] wl
 - [x] Fix xorg gamma Get (account for known brightness!)
 - [ ] Document CLIGHTD_XORG_TO_DRM env variable!
-- [ ] Split backlight in plugins: sysfs/ddc/emulated (xrandr or wlrandr or drm(?)) Init,set,get api
-- [ ] only build the new features if required libs are present, just like we do for gamma
+- [x] Split backlight in plugins: sysfs/ddc (xrandr or wlrandr or drm(?)) Init,set,get api
+- [x] only build the new features if required libs are present, just like we do for gamma
 - [x] fix gamma.Set was not setting gamma on all screens for Xorg
 - [x] Add an env variable to disable emulated backlight, similar to BL_VCP_ENV
 - [x] Check all /sys/class/drm/cardX available, not just card0!
