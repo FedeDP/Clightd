@@ -1,7 +1,5 @@
-# Clightd
+# Clightd [![CI Build](https://github.com/FedeDP/clightd/actions/workflows/ci.yaml/badge.svg)](https://github.com/FedeDP/clightd/actions/workflows/ci.yaml) [![CodeQL](https://github.com/FedeDP/clightd/actions/workflows/codeql.yaml/badge.svg)](https://github.com/FedeDP/clightd/actions/workflows/codeql.yaml)
 
-[![CI Build](https://github.com/FedeDP/clightd/actions/workflows/ci.yaml/badge.svg)](https://github.com/FedeDP/clightd/actions/workflows/ci.yaml)
-[![CodeQL](https://github.com/FedeDP/clightd/actions/workflows/codeql.yaml/badge.svg)](https://github.com/FedeDP/clightd/actions/workflows/codeql.yaml)  
 [![Packaging status](https://repology.org/badge/vertical-allrepos/clightd.svg)](https://repology.org/project/clightd/versions)
 
 Clightd is a bus interface that lets you easily set/get screen brightness, gamma temperature and display dpms state.  
