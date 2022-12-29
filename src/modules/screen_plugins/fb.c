@@ -47,7 +47,7 @@ static int get_frame_brightness(const char *id, const char *env) {
     
     fprintf(stderr, "Fb resolution: %ix%i depth %i.\n", width, height, bitdepth);
     
-    const size_t buf_size = height * stride;
+    const size_t buf_size = (size_t)height * stride;
 
     if (line_length < width) {
         fprintf(stderr, "Line length cannot be smaller than width");
