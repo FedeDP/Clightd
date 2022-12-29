@@ -1,56 +1,21 @@
 #include <polkit.h>
-#include <udev.h>
 #include <bus_utils.h>
 #include <math.h>
 #include <module/map.h>
-#include <linux/fb.h>
-#include <gamma.h>
-
-#define BL_SUBSYSTEM        "backlight"
-#define DRM_SUBSYSTEM       "drm"
-
-typedef struct {
-    double target_pct;
-    double step;
-    unsigned int wait;
-} smooth_params_t;
-
-typedef struct {
-    smooth_params_t params;
-    int fd;
-} smooth_t;
-
-typedef struct bl {
-    int is_internal;
-    int is_ddc;
-    void *dev; // differs between struct udev_device (internal devices) and DDCA_Display_Ref for external ones
-    int max; // cached device max backlight value
-    char obj_path[100];
-    const char *sn;
-    sd_bus_slot *slot;
-    smooth_t *smooth; // when != NULL -> smoothing
-    uint64_t cookie;
-    int (*set)(struct bl *b, int value);
-    double (*get)(struct bl *b);
-} bl_t;
+#include "backlight.h"
 
 /* Device manager */
 static void stop_smooth(bl_t *bl);
 static void bl_dtor(void *data);
-static int store_internal_device(struct udev_device *dev, void *userdata);
-static void store_external_devices(void);
 
 /* Getters */
-static double get_internal_backlight(bl_t *bl);
 map_ret_code get_backlight(void *userdata, const char *key, void *data);
 
 /* Setters */
-static int set_internal_backlight(bl_t *bl, int value);
 static int set_backlight_value(bl_t *bl, double *target_pct, double smooth_step);
 static map_ret_code set_backlight(void *userdata, const char *key, void *data);
 
 /* Helper methods */
-static void emit_signals(bl_t *bl, double pct);
 static void sanitize_target_step(double *target_pct, double *smooth_step);
 static double next_backlight_pct(bl_t *bl, double *target_pct, double smooth_step);
 static inline bool is_smooth(smooth_params_t *params);
@@ -61,10 +26,9 @@ static int method_getbrightness(sd_bus_message *m, void *userdata, sd_bus_error 
 static int method_raisebrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 static int method_lowerbrightness(sd_bus_message *m, void *userdata, sd_bus_error *ret_error);
 
-static map_t *bls;
-static struct udev_monitor *bl_mon, *drm_mon;
-static uint64_t curr_cookie;
+map_t *bls;
 static int verse;
+static bl_plugin *plugins[BL_NUM];
 
 static const char object_path[] = "/org/clightd/clightd/Backlight";
 static const char bus_interface[] = "org.clightd.clightd.Backlight.Server";
@@ -88,220 +52,12 @@ static const sd_bus_vtable vtable[] = {
     SD_BUS_PROPERTY("Max", "i", NULL, offsetof(bl_t, max), SD_BUS_VTABLE_PROPERTY_CONST),
     SD_BUS_PROPERTY("Internal", "b", NULL, offsetof(bl_t, is_internal), SD_BUS_VTABLE_PROPERTY_CONST),
     SD_BUS_PROPERTY("DDC", "b", NULL, offsetof(bl_t, is_ddc), SD_BUS_VTABLE_PROPERTY_CONST),
+    SD_BUS_PROPERTY("Emulated", "b", NULL, offsetof(bl_t, is_emulated), SD_BUS_VTABLE_PROPERTY_CONST),
     SD_BUS_SIGNAL("Changed", "d", 0),
     SD_BUS_VTABLE_END
 };
 
 MODULE("BACKLIGHT");
-
-#ifdef DDC_PRESENT
-
-    #include <ddcutil_c_api.h>
-    #include <ddcutil_macros.h>
-    #include <glob.h>
-
-    #define ID_MAX_LEN 32
-    #define STR(x) _STR(x)
-    #define _STR(x) #x
-
-    #define BL_VCP_ENV          "CLIGHTD_BL_VCP"
-    #define BL_EMULATED_ENV     "CLIGHTD_BL_EMULATED"
-
-    /* Default value */
-    static DDCA_Vcp_Feature_Code br_code = 0x10;
-    static bool emulated_backlight_enabled = true;
-
-    static void bl_load_env(void) {
-        if (getenv(BL_VCP_ENV)) {
-            br_code = strtol(getenv(BL_VCP_ENV), NULL, 16);
-            m_log("Overridden default vcp code: 0x%x\n", br_code);
-        }
-        if (getenv(BL_EMULATED_ENV)) {
-            emulated_backlight_enabled = strtol(getenv(BL_EMULATED_ENV), NULL, 10);
-            m_log("Overridden default emulated backlight mode: %d.\n", emulated_backlight_enabled);
-        }
-    }
-
-    static void get_ddc_id(char *id, const DDCA_Display_Info *dinfo) {
-        if ((dinfo->sn[0] == '\0') || !strcasecmp(dinfo->sn, "Unspecified")) {
-            switch(dinfo->path.io_mode) {
-                case DDCA_IO_I2C:
-                    snprintf(id, ID_MAX_LEN, "/dev/i2c-%d", dinfo->path.path.i2c_busno);
-                    break;
-                case DDCA_IO_USB:
-                    snprintf(id, ID_MAX_LEN, "/dev/usb/hiddev%d", dinfo->path.path.hiddev_devno);
-                    break;
-                default:
-                    snprintf(id, ID_MAX_LEN, "%d", dinfo->dispno);
-                    break;
-            }
-        } else {
-            strncpy(id, dinfo->sn, ID_MAX_LEN);
-        }
-    }
-
-    static int set_ddc_backlight(bl_t *bl, int value) {
-        int ret = -1;
-        DDCA_Display_Handle dh = NULL;
-        if (!ddca_open_display2(bl->dev, false, &dh)) {
-            DDCA_Vcp_Feature_Code specific_br_code;
-            char specific_br_env[64];
-            snprintf(specific_br_env, sizeof(specific_br_env), BL_VCP_ENV"_%s", bl->sn);
-            if (getenv(specific_br_env)) {
-                specific_br_code = strtol(getenv(specific_br_env), NULL, 16);
-            } else {
-                specific_br_code = br_code;
-            }
-            int8_t new_sh = (value >> 8) & 0xff;
-            int8_t new_sl = value & 0xff;
-            ret = ddca_set_non_table_vcp_value(dh, specific_br_code, new_sh, new_sl);
-            ddca_close_display(dh);
-        }
-        return ret;
-    }
-
-    static double get_ddc_backlight(bl_t *bl) {
-        double value = 0.0;
-        DDCA_Display_Handle dh = NULL;
-        if (ddca_open_display2(bl->dev, false, &dh) == 0) {
-            DDCA_Any_Vcp_Value *valrec = NULL;
-            if (!ddca_get_any_vcp_value_using_explicit_type(dh, br_code, DDCA_NON_TABLE_VCP_VALUE, &valrec)) {
-                value = (double)VALREC_CUR_VAL(valrec) / bl->max;
-                ddca_free_any_vcp_value(valrec);
-            }
-            ddca_close_display(dh);
-        }
-        return value;
-    }
-
-    static void get_emulated_id(char *id, int i2c_node) {
-        glob_t gl = {0};
-        if (glob("/sys/class/drm/card*-*", GLOB_NOSORT | GLOB_ERR, NULL, &gl) == 0) {
-            for (int i = 0; i < gl.gl_pathc; i++) {
-                char path[PATH_MAX + 1];
-                snprintf(path, sizeof(path), "%s/ddc/i2c-dev/i2c-%d", gl.gl_pathv[i], i2c_node);
-                if (access(path, F_OK) == 0) {
-                    sscanf(gl.gl_pathv[i], "/sys/class/drm/card%*d-%"STR(ID_MAX_LEN)"s", id);
-                    break;
-                }
-            }
-            globfree(&gl);
-        }
-    }
-
-    static int set_emulated_backlight(bl_t *bl, int value) {
-        store_gamma_brightness(bl->sn, (double)value / bl->max);
-        return refresh_gamma();
-    }
-    
-    static double get_emulated_backlight(bl_t *bl) {
-        return fetch_gamma_brightness(bl->sn);
-    }
-    
-    static void add_new_external_display(const char *id, DDCA_Display_Info *dinfo, DDCA_Any_Vcp_Value *valrec) {
-        bl_t *d = map_get(bls, id);
-        if (!d) {
-            d = calloc(1, sizeof(bl_t));
-            if (d) {
-                d->is_internal = false;
-                d->dev = dinfo->dref;
-                d->sn = strdup(id);
-                d->cookie = curr_cookie;
-                
-                if (valrec != NULL) {
-                    d->is_ddc = true;
-                    d->max = VALREC_MAX_VAL(valrec);
-                    d->set = set_ddc_backlight;
-                    d->get = get_ddc_backlight;
-                } else {
-                    d->max = 100; // perc
-                    d->set = set_emulated_backlight;
-                    d->get = get_emulated_backlight;
-                }
-                make_valid_obj_path(d->obj_path, sizeof(d->obj_path), object_path, d->sn);
-                int r = sd_bus_add_object_vtable(bus, &d->slot, d->obj_path, bus_interface, vtable, d);
-                if (r < 0) {
-                    m_log("Failed to add object vtable on path '%s': %d\n", d->obj_path, r);
-                    bl_dtor(d);
-                } else {
-                    map_put(bls, d->sn, d);
-                    /* Not on first load */
-                    if (d->cookie > 0) {
-                        sd_bus_emit_object_added(bus, d->obj_path);
-                    }
-                }
-            }
-        } else {
-            // Update cookie and dref
-            d->cookie = curr_cookie;
-            d->dev = dinfo->dref;
-        }
-    }
-
-    static void store_external_devices(void) {
-        DDCA_Display_Info_List *dlist = NULL;
-        ddca_get_display_info_list2(true, &dlist);
-        if (!dlist) {
-            return;
-        }
-        for (int ndx = 0; ndx < dlist->ct; ndx++) {
-            DDCA_Display_Info *dinfo = &dlist->info[ndx];
-            DDCA_Display_Ref dref = dinfo->dref;
-            DDCA_Display_Handle dh = NULL;
-            if (ddca_open_display2(dref, false, &dh)) {
-                continue;
-            }
-            DDCA_Any_Vcp_Value *valrec;
-            char id[ID_MAX_LEN];
-            int ret = ddca_get_any_vcp_value_using_explicit_type(dh, br_code, DDCA_NON_TABLE_VCP_VALUE, &valrec);
-            if (ret == 0) {
-                get_ddc_id(id, dinfo);
-                add_new_external_display(id, dinfo, valrec);
-                ddca_free_any_vcp_value(valrec);
-            } else if (emulated_backlight_enabled && strlen(dinfo->model_name)) {
-                // Laptop internal displays have got empty model name; skip them.
-                get_emulated_id(id, dinfo->path.path.i2c_busno);
-                add_new_external_display(id, dinfo, NULL);
-            }
-            ddca_close_display(dh);
-        }
-        ddca_free_display_info_list(dlist);
-    }
-
-#else
-
-    static void store_external_devices(void) { }
-
-#endif
-
-#if DDCUTIL_VMAJOR >= 1 && DDCUTIL_VMINOR >= 2
-
-    static void update_external_devices(void) {
-        /*
-         * Algo: increment current cookie,
-         * then rededect all displays.
-         * Then, store any new external monitor with new cookie,
-         * or update cookie and dref for still existent ones.
-         * Finally, remove any non-existent monitor 
-         * (look for external monitors whose cookie is != of current cookie)
-         */
-        curr_cookie++;
-        ddca_redetect_displays();
-        store_external_devices();
-        for (map_itr_t *itr = map_itr_new(bls); itr; itr = map_itr_next(itr)) {
-            bl_t *d = map_itr_get_data(itr);
-            if (!d->is_internal && d->cookie != curr_cookie) {
-                sd_bus_emit_object_removed(bus, d->obj_path);
-                map_itr_remove(itr);
-            }
-        }
-    }
-
-#else
-
-    static void update_external_devices(void) { }
-
-#endif
 
 static void module_pre_start(void) {
 
@@ -316,9 +72,6 @@ static bool evaluate(void) {
 }
 
 static void init(void) {
-#ifdef DDC_PRESENT
-    bl_load_env();
-#endif
     bls = map_new(false, bl_dtor);
     sd_bus_add_object_manager(bus, NULL, object_path);
     int r = sd_bus_add_object_vtable(bus,
@@ -332,18 +85,16 @@ static void init(void) {
     }
     
     // Store and create internal devices object paths
-    udev_devices_foreach(BL_SUBSYSTEM, NULL, store_internal_device, NULL);
-
-    // Store and create external devices object paths
-    store_external_devices();
-    
-    // Register udev monitor for new internal devices
-    int fd = init_udev_monitor(BL_SUBSYSTEM, &bl_mon);
-    m_register_fd(fd, false, NULL);
-    
-    // Register udev monitor for external devices
-    fd = init_udev_monitor(DRM_SUBSYSTEM, &drm_mon);
-    m_register_fd(fd, false, NULL);
+    for (int i = 0; i < BL_NUM; i++) {
+        if (plugins[i]) {
+            plugins[i]->load_env();
+            plugins[i]->load_devices();
+            int fd = plugins[i]->get_monitor();
+            if (fd != -1) {
+                m_register_fd(fd, false, plugins[i]);
+            }
+        }
+    }
 }
 
 /* 
@@ -354,11 +105,14 @@ static void receive(const msg_t *msg, const void *userdata) {
     uint64_t t;
 
     if (!msg->is_pubsub) {
-        if (msg->fd_msg->userptr) {
+        const void *ptr = msg->fd_msg->userptr;
+        if (ptr != plugins[SYSFS] &&
+            ptr != plugins[DDC]) {
+
             /* From smooth client */
-            bl_t *bl = (bl_t *)msg->fd_msg->userptr;
+            bl_t *bl = (bl_t *)ptr;
             read(bl->smooth->fd, &t, sizeof(uint64_t));
-                        
+
             int ret = set_backlight_value(bl, &bl->smooth->params.target_pct, bl->smooth->params.step);
             if (ret != 0) {
                 m_log("failed to set backlight for %s\n", bl->sn);
@@ -373,54 +127,19 @@ static void receive(const msg_t *msg, const void *userdata) {
                 stop_smooth(bl);
             }
         } else {
-            /* From udev monitor, consume! */
-            struct udev_device *dev = udev_monitor_receive_device(bl_mon);
-            if (dev) {
-                // Ok, the event was from internal monitor
-                const char *id = udev_device_get_sysname(dev);
-                const char *action = udev_device_get_action(dev);
-                if (action) {
-                    bl_t *bl = map_get(bls, id);
-                    if (!strcmp(action, UDEV_ACTION_CHANGE) && bl) {
-                        // Load cached value
-                        int old_bl_value = atoi(udev_device_get_sysattr_value(bl->dev, "brightness"));
-                        /* Keep our device ref in sync! */
-                        udev_device_unref(bl->dev);
-                        bl->dev = udev_device_ref(dev);
-                        
-                        int val = atoi(udev_device_get_sysattr_value(dev, "brightness"));
-                        if (val != old_bl_value) {
-                            const double pct = (double)val / bl->max;
-                            emit_signals(bl, pct);
-                        }
-                    } else if (!strcmp(action, UDEV_ACTION_ADD) && !bl) {
-                        if (store_internal_device(dev, &bl) != 0) {
-                            m_log("failed to store new device.\n");
-                        } else {
-                            sd_bus_emit_object_added(bus, bl->obj_path);
-                        }
-                    } else if (!strcmp(action, UDEV_ACTION_RM) && bl) {
-                        sd_bus_emit_object_removed(bus, bl->obj_path);
-                        map_remove(bls, id);
-                    }
-                }
-                udev_device_unref(dev);
-            } else {
-                dev = udev_monitor_receive_device(drm_mon);
-                if (dev) {
-                    // The event was from external monitor!
-                    update_external_devices();
-                    udev_device_unref(dev);
-                }
-            }
+            bl_plugin *pl = (bl_plugin *)ptr;
+            pl->receive();
         }
     }
 }
 
 static void destroy(void) {
+    for (int i = 0; i < BL_NUM; i++) {
+        if (plugins[i]) {
+            plugins[i]->dtor();
+        }
+    }
     map_free(bls);
-    udev_monitor_unref(bl_mon);
-    udev_monitor_unref(drm_mon);
 }
 
 static void stop_smooth(bl_t *bl) {
@@ -433,70 +152,73 @@ static void stop_smooth(bl_t *bl) {
 
 static void bl_dtor(void *data) {
     bl_t *bl = (bl_t *)data;
+    sd_bus_emit_object_removed(bus, bl->obj_path);
     sd_bus_slot_unref(bl->slot);
-    if (bl->is_internal) {
-        udev_device_unref(bl->dev);
-    } else if (!bl->is_ddc) {
-        clean_gamma_brightness(bl->sn);
-    }
+    bl->plugin->free_device(bl->dev);
     stop_smooth(bl);
     free((void *)bl->sn);
     free(bl);
 }
 
-static int store_internal_device(struct udev_device *dev, void *userdata) {
-    int ret = -ENOMEM;
-    const int max = atoi(udev_device_get_sysattr_value(dev, "max_brightness"));
-    const char *id = udev_device_get_sysname(dev);
-    bl_t *d = calloc(1, sizeof(bl_t));
-    if (d) {
-        d->is_internal = true;
-        d->dev = udev_device_ref(dev);
-        d->max = max;
-        d->sn = strdup(id);
-        d->set = set_internal_backlight;
-        d->get = get_internal_backlight;
-        // Unused. But receive() callback expects brightness value to be cached
-        udev_device_get_sysattr_value(dev, "brightness");
-        make_valid_obj_path(d->obj_path, sizeof(d->obj_path), object_path, d->sn);
-        ret = sd_bus_add_object_vtable(bus, &d->slot, d->obj_path, bus_interface, vtable, d);
-        if (ret < 0) {
-            m_log("Failed to add object vtable on path '%s': %d\n", d->obj_path, ret);
-            bl_dtor(d);
+/** backlight.h API **/
+void bl_register_new(bl_plugin *plugin) {
+    const char *plugins_names[] = {
+        #define X(name, val) #name,
+        _BL_PLUGINS
+        #undef X
+    };
+    
+    int i;
+    for (i = 0; i < BL_NUM; i++) {
+        if (strcasestr(plugins_names[i], plugin->name)) {
+            break;
+        }
+    }
+    
+    if (i < BL_NUM) {
+        plugins[i] = plugin;
+        printf("Registered '%s' bl plugin.\n", plugin->name);
+    } else {
+        printf("Bl plugin '%s' not recognized. Not registering.\n", plugin->name);
+    }
+}
+
+int store_device(bl_t *bl, enum backlight_plugins plenum) {
+    bl->plugin = plugins[plenum];
+    make_valid_obj_path(bl->obj_path, sizeof(bl->obj_path), object_path, bl->sn);
+    int ret = sd_bus_add_object_vtable(bus, &bl->slot, bl->obj_path, bus_interface, vtable, bl);
+    if (ret < 0) {
+        m_log("Failed to add object vtable on path '%s': %d\n", bl->obj_path, ret);
+        bl_dtor(bl);
+    } else {
+        ret = map_put(bls, bl->sn, bl);
+        if (ret != 0){
+            m_log("Failed to store new device.\n");
         } else {
-            ret = map_put(bls, d->sn, d);
-            if (ret == 0 && userdata) {
-                bl_t **bltmp = (bl_t **)userdata;
-                *bltmp = d;
-            }
+            sd_bus_emit_object_added(bus, bl->obj_path);
         }
     }
     return ret;
 }
 
-static double get_internal_backlight(bl_t *bl) {
-    int val = atoi(udev_device_get_sysattr_value(bl->dev, "brightness"));
-    return (double)val / bl->max;
+void emit_signals(bl_t *bl, double pct) {
+    sd_bus_emit_signal(bus, object_path, main_interface, "Changed", "sd", bl->sn, pct);
+    sd_bus_emit_signal(bus, bl->obj_path, bus_interface, "Changed", "d", pct);
 }
+/** Backlight.h API **/
 
 map_ret_code get_backlight(void *userdata, const char *key, void *data) {
     bl_t *bl = (bl_t *)data;
     double *val = (double *)userdata;
-    *val = bl->get(bl);
+    *val = (double)bl->plugin->get(bl) / bl->max;
     return MAP_OK;
-}
-
-static int set_internal_backlight(bl_t *bl, int value) {
-    char val[15] = {0};
-    snprintf(val, sizeof(val) - 1, "%d", value);
-    return udev_device_set_sysattr_value(bl->dev, "brightness", val);
 }
 
 /* Set a target_pct eventually computing smooth step */
 static int set_backlight_value(bl_t *bl, double *target_pct, double smooth_step) {
     const double next_pct = next_backlight_pct(bl, target_pct, smooth_step);
     const int value = (int)round(bl->max * next_pct);
-    int ret = bl->set(bl, value);
+    int ret = bl->plugin->set(bl, value);
     if (ret == 0) {
         /*
          * For external monitor:
@@ -539,11 +261,6 @@ static map_ret_code set_backlight(void *userdata, const char *key, void *data) {
         return MAP_OK;
     }
     return MAP_ERR;
-}
-
-static void emit_signals(bl_t *bl, double pct) {
-    sd_bus_emit_signal(bus, object_path, main_interface, "Changed", "sd", bl->sn, pct);
-    sd_bus_emit_signal(bus, bl->obj_path, bus_interface, "Changed", "d", pct);
 }
 
 static void sanitize_target_step(double *target_pct, double *smooth_step) {
