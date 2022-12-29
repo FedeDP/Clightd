@@ -94,13 +94,25 @@ macro(optional_dep name modules description)
     endif()
 endmacro()
 
-optional_dep(GAMMA "x11;xrandr;libdrm>=2.4.112;wayland-client" "Gamma correction" protocol/wlr-gamma-control-unstable-v1.xml src/modules/gamma_plugins)
+optional_dep(GAMMA "x11;xrandr;libdrm;wayland-client" "Gamma correction" protocol/wlr-gamma-control-unstable-v1.xml src/modules/gamma_plugins)
 optional_dep(DPMS "x11;xext;libdrm;wayland-client" "DPMS" protocol/org_kde_kwin_dpms.xml src/modules/dpms_plugins)
 optional_dep(SCREEN "x11" "screen emitted brightness" protocol/wlr-screencopy-unstable-v1.xml src/modules/screen_plugins)
 optional_dep(SCREEN "x11" "screen emitted brightness" protocol/wlr-output-management-unstable-v1.xml src/modules/screen_plugins)
 optional_dep(DDC "ddcutil>=0.9.5" "external monitor backlight")
 optional_dep(YOCTOLIGHT "libusb-1.0" "Yoctolight usb als devices support")
 optional_dep(PIPEWIRE "libpipewire-0.3" "Enable pipewire camera sensor support")
+
+# Add libdrm versions macros in any case, quietly
+pkg_check_modules(LIBDRM QUIET libdrm)
+if(LIBDRM_FOUND)
+    string(REPLACE "." ";" VERSION_LIST ${LIBDRM_VERSION})
+    list(GET VERSION_LIST 0 LIBDRM_VERSION_MAJ)
+    list(GET VERSION_LIST 1 LIBDRM_VERSION_MIN)
+    list(GET VERSION_LIST 2 LIBDRM_VERSION_PATCH)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE LIBDRM_VERSION_MAJ=${LIBDRM_VERSION_MAJ})
+    target_compile_definitions(${PROJECT_NAME} PRIVATE LIBDRM_VERSION_MIN=${LIBDRM_VERSION_MIN})
+    target_compile_definitions(${PROJECT_NAME} PRIVATE LIBDRM_VERSION_PATCH=${LIBDRM_VERSION_PATCH})
+endif()
 
 # Convert ld flag list from list to space separated string.
 string(REPLACE ";" " " COMBINED_LDFLAGS "${COMBINED_LDFLAGS}")
