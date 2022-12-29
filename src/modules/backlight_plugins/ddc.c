@@ -147,7 +147,12 @@ static void add_new_external_display(const char *id, DDCA_Display_Info *dinfo, D
                 d->max = 100; // perc
                 d->is_emulated = true;
             }
-            store_device(d, DDC);
+            if (store_device(d, DDC) == 0) {
+                /* Not on first load */
+                if (d->cookie > 0) {
+                    sd_bus_emit_object_added(bus, d->obj_path);
+                }
+            }
         }
     } else {
         // Update cookie and dref
@@ -205,6 +210,7 @@ static void update_external_devices(void) {
     for (map_itr_t *itr = map_itr_new(bls); itr; itr = map_itr_next(itr)) {
         bl_t *d = map_itr_get_data(itr);
         if (!d->is_internal && d->cookie != curr_cookie) {
+            sd_bus_emit_object_removed(bus, d->obj_path);
             map_itr_remove(itr);
         }
     }

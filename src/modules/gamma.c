@@ -435,4 +435,11 @@ static int start_client(gamma_client *cl, int temp, bool is_smooth, unsigned int
     return map_put(clients, cl->display, cl);
 }
 
+#else
+
+void store_gamma_brightness(const char *id, double brightness) { }
+double fetch_gamma_brightness(const char *id) { return 1.0; }
+void clean_gamma_brightness(const char *id) { }
+int refresh_gamma(void) { }
+
 #endif
