@@ -286,6 +286,7 @@ static double next_backlight_pct(bl_t *bl, double *target_pct, double smooth_ste
     double curr_pct = 0.0;
     get_backlight(&curr_pct, NULL, bl);
     
+    /* Manage Raise/Lower */
     if (verse != 0) {
         *target_pct = curr_pct + (verse * *target_pct);
         sanitize_target_step(target_pct, &smooth_step);

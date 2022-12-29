@@ -243,15 +243,29 @@ void fill_gamma_table(uint16_t *r, uint16_t *g, uint16_t *b, double br, uint32_t
     }
 }
 
-void store_gamma_brightness(const char *id, double brightness) {
+int set_gamma_brightness(const char *id, double brightness) {
+    int error;
+    /* 
+     * Fetch the client before storing the gamma brightness:
+     * fetch_client internally calls plugin->get(), 
+     * therefore leading to wrong plugin->current_temp
+     * being reported if we set gamma backlight before.
+     */
+    gamma_client *sc = fetch_client(NULL, "", "", &error);
+    if (!sc) {
+        return error;
+    }
     double *b = malloc(sizeof(double));
     *b = brightness;
-    if (map_put(gamma_brightness, id, b) != 0) {
+    error = map_put(gamma_brightness, id, b);
+    if (error != 0) {
         free(b);
+        return error;
     }
+    return start_client(sc, sc->current_temp, false, 0, 0);
 }
 
-double fetch_gamma_brightness(const char *id) {
+double get_gamma_brightness(const char *id) {
     double *b = map_get(gamma_brightness, id);
     if (!b) {
         return 1.0;
@@ -259,21 +273,20 @@ double fetch_gamma_brightness(const char *id) {
     return *b;
 }
 
-void clean_gamma_brightness(const char *id) {
-    map_remove(gamma_brightness, id);
-}
-
-/* Utility function to refresh gamma levels. */
-int refresh_gamma(void) {
+int clean_gamma_brightness(const char *id) {
     int error;
-    gamma_client *sc = map_get(clients, NULL);
-    if (!sc) {
-        sc = fetch_client(NULL, "", "", &error);
-    }
+    /* 
+    * Fetch the client before deleting the gamma brightness:
+    * fetch_client internally calls plugin->get(), 
+    * therefore leading to wrong plugin->current_temp
+    * being reported if we delete gamma backlight before.
+    */
+    gamma_client *sc = fetch_client(NULL, "", "", &error);
+    map_remove(gamma_brightness, id);
     if (sc) {
         return start_client(sc, sc->current_temp, false, 0, 0);
     }
-    return -ENOENT;
+    return error;
 }
 
 /** **/
@@ -392,8 +405,10 @@ static gamma_client *fetch_client(gamma_plugin *plugin, const char *display, con
         if (!plugin) {
             *err = WRONG_PLUGIN;
             for (int i = 0; i < GAMMA_NUM && *err == WRONG_PLUGIN; i++) {
-                plugin = plugins[i];
-                *err = plugin->validate(&cl->display, cl->env, &cl->priv);
+                if (plugins[i]) {
+                    plugin = plugins[i];
+                    *err = plugin->validate(&cl->display, cl->env, &cl->priv);
+                }
             }
         } else {
             *err = plugin->validate(&cl->display, cl->env, &cl->priv);
@@ -436,9 +451,8 @@ static int start_client(gamma_client *cl, int temp, bool is_smooth, unsigned int
 
 #else
 
-void store_gamma_brightness(const char *id, double brightness) { }
-double fetch_gamma_brightness(const char *id) { return 1.0; }
-void clean_gamma_brightness(const char *id) { }
-int refresh_gamma(void) { }
+int set_gamma_brightness(const char *id, double brightness) { }
+double get_gamma_brightness(const char *id) { return 1.0; }
+int clean_gamma_brightness(const char *id) { }
 
 #endif

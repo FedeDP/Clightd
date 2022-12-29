@@ -101,7 +101,7 @@ static double get_connector_br(drmModeConnectorPtr p) {
     char drm_name[32];
     const char *conn_type_name = drmModeGetConnectorTypeName(p->connector_type);
     snprintf(drm_name, sizeof(drm_name), "%s-%u", conn_type_name ? conn_type_name : "Unknown", p->connector_type_id);
-    return fetch_gamma_brightness(drm_name);
+    return get_gamma_brightness(drm_name);
 }
 
 static int set(void *priv_data, const int temp) {

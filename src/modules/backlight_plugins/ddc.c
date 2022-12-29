@@ -16,7 +16,7 @@
 
 static void add_new_external_display(const char *id, DDCA_Display_Info *dinfo, DDCA_Any_Vcp_Value *valrec);
 static void get_ddc_id(char *id, const DDCA_Display_Info *dinfo);
-static void get_emulated_id(char *id, int i2c_node);
+static int get_emulated_id(char *id, int i2c_node);
 static void update_external_devices(void);
 
 BACKLIGHT("DDC");
@@ -64,8 +64,9 @@ static void load_devices(void) {
             ddca_free_any_vcp_value(valrec);
         } else if (emulated_backlight_enabled && strlen(dinfo->model_name)) {
             // Laptop internal displays have got empty model name; skip them.
-            get_emulated_id(id, dinfo->path.path.i2c_busno);
-            add_new_external_display(id, dinfo, NULL);
+            if (get_emulated_id(id, dinfo->path.path.i2c_busno) == 0) {
+                add_new_external_display(id, dinfo, NULL);
+            }
         }
         ddca_close_display(dh);
     }
@@ -79,7 +80,6 @@ static int get_monitor(void) {
 static void receive(void) {
     struct udev_device *dev = udev_monitor_receive_device(drm_mon);
     if (dev) {
-        // The event was from external monitor!
         update_external_devices();
         udev_device_unref(dev);
     }
@@ -87,8 +87,7 @@ static void receive(void) {
 
 static int set(bl_t *dev, int value) {
     if (dev->is_emulated) {
-        store_gamma_brightness(dev->sn, (double)value / dev->max);
-        return refresh_gamma();
+        return set_gamma_brightness(dev->sn, (double)value / dev->max);
     }
     int ret = -1;
     DDCA_Display_Handle dh = NULL;
@@ -111,7 +110,7 @@ static int set(bl_t *dev, int value) {
 
 static int get(bl_t *dev) {
     if (dev->is_emulated) {
-        return fetch_gamma_brightness(dev->sn) * dev->max;
+        return get_gamma_brightness(dev->sn) * dev->max;
     }
     int value = 0;
     DDCA_Display_Handle dh = NULL;
@@ -183,7 +182,8 @@ static void get_ddc_id(char *id, const DDCA_Display_Info *dinfo) {
     }
 }
 
-static void get_emulated_id(char *id, int i2c_node) {
+static int get_emulated_id(char *id, int i2c_node) {
+    int ret = -ENOENT;
     glob_t gl = {0};
     if (glob("/sys/class/drm/card*-*", GLOB_NOSORT | GLOB_ERR, NULL, &gl) == 0) {
         for (int i = 0; i < gl.gl_pathc; i++) {
@@ -191,11 +191,13 @@ static void get_emulated_id(char *id, int i2c_node) {
             snprintf(path, sizeof(path), "%s/ddc/i2c-dev/i2c-%d", gl.gl_pathv[i], i2c_node);
             if (access(path, F_OK) == 0) {
                 sscanf(gl.gl_pathv[i], "/sys/class/drm/card%*d-%"STR(ID_MAX_LEN)"s", id);
+                ret = 0;
                 break;
             }
         }
         globfree(&gl);
     }
+    return ret;
 }
 
 static void update_external_devices(void) {
