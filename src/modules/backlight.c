@@ -1,7 +1,6 @@
 #include <polkit.h>
 #include <bus_utils.h>
 #include <math.h>
-#include <module/map.h>
 #include "backlight.h"
 
 /* Device manager */
