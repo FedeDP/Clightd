@@ -175,7 +175,7 @@ static void dtor(void) {
         buffer.wl_buffer = NULL;
     }
     if (buffer.data) {
-        munmap(buffer.data, buffer.height * buffer.stride);
+        munmap(buffer.data, (size_t)buffer.height * buffer.stride);
         buffer.data = NULL;
     }
     if (output) {

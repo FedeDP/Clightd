@@ -1,0 +1,52 @@
+name: CI Build
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  build-ubuntu-amd64:
+    name: build-ubuntu-amd64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Check out libmodule
+        uses: actions/checkout@v3
+        with:
+          repository: fededp/libmodule
+          ref: '5.0.1'
+          path: libmodule
+      - name: Install deps
+        run: |
+          sudo apt update
+          sudo apt install -y --no-install-recommends build-essential pkg-config cmake libsystemd-dev libxrandr-dev libxext-dev policykit-1 libpolkit-gobject-1-dev libjpeg-dev libusb-dev libwayland-dev libdrm-dev libddcutil-dev libusb-1.0-0-dev libudev-dev libpipewire-0.3-dev libdbus-1-dev
+      - name: Install libmodule
+        run: |
+          cd libmodule
+          mkdir build && cd build
+          cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_BUILD_TYPE="Release" ..
+          make
+          sudo make install
+      - name: Create build configurations
+        run: |
+          mkdir build build-no-gamma build-no-dpms build-no-ddc build-no-screen build-no-yoctolight build-no-pipewire build-no-extras
+          cd build && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_GAMMA=1 -DENABLE_DPMS=1 -DENABLE_DDC=1 -DENABLE_SCREEN=1 -DENABLE_YOCTOLIGHT=1 -DENABLE_PIPEWIRE=1 ..
+          cd ../build-no-gamma && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_DPMS=1 -DENABLE_DDC=1 -DENABLE_SCREEN=1 -DENABLE_YOCTOLIGHT=1 -DENABLE_PIPEWIRE=1 ..
+          cd ../build-no-dpms && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_GAMMA=1 -DENABLE_DDC=1 -DENABLE_SCREEN=1 -DENABLE_YOCTOLIGHT=1 -DENABLE_PIPEWIRE=1 ..
+          cd ../build-no-ddc && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_GAMMA=1 -DENABLE_DPMS=1 -DENABLE_SCREEN=1 -DENABLE_YOCTOLIGHT=1 -DENABLE_PIPEWIRE=1 ..
+          cd ../build-no-screen && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_GAMMA=1 -DENABLE_DPMS=1 -DENABLE_DDC=1 -DENABLE_YOCTOLIGHT=1 -DENABLE_PIPEWIRE=1 ..
+          cd ../build-no-yoctolight && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_GAMMA=1 -DENABLE_DPMS=1 -DENABLE_DDC=1 -DENABLE_SCREEN=1 -DENABLE_PIPEWIRE=1 ..
+          cd ../build-no-pipewire && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_GAMMA=1 -DENABLE_DPMS=1 -DENABLE_DDC=1 -DENABLE_SCREEN=1 -DENABLE_YOCTOLIGHT=1 ..
+          cd ../build-no-extras && cmake -DCMAKE_BUILD_TYPE=Debug ..
+      - name: Build
+        run: |
+          cd build && make
+          cd ../build-no-gamma && make
+          cd ../build-no-dpms && make
+          cd ../build-no-ddc && make
+          cd ../build-no-screen && make
+          cd ../build-no-yoctolight && make
+          cd ../build-no-pipewire && make
+          cd ../build-no-extras && make
