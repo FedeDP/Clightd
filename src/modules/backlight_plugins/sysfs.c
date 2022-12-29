@@ -43,8 +43,9 @@ static void receive(void) {
                     emit_signals(bl, pct);
                 }
             } else if (!strcmp(action, UDEV_ACTION_ADD) && !bl) {
-                store_internal_device(dev, NULL);
+                store_internal_device(dev, &bl);
             } else if (!strcmp(action, UDEV_ACTION_RM) && bl) {
+                sd_bus_emit_object_removed(bus, bl->obj_path);
                 map_remove(bls, id);
             }
         }
@@ -83,6 +84,10 @@ static int store_internal_device(struct udev_device *dev, void *userdata) {
         // Unused. But receive() callback expects brightness value to be cached
         udev_device_get_sysattr_value(dev, "brightness");
         ret = store_device(d, SYSFS);
+        if (ret == 0 && userdata != NULL) {
+            /* Not on first load (userdata != NULL only true when called by receive()) */
+            sd_bus_emit_object_added(bus, d->obj_path);
+        }
     }
     return ret;
 }

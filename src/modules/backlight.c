@@ -152,7 +152,6 @@ static void stop_smooth(bl_t *bl) {
 
 static void bl_dtor(void *data) {
     bl_t *bl = (bl_t *)data;
-    sd_bus_emit_object_removed(bus, bl->obj_path);
     sd_bus_slot_unref(bl->slot);
     bl->plugin->free_device(bl->dev);
     stop_smooth(bl);
@@ -194,8 +193,6 @@ int store_device(bl_t *bl, enum backlight_plugins plenum) {
         ret = map_put(bls, bl->sn, bl);
         if (ret != 0){
             m_log("Failed to store new device.\n");
-        } else {
-            sd_bus_emit_object_added(bus, bl->obj_path);
         }
     }
     return ret;
