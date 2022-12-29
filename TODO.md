@@ -13,6 +13,9 @@
 - [x] Add an env variable to disable emulated backlight, similar to BL_VCP_ENV
 - [x] Check all /sys/class/drm/cardX available, not just card0!
 
+### Generic
+- [x] port CI to gh actions
+
 ## 6.0 (api break)
 
 ### Backlight
@@ -23,7 +26,6 @@
 ### Generic
 - [ ] Drop is_smooth options for gamma
 - [ ] avoid returning boolean where it does not make sense
-- [ ] port CI to gh actions
 
 ## 6.1
 
