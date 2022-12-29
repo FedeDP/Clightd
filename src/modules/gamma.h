@@ -63,7 +63,6 @@ void fill_gamma_table(uint16_t *r, uint16_t *g, uint16_t *b, double br, uint32_t
  * Gamma brightness related (ie: emulated backlight). 
  * When gamma is not enabled, these APIs won't do anything
  */
-void store_gamma_brightness(const char *id, double brightness);
-double fetch_gamma_brightness(const char *id);
-void clean_gamma_brightness(const char *id);
-int refresh_gamma(void);
+int set_gamma_brightness(const char *id, double brightness);
+double get_gamma_brightness(const char *id);
+int clean_gamma_brightness(const char *id);

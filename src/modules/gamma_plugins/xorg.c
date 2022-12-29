@@ -55,14 +55,14 @@ static double get_output_br(XRROutputInfo *info) {
                 goto err;
             }
             if (strcmp(s, info->name) == 0) {
-                return fetch_gamma_brightness(val);
+                return get_gamma_brightness(val);
             }
             s = strtok(NULL, ",");
         }
     }
 
 err:
-    return fetch_gamma_brightness(info->name);
+    return get_gamma_brightness(info->name);
 }
 
 static int set(void *priv_data, const int temp) {

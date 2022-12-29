@@ -194,7 +194,7 @@ static int set(void *priv_data, const int temp) {
         uint16_t *g = output->table + output->ramp_size;
         uint16_t *b = output->table + 2 * output->ramp_size;
 
-        const double br = fetch_gamma_brightness(output->name);
+        const double br = get_gamma_brightness(output->name);
         fill_gamma_table(r, g, b, br, output->ramp_size, temp);
         zwlr_gamma_control_v1_set_gamma(output->gamma_control,
                                         output->table_fd);
