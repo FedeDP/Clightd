@@ -274,19 +274,7 @@ double get_gamma_brightness(const char *id) {
 }
 
 int clean_gamma_brightness(const char *id) {
-    int error;
-    /* 
-    * Fetch the client before deleting the gamma brightness:
-    * fetch_client internally calls plugin->get(), 
-    * therefore leading to wrong plugin->current_temp
-    * being reported if we delete gamma backlight before.
-    */
-    gamma_client *sc = fetch_client(NULL, "", "", &error);
-    map_remove(gamma_brightness, id);
-    if (sc) {
-        return start_client(sc, sc->current_temp, false, 0, 0);
-    }
-    return error;
+    return map_remove(gamma_brightness, id);
 }
 
 /** **/

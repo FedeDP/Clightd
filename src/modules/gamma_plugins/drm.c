@@ -165,8 +165,6 @@ static int get(void *priv_data) {
     drm_gamma_priv *priv = (drm_gamma_priv *)priv_data;
     
     int temp = -1;
-    
-    char drm_name[32];
     for (int i = 0; i < priv->res->count_connectors; i++) {
         drmModeConnectorPtr p = drmModeGetConnector(priv->fd, priv->res->connectors[i]);
         if (!p || (p->connection != DRM_MODE_CONNECTED && i < priv->res->count_connectors - 1)) {
