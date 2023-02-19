@@ -240,24 +240,25 @@ static int set_backlight_value(bl_t *bl, double *target_pct, double smooth_step)
 }
 
 static map_ret_code set_backlight(void *userdata, const char *key, void *data) {
-    smooth_params_t params = *((smooth_params_t *)userdata);
+    smooth_params_t *params = (smooth_params_t *)userdata;
     bl_t *bl = (bl_t *)data;
     
     stop_smooth(bl);
-    if (set_backlight_value(bl, &params.target_pct, params.step) == 0) {
-        if (is_smooth(&params)) {
+    // Force-reset step if we are not smoothing
+    if (set_backlight_value(bl, &params->target_pct, is_smooth(params) ? params->step : 0) == 0) {
+        if (is_smooth(params)) {
             bl->smooth = calloc(1, sizeof(smooth_t));
             if (bl->smooth) {
-                memcpy(&bl->smooth->params, &params, sizeof(smooth_params_t));
+                memcpy(&bl->smooth->params, params, sizeof(smooth_params_t));
                 
                 // set and start timer fd
                 bl->smooth->fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
                 m_register_fd(bl->smooth->fd, true, bl);
                 struct itimerspec timerValue = {{0}};
-                timerValue.it_value.tv_sec = params.wait / 1000;
-                timerValue.it_value.tv_nsec = 1000 * 1000 * (params.wait % 1000); // ms
-                timerValue.it_interval.tv_sec = params.wait / 1000;
-                timerValue.it_interval.tv_nsec = 1000 * 1000 * (params.wait % 1000); // ms
+                timerValue.it_value.tv_sec = params->wait / 1000;
+                timerValue.it_value.tv_nsec = 1000 * 1000 * (params->wait % 1000); // ms
+                timerValue.it_interval.tv_sec = params->wait / 1000;
+                timerValue.it_interval.tv_nsec = 1000 * 1000 * (params->wait % 1000); // ms
                 timerfd_settime(bl->smooth->fd, 0, &timerValue, NULL);
             }
         }
