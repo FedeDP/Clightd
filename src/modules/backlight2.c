@@ -157,7 +157,7 @@ static void stop_smooth(bl_t *bl) {
 static void bl_dtor(void *data) {
     bl_t *bl = (bl_t *)data;
     sd_bus_slot_unref(bl->slot);
-    bl->plugin->free_device(bl->dev);
+    bl->plugin->free_device(bl);
     stop_smooth(bl);
     free((void *)bl->sn);
     free(bl);
