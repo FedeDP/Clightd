@@ -123,33 +123,31 @@ static int set(void *priv_data, const int temp) {
             }
             continue;
         }
-        const double br = get_connector_br(p);
-        for (int j = 0; j < p->count_encoders; j++) {
-            drmModeEncoderPtr enc = drmModeGetEncoder(priv->fd, p->encoders[j]);
-            if (!enc) {
-                continue;
-            }
-            drmModeCrtc *crtc_info = drmModeGetCrtc(priv->fd, enc->crtc_id);
-            if (!crtc_info) {
-                drmModeFreeEncoder(enc);
-                continue;
-            }
-            int ramp_size = crtc_info->gamma_size;
-            uint16_t *r = calloc(ramp_size, sizeof(uint16_t));
-            uint16_t *g = calloc(ramp_size, sizeof(uint16_t));
-            uint16_t *b = calloc(ramp_size, sizeof(uint16_t));
-            fill_gamma_table(r, g, b, br, ramp_size, temp);
-            ret = drmModeCrtcSetGamma(priv->fd, enc->crtc_id, ramp_size, r, g, b);
-            if (ret) {
-                ret = -errno;
-                perror("drmModeCrtcSetGamma");
-            }
-            free(r);
-            free(g);
-            free(b);
-            drmModeFreeCrtc(crtc_info);
-            drmModeFreeEncoder(enc);
+        drmModeEncoderPtr enc = drmModeGetEncoder(priv->fd, p->encoder_id);
+        if (!enc) {
+            continue;
         }
+        drmModeCrtc *crtc_info = drmModeGetCrtc(priv->fd, enc->crtc_id);
+        if (!crtc_info) {
+            drmModeFreeEncoder(enc);
+            continue;
+        }
+        const double br = get_connector_br(p);
+        const int ramp_size = crtc_info->gamma_size;
+        uint16_t *r = calloc(ramp_size, sizeof(uint16_t));
+        uint16_t *g = calloc(ramp_size, sizeof(uint16_t));
+        uint16_t *b = calloc(ramp_size, sizeof(uint16_t));
+        fill_gamma_table(r, g, b, br, ramp_size, temp);
+        ret = drmModeCrtcSetGamma(priv->fd, enc->crtc_id, ramp_size, r, g, b);
+        if (ret) {
+            ret = -errno;
+            perror("drmModeCrtcSetGamma");
+        }
+        free(r);
+        free(g);
+        free(b);
+        drmModeFreeCrtc(crtc_info);
+        drmModeFreeEncoder(enc);
         drmModeFreeConnector(p);
     }
     
@@ -167,21 +165,19 @@ static int get(void *priv_data) {
     int temp = -1;
     for (int i = 0; i < priv->res->count_connectors; i++) {
         drmModeConnectorPtr p = drmModeGetConnector(priv->fd, priv->res->connectors[i]);
-        if (!p || (p->connection != DRM_MODE_CONNECTED && i < priv->res->count_connectors - 1)) {
-            // Skip output not connected if there is any others
+        if (!p || p->connection != DRM_MODE_CONNECTED) {
             if (p) {
                 drmModeFreeConnector(p);
             }
             continue;
         }
-        const double br = get_connector_br(p);
-        drmModeEncoderPtr enc = drmModeGetEncoder(priv->fd, p->encoders[0]);
+        drmModeEncoderPtr enc = drmModeGetEncoder(priv->fd, p->encoder_id);
         if (!enc) {
             drmModeFreeConnector(p);
             continue;
         }
         drmModeCrtc *crtc_info = drmModeGetCrtc(priv->fd, enc->crtc_id);
-        int ramp_size = crtc_info->gamma_size;
+        const int ramp_size = crtc_info->gamma_size;
         
         uint16_t *red = calloc(ramp_size, sizeof(uint16_t));
         uint16_t *green = calloc(ramp_size, sizeof(uint16_t));
@@ -191,6 +187,7 @@ static int get(void *priv_data) {
         if (r) {
             perror("drmModeCrtcSetGamma");
         } else {
+            const double br = get_connector_br(p);
             temp = get_temp(clamp(red[1] / br, 0, 255), clamp(blue[1] / br, 0, 255));
         }
         

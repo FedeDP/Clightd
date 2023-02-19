@@ -244,9 +244,10 @@ static map_ret_code set_backlight(void *userdata, const char *key, void *data) {
     bl_t *bl = (bl_t *)data;
     
     stop_smooth(bl);
-    // Force-reset step if we are not smoothing
-    if (set_backlight_value(bl, &params->target_pct, is_smooth(params) ? params->step : 0) == 0) {
-        if (is_smooth(params)) {
+    
+    const bool needs_smooth = is_smooth(params);
+    if (set_backlight_value(bl, &params->target_pct, needs_smooth ? params->step : 0) == 0) {
+        if (needs_smooth) {
             bl->smooth = calloc(1, sizeof(smooth_t));
             if (bl->smooth) {
                 memcpy(&bl->smooth->params, params, sizeof(smooth_params_t));
