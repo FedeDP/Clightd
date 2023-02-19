@@ -19,7 +19,7 @@ int bus_sender_fill_creds(sd_bus_message *m) {
             for (struct passwd *p = getpwent(); p; p = getpwent()) {
                 if (p->pw_uid == uid && p->pw_dir) {
                     snprintf(xauth_path, PATH_MAX, "%s/.Xauthority", p->pw_dir);
-                    ret = 0;;
+                    ret = 0;
                     break;
                 }
             }
