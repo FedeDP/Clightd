@@ -70,22 +70,19 @@ static int set(void *priv_data, const int temp) {
     
     for (int i = 0; i < priv->res->noutput; i++) {
         XRROutputInfo *info = XRRGetOutputInfo(priv->dpy, priv->res, priv->res->outputs[i]);
-        if (!info || info->connection != RR_Connected) {
-            // Skip output not connected
+        if (!info || info->crtc == 0 || info->connection != RR_Connected) {
             if (info) {
                 XRRFreeOutputInfo(info);
             }
             continue;
         }
         const double br = get_output_br(info);
-        for (int j = 0; j < info->ncrtc; j++) {
-            const int crtcxid = info->crtcs[j];
-            const int size = XRRGetCrtcGammaSize(priv->dpy, crtcxid);
-            XRRCrtcGamma *crtc_gamma = XRRAllocGamma(size);
-            fill_gamma_table(crtc_gamma->red, crtc_gamma->green, crtc_gamma->blue, br, size, temp);
-            XRRSetCrtcGamma(priv->dpy, crtcxid, crtc_gamma);
-            XFree(crtc_gamma);
-        }
+        const int crtcxid = info->crtc;
+        const int size = XRRGetCrtcGammaSize(priv->dpy, crtcxid);
+        XRRCrtcGamma *crtc_gamma = XRRAllocGamma(size);
+        fill_gamma_table(crtc_gamma->red, crtc_gamma->green, crtc_gamma->blue, br, size, temp);
+        XRRSetCrtcGamma(priv->dpy, crtcxid, crtc_gamma);
+        XFree(crtc_gamma);
         XRRFreeOutputInfo(info);
     }
     return 0;
@@ -98,18 +95,18 @@ static int get(void *priv_data) {
     if (priv->res && priv->res->ncrtc > 0) {
         for (int i = 0; i < priv->res->noutput; i++) {
             XRROutputInfo *info = XRRGetOutputInfo(priv->dpy, priv->res, priv->res->outputs[i]);
-            if (!info || (info->connection != RR_Connected && (i < priv->res->noutput - 1))) {
-                // Skip output not connected if there is any others
+            if (!info || info->crtc == 0 || info->connection != RR_Connected) {
                 if (info) {
                     XRRFreeOutputInfo(info);
                 }
                 continue;
             }
             const double br = get_output_br(info);
-            XRRCrtcGamma *crtc_gamma = XRRGetCrtcGamma(priv->dpy, info->crtcs[0]);
+            const int crtcxid = info->crtc;
+            XRRCrtcGamma *crtc_gamma = XRRGetCrtcGamma(priv->dpy, crtcxid);
             const int size = crtc_gamma->size;
             const int g = (65535.0 * (size - 1) / size) / 255;
-            temp = get_temp(clamp(crtc_gamma->red[size - 1] / g / br, 0, 255), clamp(crtc_gamma->blue[size - 1] / g / br, 0, 255));
+            temp = get_temp(clamp(crtc_gamma->red[size - 1] / (g * br), 0, 255), clamp(crtc_gamma->blue[size - 1] / (g * br), 0, 255));
             XFree(crtc_gamma);
             XRRFreeOutputInfo(info);
             break;
