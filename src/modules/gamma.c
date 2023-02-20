@@ -245,6 +245,7 @@ void fill_gamma_table(uint16_t *r, uint16_t *g, uint16_t *b, double br, uint32_t
 
 int set_gamma_brightness(const char *id, double brightness) {
     int error;
+    
     /* 
      * Fetch the client before storing the gamma brightness:
      * fetch_client internally calls plugin->get(), 
@@ -255,14 +256,20 @@ int set_gamma_brightness(const char *id, double brightness) {
     if (!sc) {
         return error;
     }
+    
     double *b = malloc(sizeof(double));
     *b = brightness;
     error = map_put(gamma_brightness, id, b);
     if (error != 0) {
         free(b);
-        return error;
+        goto end;
     }
-    return start_client(sc, sc->current_temp, false, 0, 0);
+    
+    error = sc->plugin->set(sc->priv, sc->current_temp);
+    
+end:
+    client_dtor(sc);
+    return error;
 }
 
 double get_gamma_brightness(const char *id) {
@@ -429,7 +436,7 @@ static int start_client(gamma_client *cl, int temp, bool is_smooth, unsigned int
         cl->fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
         m_register_fd(cl->fd, true, cl);
     }
-            
+    
     // start transitioning right now
     struct itimerspec timerValue = {{0}};
     timerValue.it_value.tv_nsec = 1;
