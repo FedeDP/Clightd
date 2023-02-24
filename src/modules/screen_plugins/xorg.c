@@ -23,7 +23,7 @@ static int get_frame_brightness(const char *id, const char *env) {
     Window root_window = XRootWindow(dpy, XDefaultScreen(dpy));
     XImage *ximage = XGetImage(dpy, root_window, x, y, w, h, AllPlanes, ZPixmap);
     if (ximage) {
-        ret = rgb_frame_brightness((const uint8_t *)ximage->data, ximage->width, ximage->height, ximage->width);
+        ret = rgb_frame_brightness((const uint8_t *)ximage->data, ximage->width, ximage->height, ximage->bytes_per_line);
         XDestroyImage(ximage);
     }
     XCloseDisplay(dpy);
