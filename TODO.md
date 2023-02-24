@@ -4,6 +4,10 @@
 ### Pipewire
 - [ ] Fix set_camera_setting() impl -> how to get current value? how to set a new value?
 
+### Screen
+- [x] fix `rgb_frame_brightness` impl
+- [x] fix xorg impl
+
 ## 6.x (api break release)
 
 ### Generic
