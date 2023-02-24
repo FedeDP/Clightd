@@ -92,10 +92,11 @@ int rgb_frame_brightness(const uint8_t *data, const int width, const int height,
     const int div = 8;
     const int wmax = (double)width / div;
     const int hmax = (double)height / div;
+    const int pixelsize = stride / width;
     for (int i = 0; i < wmax; i++) {
         for (int k = 0; k < hmax; k++) {
             /* obtain r,g,b components */
-            const uint8_t *p = data + (i * div + k * div * stride);
+            const uint8_t *p = data + (i * div * pixelsize + k * div * stride);
             r += p[2] & 0xFF;
             g += p[1] & 0xFF;
             b += p[0] & 0xFF;
