@@ -62,10 +62,12 @@ static void load_devices(void) {
             get_ddc_id(id, dinfo);
             add_new_external_display(id, dinfo, valrec);
             ddca_free_any_vcp_value(valrec);
-        } else if (emulated_backlight_enabled && strlen(dinfo->model_name)) {
-            // Laptop internal displays have got empty model name; skip them.
+        } else if (emulated_backlight_enabled && dinfo->path.io_mode == DDCA_IO_I2C) {
             if (get_emulated_id(id, dinfo->path.path.i2c_busno) == 0) {
-                add_new_external_display(id, dinfo, NULL);
+                // Skip internal laptop displays
+                if (!strcasestr(id, "eDP") && !strcasestr(id, "LVDS")) {
+                    add_new_external_display(id, dinfo, NULL);
+                }
             }
         }
         ddca_close_display(dh);
