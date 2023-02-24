@@ -13,8 +13,21 @@
 - [x] Add an env variable to disable emulated backlight, similar to BL_VCP_ENV
 - [x] Check all /sys/class/drm/cardX available, not just card0!
 
+### Screen
+- [x] fix `rgb_frame_brightness` impl
+- [x] fix xorg impl
+
 ### Generic
 - [x] port CI to gh actions
+
+## 5.x
+
+### Pipewire
+- [ ] Fix set_camera_setting() impl -> how to get current value? how to set a new value?
+- [ ] Check pipewire 0.3.60 v4l2 changes 
+
+### Backlight
+- [ ] Keep it up to date with possible ddcutil api changes
 
 ## 6.0 (api break)
 
@@ -26,19 +39,6 @@
 ### Generic
 - [ ] Drop is_smooth options for gamma
 - [ ] avoid returning boolean where it does not make sense
-
-## 6.1
-
-### Pipewire
-- [ ] Check pipewire 0.3.60 v4l2 changes 
-
-## 6.x
-
-### Backlight
-- [ ] Keep it up to date with possible ddcutil api changes
-
-### Pipewire
-- [ ] Fix set_camera_setting() impl -> how to get current value? how to set a new value?
 
 ## Ideas
 - [ ] follow ddcci kernel driver and in case, drop ddcutil and add the kernel driver as clightd opt-dep
