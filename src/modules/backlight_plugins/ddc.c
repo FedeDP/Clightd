@@ -11,7 +11,8 @@
 #define _STR(x) #x
 #define ID_MAX_LEN 32
 #define BL_VCP_ENV          "CLIGHTD_BL_VCP"
-#define BL_EMULATED_ENV     "CLIGHTD_BL_EMULATED"
+#define BL_DDC_ENV          "CLIGHTD_BL_DDC_ENABLED"
+#define BL_EMULATED_ENV     "CLIGHTD_BL_EMULATED_ENABLED"
 #define DRM_SUBSYSTEM       "drm"
 
 static void add_new_external_display(const char *id, DDCA_Display_Info *dinfo, DDCA_Any_Vcp_Value *valrec);
@@ -23,13 +24,18 @@ BACKLIGHT("DDC");
 
 static struct udev_monitor *drm_mon;
 static DDCA_Vcp_Feature_Code br_code = 0x10;
+static bool ddc_backlight_enabled = true;
 static bool emulated_backlight_enabled = true;
 static uint64_t curr_cookie;
 
-static void load_env(void) {
+static bool load_env(void) {
     if (getenv(BL_VCP_ENV)) {
         br_code = strtol(getenv(BL_VCP_ENV), NULL, 16);
         printf("Overridden default vcp code: 0x%x\n", br_code);
+    }
+    if (getenv(BL_DDC_ENV)) {
+        ddc_backlight_enabled = strtol(getenv(BL_DDC_ENV), NULL, 10);
+        printf("Overridden default DDC backlight mode: %d.\n", ddc_backlight_enabled);
     }
     if (getenv(BL_EMULATED_ENV)) {
         emulated_backlight_enabled = strtol(getenv(BL_EMULATED_ENV), NULL, 10);
@@ -39,7 +45,7 @@ static void load_env(void) {
     printf("Gamma was not built in. Force-disable emulated backlight support.\n");
     emulated_backlight_enabled = false;
 #endif
-    return;
+    return ddc_backlight_enabled || emulated_backlight_enabled;
 }
 
 static void load_devices(void) {
@@ -59,8 +65,10 @@ static void load_devices(void) {
         char id[ID_MAX_LEN];
         int ret = ddca_get_any_vcp_value_using_explicit_type(dh, br_code, DDCA_NON_TABLE_VCP_VALUE, &valrec);
         if (ret == 0) {
-            get_ddc_id(id, dinfo);
-            add_new_external_display(id, dinfo, valrec);
+            if (ddc_backlight_enabled) {
+                get_ddc_id(id, dinfo);
+                add_new_external_display(id, dinfo, valrec);
+            }
             ddca_free_any_vcp_value(valrec);
         } else if (emulated_backlight_enabled && dinfo->path.io_mode == DDCA_IO_I2C) {
             if (get_emulated_id(id, dinfo->path.path.i2c_busno) == 0) {

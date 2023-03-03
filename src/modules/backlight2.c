@@ -91,20 +91,20 @@ static void init(void) {
     // Store and create internal devices object paths
     for (int i = 0; i < BL_NUM; i++) {
         if (plugins[i]) {
-            plugins[i]->load_env();
-            plugins[i]->load_devices();
-            int fd = plugins[i]->get_monitor();
-            if (fd != -1) {
-                m_register_fd(fd, false, plugins[i]);
+            if (plugins[i]->load_env()) {
+                plugins[i]->load_devices();
+                int fd = plugins[i]->get_monitor();
+                if (fd != -1) {
+                    m_register_fd(fd, false, plugins[i]);
+                }
+            } else {
+                // load_env returned false. Disable plugin.
+                plugins[i] = NULL;
             }
         }
     }
 }
 
-/* 
- * Note that ddcutil does not yet support monitor plug/unplug, 
- * thus we are not able to runtime detect newly added/removed monitors.
- */
 static void receive(const msg_t *msg, const void *userdata) {
     uint64_t t;
 

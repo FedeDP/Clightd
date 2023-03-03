@@ -43,7 +43,7 @@ typedef struct bl {
 
 typedef struct _bl_plugin {
     const char *name;
-    void (*load_env)(void);
+    bool (*load_env)(void); // returns true to actually enable the plugin
     void (*load_devices)(void);
     int (*get_monitor)(void);
     void (*receive)(void);
@@ -54,7 +54,7 @@ typedef struct _bl_plugin {
 } bl_plugin;
 
 #define BACKLIGHT(name) \
-    static void load_env(void); \
+    static bool load_env(void); \
     static void load_devices(void); \
     static int get_monitor(void); \
     static void receive(void); \
