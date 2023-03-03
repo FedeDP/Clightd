@@ -6,12 +6,13 @@
 - - [x] drm
 - - [x] wl
 - [x] Fix xorg gamma Get (account for known brightness!)
-- [ ] Document CLIGHTD_XORG_TO_DRM env variable!
 - [x] Split backlight in plugins: sysfs/ddc (xrandr or wlrandr or drm(?)) Init,set,get api
 - [x] only build the new features if required libs are present, just like we do for gamma
 - [x] fix gamma.Set was not setting gamma on all screens for Xorg
 - [x] Add an env variable to disable emulated backlight, similar to BL_VCP_ENV
+- [x] add an env to disable ddc or sysfs too!
 - [x] Check all /sys/class/drm/cardX available, not just card0!
+- [ ] Document new env variables!
 
 ### Screen
 - [x] fix `rgb_frame_brightness` impl

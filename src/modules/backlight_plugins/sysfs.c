@@ -2,6 +2,7 @@
 #include <udev.h>
 
 #define BL_SUBSYSTEM        "backlight"
+#define BL_SYSFS_ENV        "CLIGHTD_BL_SYSFS_ENABLED"
 
 static int store_internal_device(struct udev_device *dev, void *userdata);
 
@@ -9,8 +10,13 @@ BACKLIGHT("Sysfs");
 
 static struct udev_monitor *bl_mon;
 
-static void load_env(void) {
-    return;
+static bool load_env(void) {
+    bool bl_backlight_enabled = true;
+    if (getenv(BL_SYSFS_ENV)) {
+        bl_backlight_enabled = strtol(getenv(BL_SYSFS_ENV), NULL, 10);
+        printf("Overridden default sysfs backlight mode: %d.\n", bl_backlight_enabled);
+    }
+    return bl_backlight_enabled;
 }
 
 static void load_devices(void) {
