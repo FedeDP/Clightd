@@ -1,12 +1,13 @@
-#include "wlr-output-power-management-unstable-v1-client-protocol.h"
+#include "org_kde_kwin_dpms-client-protocol.h"
 #include "wl_utils.h"
 #include "dpms.h"
 
 struct output {
     struct wl_output *wl_output;
-    struct zwlr_output_power_v1 *dpms_control;
+    struct org_kde_kwin_dpms *dpms_control;
+    uint32_t supported;
     uint32_t mode;
-    bool failed;
+    bool done;
     struct wl_list link;
 };
 
@@ -14,8 +15,9 @@ static void registry_handle_global(void *data, struct wl_registry *registry,
                                    uint32_t name, const char *interface, uint32_t version);
 static void registry_handle_global_remove(void *data,
                                           struct wl_registry *registry, uint32_t name);
-static void dpms_control_handle_mode(void *data, struct zwlr_output_power_v1 *zwlr_output_power_v1, uint32_t mode);
-static void dpms_control_handle_failed(void *data, struct zwlr_output_power_v1 *zwlr_output_power_v1);
+static void dpms_control_handle_supported(void *data, struct org_kde_kwin_dpms *org_kde_kwin_dpms, uint32_t supported);
+static void dpms_control_handle_mode(void *data, struct org_kde_kwin_dpms *org_kde_kwin_dpms, uint32_t mode);
+static void dpms_control_handle_done(void *data, struct org_kde_kwin_dpms *org_kde_kwin_dpms);
 
 static int wl_init(const char *display, const char *env);
 static void wl_deinit(void);
@@ -23,7 +25,7 @@ static void destroy_node(struct output *output);
 
 static struct wl_display *dpy;
 static struct wl_list outputs;
-static struct zwlr_output_power_manager_v1 *dpms_control_manager;
+static struct org_kde_kwin_dpms_manager *dpms_control_manager;
 static struct wl_registry *dpms_registry;
 
 static const struct wl_registry_listener registry_listener = {
@@ -31,12 +33,13 @@ static const struct wl_registry_listener registry_listener = {
     .global_remove = registry_handle_global_remove,
 };
 
-static const struct zwlr_output_power_v1_listener dpms_listener = {
-    .failed = dpms_control_handle_failed,
+static const struct org_kde_kwin_dpms_listener dpms_listener = {
+    .supported = dpms_control_handle_supported,
     .mode = dpms_control_handle_mode,
+    .done = dpms_control_handle_done,
 };
 
-DPMS("Wl");
+DPMS("KWin_wl");
 
 static void registry_handle_global(void *data, struct wl_registry *registry,
                                    uint32_t name, const char *interface, uint32_t version) {
@@ -44,8 +47,8 @@ static void registry_handle_global(void *data, struct wl_registry *registry,
         struct output *output = calloc(1, sizeof(struct output));
         output->wl_output = wl_registry_bind(registry, name, &wl_output_interface, 1);
         wl_list_insert(&outputs, &output->link);
-    } else if (strcmp(interface, zwlr_output_power_manager_v1_interface.name) == 0) {
-        dpms_control_manager = wl_registry_bind(registry, name, &zwlr_output_power_manager_v1_interface, 1);
+    } else if (strcmp(interface, org_kde_kwin_dpms_manager_interface.name) == 0) {
+        dpms_control_manager = wl_registry_bind(registry, name, &org_kde_kwin_dpms_manager_interface, 1);
     }
 }
 
@@ -54,14 +57,19 @@ static void registry_handle_global_remove(void *data,
     
 }
 
-static void dpms_control_handle_mode(void *data, struct zwlr_output_power_v1 *zwlr_output_power_v1, uint32_t mode) {
-    struct output *output = data;
-    output->mode = mode;
+static void dpms_control_handle_supported(void *data, struct org_kde_kwin_dpms *org_kde_kwin_dpms, uint32_t supported) {
+     struct output *output = data;
+     output->supported = supported;
 }
 
-static void dpms_control_handle_failed(void *data, struct zwlr_output_power_v1 *zwlr_output_power_v1) {
+static void dpms_control_handle_mode(void *data, struct org_kde_kwin_dpms *org_kde_kwin_dpms, uint32_t mode) {
     struct output *output = data;
-    output->failed = true;
+     output->mode = mode;
+}
+
+static void dpms_control_handle_done(void *data, struct org_kde_kwin_dpms *org_kde_kwin_dpms) {
+    struct output *output = data;
+    output->done = true;
 }
 
 static int wl_init(const char *display, const char *env) {
@@ -86,11 +94,11 @@ static int wl_init(const char *display, const char *env) {
     struct output *output;
     struct output *tmp_output;
     wl_list_for_each(output, &outputs, link) {
-        output->dpms_control = zwlr_output_power_manager_v1_get_output_power(dpms_control_manager, output->wl_output);
+        output->dpms_control = org_kde_kwin_dpms_manager_get(dpms_control_manager, output->wl_output);
         if (output->dpms_control) {
-            zwlr_output_power_v1_add_listener(output->dpms_control, &dpms_listener, output);
+            org_kde_kwin_dpms_add_listener(output->dpms_control, &dpms_listener, output);
         } else {
-            fprintf(stderr, "failed to receive wlr DPMS control manager\n");
+            fprintf(stderr, "failed to receive KWin DPMS control manager\n");
             ret = -errno;
             goto err;
         }
@@ -100,11 +108,11 @@ static int wl_init(const char *display, const char *env) {
      /* Check that all outputs were inited correctly */
     wl_list_for_each_safe(output, tmp_output, &outputs, link) {
         if (output->wl_output == NULL || output->dpms_control == NULL) {
-            fprintf(stderr, "failed to create wlr DPMS output\n");
+            fprintf(stderr, "failed to create KWin DPMS output\n");
             ret = -ENOMEM;
             break;
         }
-        if (output->failed) {
+        if (!output->supported) {
             wl_list_remove(&output->link);
             destroy_node(output);
         }
@@ -133,7 +141,7 @@ static void wl_deinit(void) {
         wl_registry_destroy(dpms_registry);
     }
     if (dpms_control_manager) {
-        zwlr_output_power_manager_v1_destroy(dpms_control_manager);
+        org_kde_kwin_dpms_manager_destroy(dpms_control_manager);
     }
     // NOTE: dpy is disconnected on program exit to workaround
     // gamma protocol limitation that resets gamma as soon as display is disconnected.
@@ -145,7 +153,7 @@ static void destroy_node(struct output *output) {
         wl_output_destroy(output->wl_output);
     }
     if (output->dpms_control) {
-        zwlr_output_power_v1_destroy(output->dpms_control);
+        org_kde_kwin_dpms_destroy(output->dpms_control);
     }
     free(output);
 }
@@ -169,7 +177,7 @@ static int set(const char **display, const char *env, int level) {
      if (ret == 0) {
         struct output *output;
         wl_list_for_each(output, &outputs, link) {
-            zwlr_output_power_v1_set_mode(output->dpms_control, level);
+            org_kde_kwin_dpms_set(output->dpms_control, level);
         }
         wl_display_roundtrip(dpy);
         wl_deinit();
