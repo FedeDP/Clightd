@@ -3,7 +3,8 @@
 #define _DPMS_PLUGINS \
     X(XORG, 0) \
     X(WL, 1) \
-    X(DRM, 2)
+    X(KWIN_WL, 2) \
+    X(DRM, 3)
 
 enum dpms_plugins { 
 #define X(name, val) name = val,

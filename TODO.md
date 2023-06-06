@@ -18,6 +18,12 @@
 - [x] fix `rgb_frame_brightness` impl
 - [x] fix xorg impl
 
+### Dpms
+- [x] implement wlroots DPMS protocol (wlr-output-power-management-unstable-v1.xml)
+- [x] give higher priority to wlroots protocol (in respect to kwin protocol)
+- [x] rename kwin protocol to `kwin_wl` 
+- [x] `wl` is instead wlroots (like all other plugins)
+
 ### Generic
 - [x] port CI to gh actions
 
