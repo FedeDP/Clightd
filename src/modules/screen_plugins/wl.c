@@ -1,6 +1,5 @@
 #include "screen.h"
 #include "wl_utils.h"
-#include "wlr-output-management-unstable-v1-client-protocol.h"
 #include "wlr-screencopy-unstable-v1-client-protocol.h"
 
 struct cl_display {
@@ -36,8 +35,7 @@ struct cl_output {
 
 SCREEN("Wl");
 
-void noop() {
-}
+void noop() {}
 
 struct wl_buffer *create_shm_buffer(struct wl_shm *shm,
                                     enum wl_shm_format format, int width,

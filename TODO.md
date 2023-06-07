@@ -24,10 +24,10 @@
 - [x] rename kwin protocol to `kwin_wl` 
 - [x] `wl` is instead wlroots (like all other plugins)
 - [x] fix KWin_wl
+- [ ] update wiki pages (new object path + wlroots as default under `Wl` obj path)
 
 ### Generic
 - [x] port CI to gh actions
-- [ ] download wayland protocols from https://wayland.app/protocols instead of embedding them?
 
 ## 5.x
 

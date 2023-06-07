@@ -100,7 +100,7 @@ endmacro()
 
 optional_dep(GAMMA "x11;xrandr;libdrm;wayland-client" "Gamma correction" src/modules/gamma_plugins protocol/wlr-gamma-control-unstable-v1.xml)
 optional_dep(DPMS "x11;xext;libdrm;wayland-client" "DPMS" src/modules/dpms_plugins protocol/org_kde_kwin_dpms.xml;protocol/wlr-output-power-management-unstable-v1.xml)
-optional_dep(SCREEN "x11" "screen emitted brightness" src/modules/screen_plugins protocol/wlr-screencopy-unstable-v1.xml;protocol/wlr-output-management-unstable-v1.xml )
+optional_dep(SCREEN "x11" "screen emitted brightness" src/modules/screen_plugins protocol/wlr-screencopy-unstable-v1.xml)
 optional_dep(DDC "ddcutil>=0.9.5" "external monitor backlight")
 optional_dep(YOCTOLIGHT "libusb-1.0" "Yoctolight usb als devices support")
 optional_dep(PIPEWIRE "libpipewire-0.3" "Enable pipewire camera sensor support")
