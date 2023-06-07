@@ -12,7 +12,7 @@
 - [x] Add an env variable to disable emulated backlight, similar to BL_VCP_ENV
 - [x] add an env to disable ddc or sysfs too!
 - [x] Check all /sys/class/drm/cardX available, not just card0!
-- [ ] Document new env variables!
+- [x] Document new env variables!
 
 ### Screen
 - [x] fix `rgb_frame_brightness` impl
@@ -24,7 +24,7 @@
 - [x] rename kwin protocol to `kwin_wl` 
 - [x] `wl` is instead wlroots (like all other plugins)
 - [x] fix KWin_wl
-- [ ] update wiki pages (new object path + wlroots as default under `Wl` obj path)
+- [x] update wiki pages (new object path + wlroots as default under `Wl` obj path)
 
 ### Generic
 - [x] port CI to gh actions
