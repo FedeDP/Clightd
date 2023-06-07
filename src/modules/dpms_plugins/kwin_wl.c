@@ -74,12 +74,11 @@ static void dpms_control_handle_done(void *data, struct org_kde_kwin_dpms *org_k
 
 static int wl_init(const char *display, const char *env) {
     int ret = 0;
-    struct wl_display *dpy = fetch_wl_display(display, env);
+    dpy = fetch_wl_display(display, env);
     if (dpy == NULL) {
         ret = WRONG_PLUGIN;
         return ret;
     }
-    
     wl_list_init(&outputs);
     dpms_registry = wl_display_get_registry(dpy);
     wl_registry_add_listener(dpms_registry, &registry_listener, NULL);
@@ -174,7 +173,7 @@ static int get(const char **display, const char *env) {
 
 static int set(const char **display, const char *env, int level) {
     int ret = wl_init(*display, env);
-     if (ret == 0) {
+    if (ret == 0) {
         struct output *output;
         wl_list_for_each(output, &outputs, link) {
             org_kde_kwin_dpms_set(output->dpms_control, level);

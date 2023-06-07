@@ -66,20 +66,19 @@ static void dpms_control_handle_failed(void *data, struct zwlr_output_power_v1 *
 
 static int wl_init(const char *display, const char *env) {
     int ret = 0;
-    struct wl_display *dpy = fetch_wl_display(display, env);
+    dpy = fetch_wl_display(display, env);
     if (dpy == NULL) {
         ret = WRONG_PLUGIN;
         return ret;
     }
-    
     wl_list_init(&outputs);
     dpms_registry = wl_display_get_registry(dpy);
     wl_registry_add_listener(dpms_registry, &registry_listener, NULL);
     wl_display_roundtrip(dpy);
 
      if (dpms_control_manager == NULL) {
-        fprintf(stderr, "compositor doesn't support org_kde_kwin_dpms\n");
-        ret = COMPOSITOR_NO_PROTOCOL;
+        fprintf(stderr, "compositor doesn't support wlr-output-power-management-unstable-v1\n");
+        ret = /*COMPOSITOR_NO_PROTOCOL*/ WRONG_PLUGIN; // Since we want DPMS to try kwin_wl afterwards
         goto err;
     }
 
@@ -156,7 +155,10 @@ static int get(const char **display, const char *env) {
         struct output *output;
          wl_list_for_each(output, &outputs, link) {
             // Only store first output mode
-            ret = output->mode;
+            // Negate the return because Clightd returns value
+            // is 0 ON, 1 OFF.
+            // See zwlr_output_power_v1_mode
+            ret = !output->mode;
             break;
         }
         wl_deinit();
@@ -166,10 +168,13 @@ static int get(const char **display, const char *env) {
 
 static int set(const char **display, const char *env, int level) {
     int ret = wl_init(*display, env);
-     if (ret == 0) {
+    if (ret == 0) {
         struct output *output;
         wl_list_for_each(output, &outputs, link) {
-            zwlr_output_power_v1_set_mode(output->dpms_control, level);
+            // Negate the level because Clightd uses value
+            // is 0 ON, 1 OFF.
+            // See zwlr_output_power_v1_mode
+            zwlr_output_power_v1_set_mode(output->dpms_control, !level);
         }
         wl_display_roundtrip(dpy);
         wl_deinit();

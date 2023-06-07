@@ -23,9 +23,11 @@
 - [x] give higher priority to wlroots protocol (in respect to kwin protocol)
 - [x] rename kwin protocol to `kwin_wl` 
 - [x] `wl` is instead wlroots (like all other plugins)
+- [x] fix KWin_wl
 
 ### Generic
 - [x] port CI to gh actions
+- [ ] download wayland protocols from https://wayland.app/protocols instead of embedding them?
 
 ## 5.x
 
