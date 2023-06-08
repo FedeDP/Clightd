@@ -18,8 +18,12 @@ static void get_first_matching_device(struct udev_device **dev, const char *subs
     udev_enumerate_add_match_subsystem(enumerate, subsystem);
     bool last_added =false;
     if (match) {
-        udev_enumerate_add_match_sysattr(enumerate, match->sysattr_key, match->sysattr_val);
-        udev_enumerate_add_match_property(enumerate, match->prop_key, match->prop_val);
+        if (match->sysattr_key) {
+            udev_enumerate_add_match_sysattr(enumerate, match->sysattr_key, match->sysattr_val);
+        }
+        if (match->prop_key) {
+            udev_enumerate_add_match_property(enumerate, match->prop_key, match->prop_val);
+        }
         last_added = match->last_added;
     }
     udev_enumerate_scan_devices(enumerate);
