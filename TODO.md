@@ -26,6 +26,10 @@
 - [x] fix KWin_wl
 - [x] update wiki pages (new object path + wlroots as default under `Wl` obj path)
 
+### Camera
+- [x] always prefer greater sysnum cameras (ie: external ones) when present (refs https://github.com/FedeDP/Clight/issues/241)
+- [x] properly enumerate filtering by correct `ID_V4L_CAPABILITIES` being available (ie: `:capture:`)
+
 ### Generic
 - [x] port CI to gh actions
 

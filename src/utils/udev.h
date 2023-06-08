@@ -4,6 +4,9 @@ typedef struct {
     const char *sysattr_key;
     const char *sysattr_val;
     const char *sysname;
+    const char *prop_key;
+    const char *prop_val;
+    bool last_added;
 } udev_match;
 
 int init_udev_monitor(const char *subsystem, struct udev_monitor **mon);

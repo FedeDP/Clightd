@@ -16,14 +16,39 @@ static void get_first_matching_device(struct udev_device **dev, const char *subs
                                       const udev_match *match) {
     struct udev_enumerate *enumerate = udev_enumerate_new(udev);
     udev_enumerate_add_match_subsystem(enumerate, subsystem);
+    bool last_added =false;
     if (match) {
         udev_enumerate_add_match_sysattr(enumerate, match->sysattr_key, match->sysattr_val);
+        udev_enumerate_add_match_property(enumerate, match->prop_key, match->prop_val);
+        last_added = match->last_added;
     }
     udev_enumerate_scan_devices(enumerate);
     struct udev_list_entry *devices = udev_enumerate_get_list_entry(enumerate);
     if (devices) {
-        const char *path = udev_list_entry_get_name(devices);
-        *dev = udev_device_new_from_syspath(udev, path);
+        if (!last_added) {
+            // Return first found
+            const char *path = udev_list_entry_get_name(devices);
+            *dev = udev_device_new_from_syspath(udev, path);
+        } else {
+            // Return last found, ie: the one with greatest index
+            *dev = NULL;
+            struct udev_list_entry *entry = NULL;
+            int max_sysnum = -1;
+            udev_list_entry_foreach(entry, devices) {
+                const char *path = udev_list_entry_get_name(entry);
+                struct udev_device *d = udev_device_new_from_syspath(udev, path);
+                int sysnum = atoi(udev_device_get_sysnum(d));
+                if (sysnum > max_sysnum) {
+                    if (*dev) {
+                        udev_device_unref(*dev);
+                    }
+                    *dev = d;
+                    max_sysnum = sysnum;
+                } else {
+                    udev_device_unref(d);
+                }
+            }
+        }
     }
     /* Free the enumerator object */
     udev_enumerate_unref(enumerate);

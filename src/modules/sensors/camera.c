@@ -7,6 +7,8 @@
 
 #define CAMERA_NAME                 "Camera"
 #define CAMERA_SUBSYSTEM            "video4linux"
+#define CAMERA_CAPTURE_PROP_NAME    "ID_V4L_CAPABILITIES"
+#define CAMERA_CAPTURE_PROP_VAL     ":capture:"
 
 struct buffer {
     uint8_t *start;
@@ -63,7 +65,11 @@ static bool validate_dev(void *dev) {
 }
 
 static void fetch_dev(const char *interface, void **dev) {
-    get_udev_device(interface, CAMERA_SUBSYSTEM, NULL, NULL, (struct udev_device **)dev);
+    // Note: we only filer cameras with capture prop val,
+    // and always start from greater sysnum (so that /dev/video2 has precedence over /dev/video0, when present).
+    // This means that external webcam are always preferred to internal ones,
+    // as they tend to have better resolution and increased image quality.
+    get_udev_device(interface, CAMERA_SUBSYSTEM, &(udev_match){.prop_key=CAMERA_CAPTURE_PROP_NAME, .prop_val=CAMERA_CAPTURE_PROP_VAL, .last_added = true}, NULL, (struct udev_device **)dev);
 }
 
 static void fetch_props_dev(void *dev, const char **node, const char **action) {
