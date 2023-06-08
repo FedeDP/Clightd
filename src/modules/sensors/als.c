@@ -27,7 +27,7 @@ static void fetch_dev(const char *interface, void **dev) {
     /* Check if any device exposes requested sysattr */
     for (int i = 0; i < SIZE(ill_names) && !*dev; i++) {
         /* Only check existence for needed sysattr */
-        const udev_match match = { ill_names[i] };
+        const udev_match match = { .sysattr_key = ill_names[i] };
         get_udev_device(interface, ALS_SUBSYSTEM, &match, NULL, (struct udev_device **)dev);
     }
 }

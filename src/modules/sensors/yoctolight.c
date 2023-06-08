@@ -144,7 +144,7 @@ static bool validate_dev(void *dev) {
 }
 
 static void fetch_dev(const char *interface, void **dev) {
-    const udev_match match = { YOCTO_PROPERTY, YOCTO_VENDORID };
+    const udev_match match = { .sysattr_key = YOCTO_PROPERTY, .sysattr_val = YOCTO_VENDORID };
     get_udev_device(interface, YOCTO_SUBSYSTEM, &match, NULL, (struct udev_device **)dev);
 }
 
