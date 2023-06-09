@@ -203,6 +203,9 @@ endif()
 install(FILES ${SCRIPT_DIR}/org.clightd.clightd.conf
         DESTINATION ${DBUS_CONFIG_DIR})
 
+# Install /etc/clightd/sensors.d/ folder, needed by custom sensor
+install (DIRECTORY "clightd/sensors.d" DESTINATION ${CMAKE_INSTALL_FULL_SYSCONFDIR})
+
 #
 # Packaging support
 #
