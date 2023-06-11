@@ -1,5 +1,10 @@
 ## 5.x
 
+### CI
+
+- [ ] Support prebuilt artifacts (deb, rpm) build from as old as possible glibc version to reach widest compatibility
+- [ ] both master devel and release
+
 ### Pipewire
 - [ ] Fix set_camera_setting() impl -> how to get current value? how to set a new value?
 - [ ] Check pipewire 0.3.60 v4l2 changes 
