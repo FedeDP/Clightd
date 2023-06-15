@@ -1,5 +1,8 @@
 ## 5.x
 
+### Als
+- [x] add support for buffer als reads
+
 ### Pipewire
 - [ ] Fix set_camera_setting() impl -> how to get current value? how to set a new value?
 - [ ] Check pipewire 0.3.60 v4l2 changes 
