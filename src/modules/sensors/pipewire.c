@@ -1,6 +1,6 @@
 #ifdef PIPEWIRE_PRESENT
 
-#warning "Experimental support. Camera settings are not supported. Possible freezes."
+#warning "Experimental support. Camera settings are not supported."
 
 #include "camera.h"
 #include "bus_utils.h"
@@ -16,12 +16,10 @@
 
 #define PW_NAME                 "Pipewire"
 #define PW_ENV_NAME             "CLIGHTD_PIPEWIRE_RUNTIME_DIR"
-#define BUILD_KEY(id) \
-    char key[10]; \
-    snprintf(key, sizeof(key), "%d", id);
 
 typedef struct {
     uint32_t id;
+    const char *objpath;
     struct spa_hook proxy_listener;
     struct spa_hook object_listener;
     struct pw_proxy *proxy;
@@ -39,7 +37,6 @@ typedef struct {
     pw_node_t node;
     struct pw_loop *loop;
     struct pw_stream *stream;
-    struct spa_source *timer;
     struct spa_video_info format;
     capture_settings_t cap_set;
 } pw_data_t;
@@ -80,7 +77,7 @@ static bool evaluate(void) {
 }
 
 static void init(void) {
-    nodes = map_new(true, free_node);
+    nodes = map_new(false, free_node);
 }
 
 static void receive(const msg_t *msg, const void *userdata) {
@@ -120,6 +117,7 @@ static void free_node(void *dev) {
     pw->node.action = NULL; // see destroy_dev() impl
     destroy_dev(pw);
     pw_proxy_destroy(pw->node.proxy);
+    free((void *)pw->node.objpath);
     free(pw);
 }
 
@@ -128,9 +126,10 @@ static void on_state_changed(void *_data, enum pw_stream_state old,
     pw_data_t *pw = _data;
     if (state == PW_STREAM_STATE_STREAMING) {
         /* Camera entered streaming mode; set settings. TODO: unsupported atm */
-//         set_camera_settings(pw, pw->cap_set.settings);
+        // set_camera_settings(pw, pw->cap_set.settings);
     } else if (state == PW_STREAM_STATE_ERROR) {
         pw->cap_set.with_err = true;
+        fprintf(stderr, "Stream failed with error: %s\n", error);
     }
 }
 
@@ -174,14 +173,12 @@ static void on_stream_param_changed(void *_data, uint32_t id, const struct spa_p
     if (spa_format_parse(param,
         &pw->format.media_type,
         &pw->format.media_subtype) < 0) {
-        
         pw->cap_set.with_err = true;
         return;
     }
         
     if (pw->format.media_type != SPA_MEDIA_TYPE_video ||
         pw->format.media_subtype != SPA_MEDIA_SUBTYPE_raw) {
-        
         pw->cap_set.with_err = true;
         return;
     }
@@ -248,10 +245,8 @@ static void fetch_dev(const char *interface, void **dev) {
 }
 
 static void fetch_props_dev(void *dev, const char **node, const char **action) {
-    static char str_id[32];
     pw_data_t *pw = (pw_data_t *)dev;
-    sprintf(str_id, "%d", pw->node.id);
-    *node = str_id;
+    *node = pw->node.objpath;
     if (action) {
         *action = pw->node.action;
     }
@@ -259,9 +254,6 @@ static void fetch_props_dev(void *dev, const char **node, const char **action) {
 
 static void destroy_dev(void *dev) {
     pw_data_t *pw = (pw_data_t *)dev;
-    if (pw->timer) {
-        pw_loop_destroy_source(pw->loop, pw->timer);
-    }
     if (pw->stream) {
         pw_stream_destroy(pw->stream);
         pw->stream = NULL;
@@ -270,19 +262,18 @@ static void destroy_dev(void *dev) {
         pw_loop_destroy(pw->loop);
         pw->loop = NULL;
     }
-    
     memset(&pw->cap_set, 0, sizeof(pw->cap_set));
     
     if (pw->node.action && !strcmp(pw->node.action, UDEV_ACTION_RM)) {
-        BUILD_KEY(pw->node.id);
-        map_remove(nodes, key);
+        INFO("Destroyed node %s.\n", pw->node.objpath);
+        map_remove(nodes, pw->node.objpath);
     }
 }
 
 static void removed_proxy(void *data) {
     pw_data_t *pw = (pw_data_t *)data;
     pw->node.action = UDEV_ACTION_RM; // this will kill our module during destroy_dev() call!
-    INFO("Removed node %d\n", pw->node.id);
+    INFO("Removed node %s\n", pw->node.objpath);
     last_recved = pw;
 }
 
@@ -297,7 +288,6 @@ static void parse_props(pw_data_t *pw, const struct spa_pod *pod)
     struct spa_pod_prop *prop;
     struct spa_pod_object *obj = (struct spa_pod_object *)pod;
     SPA_POD_OBJECT_FOREACH(obj, prop) {
-        printf("top %d\n", prop->key);
         switch (prop->key) {
         case SPA_PROP_device: {
             const char *str = NULL;
@@ -313,7 +303,8 @@ static void parse_props(pw_data_t *pw, const struct spa_pod *pod)
             printf("ID: %d\n", id);
             break;
         }
-        case SPA_PROP_INFO_name: {
+        case SPA_PROP_INFO_name:
+        case SPA_PROP_INFO_description: {
             const char *name;
             if (spa_pod_get_string(&prop->value, &name) < 0) {
                 break;
@@ -332,18 +323,24 @@ static void parse_props(pw_data_t *pw, const struct spa_pod *pod)
                 // TODO: store default values somewhere (easy)
                 // TODO: find current values??
                 printf("Choice: type %s\n", ti ? ti->name : "unknown");
+                const char *keys[] = { "default", "min" , "max", "step"};
+                int i = 0;
                 SPA_POD_CHOICE_BODY_FOREACH(b, size, p) {
                     switch (b->child.type) {
                         case SPA_TYPE_Bool:
-                            printf("\tBool %s\n", (*(int32_t *) p) ? "true" : "false");
+                            printf("\tBool %s -> %s\n", (*(int32_t *) p) ? "true" : "false", keys[i]);
                             break;
                         case SPA_TYPE_Int:
-                            printf("\tInt %d\n", *(int32_t *) p);
+                            printf("\tInt %d -> %s\n", *(int32_t *) p, keys[i]);
+                            break;
+                        case SPA_TYPE_Float:
+                            printf("\tFloat %f -> %s\n", *(float *) p, keys[i]);
                             break;
                         default:
                             INFO("Unmanaged type: %d\n", b->child.type);
                             break;
                     }
+                    i++;
                 }
             }
             break;
@@ -357,8 +354,7 @@ static void parse_props(pw_data_t *pw, const struct spa_pod *pod)
 
 static void node_event_param(void *object, int seq,
                              uint32_t id, uint32_t index, uint32_t next,
-                             const struct spa_pod *param)
-{
+                             const struct spa_pod *param) {
     switch (id) {
     case SPA_PARAM_PropInfo:
         parse_props(object, param);
@@ -397,26 +393,32 @@ static void registry_event_global(void *data, uint32_t id,
     if (strcmp(type, PW_TYPE_INTERFACE_Node) == 0) {
         const char *mc = spa_dict_lookup(props, PW_KEY_MEDIA_CLASS);
         const char *mr = spa_dict_lookup(props, PW_KEY_MEDIA_ROLE);
-        if (mc && mr &&  !strcmp(mc, "Video/Source") && !strcmp(mr, "Camera")) {
+        const char *op = spa_dict_lookup(props, PW_KEY_OBJECT_PATH);
+        if (op && mc && mr &&  !strcmp(mc, "Video/Source") && !strcmp(mr, "Camera")) {
+            // const struct spa_dict_item *prop;
+            // spa_dict_for_each(prop, props) {
+            //     printf("top %s -> %s\n", prop->key, prop->value);
+            // }
+            
             pw_data_t *pw = calloc(1, sizeof(pw_data_t));
             if (!pw) {
                 return;
             }
-            INFO("Added node %d\n", id);
+            
             pw->node.id = id;
+            pw->node.objpath = strdup(op);
             pw->node.action = UDEV_ACTION_ADD;
             pw->node.proxy = pw_registry_bind(pw_mon.registry, id, type, PW_VERSION_NODE, sizeof(pw_data_t));
             pw_proxy_add_listener(pw->node.proxy, &pw->node.proxy_listener, &proxy_events, pw);
-//             pw_proxy_add_object_listener(pw->node.proxy,
-//                                          &pw->node.object_listener,
-//                                          &node_events, pw);
+            // pw_proxy_add_object_listener(pw->node.proxy,
+            //                              &pw->node.object_listener,
+            //                              &node_events, pw);
             
             last_recved = pw; // used by recv_monitor
-            BUILD_KEY(id);
-            map_put(nodes, key, pw);
+            map_put(nodes, pw->node.objpath, pw);
             
-//             pw_node_enum_params((struct pw_node*)pw->node.proxy, 0,
-//                                 SPA_PARAM_PropInfo, 0, 0, NULL);
+            // pw_node_enum_params((struct pw_node*)pw->node.proxy, 0, SPA_PARAM_PropInfo, 0, 0, NULL);
+            INFO("Added node %s\n", pw->node.objpath);
         }
     }
 }
@@ -591,8 +593,8 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
     } else {
         /* Use a 2s timeout to avoid locking on the pw_loop_iterate() loop! */
         struct timespec timeout = { .tv_sec = 2 };
-        pw->timer = pw_loop_add_timer(pw->loop, on_timeout, pw);
-        pw_loop_update_timer(pw->loop, pw->timer, &timeout, NULL, false);
+        struct spa_source *timer = pw_loop_add_timer(pw->loop, on_timeout, pw);
+        pw_loop_update_timer(pw->loop, timer, &timeout, NULL, false);
         pw_loop_enter(pw->loop);
         while (pw->cap_set.capture_idx < num_captures && !pw->cap_set.with_err) {
             if (pw_loop_iterate(pw->loop, -1) < 0) {
@@ -600,7 +602,8 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
             }
         }
         pw_loop_leave(pw->loop);
-//         restore_camera_settings(pw);
+        pw_loop_destroy_source(pw->loop, timer);
+        // restore_camera_settings(pw); // TODO
     }
     unsetenv("XDG_RUNTIME_DIR");
     return pw->cap_set.capture_idx;
@@ -634,15 +637,18 @@ static inline enum spa_prop control_to_prop_id(uint32_t control_id) {
 static struct v4l2_control *set_camera_setting(void *priv, uint32_t op, float val, const char *op_name, bool store) {
     pw_data_t *pw = (pw_data_t *)priv;
     enum spa_prop pw_op = control_to_prop_id(op);
-//     if (val > 0) {
-//         uint8_t params_buffer[1024];
-//         struct spa_pod_builder b = SPA_POD_BUILDER_INIT(params_buffer, sizeof(params_buffer));
-//         const struct spa_pod *params = spa_pod_builder_add_object(&b, 
-//                                                                   SPA_TYPE_OBJECT_Props,  0,
-//                                                                   SPA_PROP_brightness, SPA_POD_Float(140));
-//         pw_node_set_param(pw->node.proxy, SPA_PARAM_Props, 0, params);
-//     }
-    
+    // if (val > 0) {
+    //     uint8_t params_buffer[1024];
+    //     struct spa_pod_builder b = SPA_POD_BUILDER_INIT(params_buffer, sizeof(params_buffer));
+    //     const struct spa_pod *params = spa_pod_builder_add_object(&b, 
+    //                                                               SPA_TYPE_OBJECT_Props,  0,
+    //                                                               SPA_PROP_brightness, SPA_POD_Float(10));
+    //     int ret = pw_node_set_param(pw->node.proxy, SPA_PARAM_Props, 0, params);
+    //     printf("topkek %d\n", ret);
+    // }
+    const struct pw_stream_control *c = pw_stream_get_control(pw->stream, SPA_PROP_brightness);
+    float v = 0.1;
+    int ret =  pw_stream_set_control(pw->stream, SPA_PROP_brightness, 1, &v);
     const struct pw_stream_control *ctrl = pw_stream_get_control(pw->stream, pw_op);
     if (ctrl) {
         INFO("%s (%u) default val: %.2lf\n", op_name, pw_op, ctrl->def);
