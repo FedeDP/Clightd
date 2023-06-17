@@ -21,7 +21,7 @@ jobs:
       - name: Install deps
         run: |
           sudo apt update
-          sudo apt install -y --no-install-recommends build-essential pkg-config cmake libsystemd-dev libxrandr-dev libxext-dev policykit-1 libpolkit-gobject-1-dev libjpeg-dev libusb-dev libwayland-dev libdrm-dev libddcutil-dev libusb-1.0-0-dev libudev-dev libpipewire-0.3-dev libdbus-1-dev
+          sudo apt install -y --no-install-recommends build-essential pkg-config cmake libsystemd-dev libxrandr-dev libxext-dev policykit-1 libpolkit-gobject-1-dev libjpeg-dev libusb-dev libwayland-dev libdrm-dev libddcutil-dev libusb-1.0-0-dev libudev-dev libpipewire-0.3-dev libdbus-1-dev libiio-dev
       - name: Install libmodule
         run: |
           cd libmodule
