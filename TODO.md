@@ -8,6 +8,11 @@
 ### Pipewire
 - [ ] Fix set_camera_setting() impl -> how to get current value? how to set a new value?
 - [ ] Check pipewire 0.3.60 v4l2 changes 
+- [x] fix source of segfault
+- [x] fix node names, ose object.path instead of object id 
+
+### Camera 
+- [x] Do not even try to open devices without correct ID_V4L_CAPABILITIES
 
 ### Backlight
 - [ ] Keep it up to date with possible ddcutil api changes

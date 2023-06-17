@@ -55,6 +55,11 @@ static const __u32 supported_fmts[] = {
 SENSOR(CAMERA_NAME);
 
 static bool validate_dev(void *dev) {
+    const char *capture_prop = udev_device_get_property_value(dev, CAMERA_CAPTURE_PROP_NAME);
+    if (!capture_prop || strcmp(capture_prop, CAMERA_CAPTURE_PROP_VAL) != 0) {
+        // Do nothing for non capture devices. This filter is useful when called on a new device from monitor.
+        return false;
+    }
     state.device_fd = open(udev_device_get_devnode(dev), O_RDWR);
     if (state.device_fd >= 0) {
         return check_camera_caps() == 0;
