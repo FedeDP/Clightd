@@ -29,6 +29,8 @@ static struct udev_monitor *mon;
 static double iio_poll_capture(struct als_device *als, double *pct, const int num_captures, int interval) {
     const char *syspath = udev_device_get_syspath(als->dev);
     
+    printf("[IIO-POLL] Start capture: '%s' syspath.\n", syspath);
+    
     // Load scale value
     const char *val = NULL;
     double scale = 1.0; // defaults to 1.0
@@ -38,15 +40,19 @@ static double iio_poll_capture(struct als_device *als, double *pct, const int nu
             scale = atof(val);
         }
     }
+    printf("[IIO-POLL] Loaded scale: %f.\n", scale);
+    
     
     int ctr = 0;
     for (int i = 0; i < num_captures; i++) {
         struct udev_device *non_cached_dev = udev_device_new_from_syspath(udev, syspath);
         val = udev_device_get_sysattr_value(non_cached_dev, als->attr_name[ALS_IIO_POLL]);
+        printf("[IIO-POLL] Read: %s.\n", val);
         if (val) {
             double illuminance = atof(val) * scale;
             ctr++;
             pct[i] = compute_value(illuminance);
+            printf("[IIO-POLL] Pct[%d] = %lf\n", i, pct[i]);
         }
         udev_device_unref(non_cached_dev);
         usleep(interval * 1000);
@@ -56,8 +62,10 @@ static double iio_poll_capture(struct als_device *als, double *pct, const int nu
 
 static double iio_buffer_capture(struct als_device *als, double *pct, const int num_captures, int interval) {
     int ctr = 0;
-    
+        
     const char *sysname = udev_device_get_sysname(als->dev);
+    printf("[IIO-BUF] Start capture: '%s' sysname.\n", sysname);
+    
     
     /* Getting local iio device context */
     struct iio_context *local_ctx = iio_create_local_context();
@@ -72,12 +80,16 @@ static double iio_buffer_capture(struct als_device *als, double *pct, const int 
         return ctr;
     }
     
+    printf("[IIO-BUF] Found device.\n");
+    
     // Compute channel name from attribute ("illuminance" or "intensity_both")
     char *name = strrchr(als->attr_name[ALS_IIO_BUFFER], '/') + 1; // "scan_elements/in_illuminance_en" -> "in_illuminance_en"
     name = strchr(name, '_') + 1; // "in_illuminance_en" -> "illuminance_en"
     char *ptr = strrchr(name, '_');
     char channel_name[64];
     snprintf(channel_name, strlen(name) - strlen(ptr) + 1, "%s", name); // "illuminance_en" -> "illuminance"
+    
+    printf("[IIO-BUF] Channel name: '%s'.\n", channel_name);
     
     struct iio_channel *ch = iio_device_find_channel(dev, channel_name, false);
     if (!ch) {
@@ -100,6 +112,7 @@ static double iio_buffer_capture(struct als_device *als, double *pct, const int 
         return ctr;
     }
     
+    printf("[IIO-BUF] Creating buffer.\n");
     struct iio_buffer *rxbuf = iio_device_create_buffer(dev, 1, false);
     if (!rxbuf) {
         fprintf(stderr, "Failed to allocated buffer: %m\n");
@@ -116,17 +129,23 @@ static double iio_buffer_capture(struct als_device *als, double *pct, const int 
     if (fmt->with_scale) {
         scale = fmt->scale;
     }
+    
+    printf("[IIO-BUF] Data fmt: bits: %d | signed: %d | len: %d | rep: %d | scale: %f | has_scale: %d | shift: %d.\n", 
+           fmt->bits, fmt->is_signed, fmt->length, fmt->repeat, fmt->scale, fmt->with_scale, fmt->shift);
 
     const size_t read_size = fmt->bits / 8;
     for (int i = 0; i < num_captures; i++) {
         int ret = iio_buffer_refill(rxbuf);
+        printf("[IIO-BUF] Refill ret: %d/%ld\n", ret, read_size);
         if (ret == read_size) {
             int64_t val = 0;
             if (ret == read_size) {
                 iio_channel_read(ch, rxbuf, &val, read_size);
+                printf("[IIO-BUF] Read %ld\n", val);
                 double illuminance = (double)val * scale;
                 ctr++;
                 pct[i] = compute_value(illuminance);
+                printf("[IIO-BUF] Pct[%d] = %lf\n", i, pct[i]);
             }
         }
         usleep(interval * 1000);
@@ -146,6 +165,7 @@ static bool validate_dev(void *dev) {
             als->attr_name[ALS_IIO_BUFFER] = ill_buff_names[i];
             als->capture[ALS_IIO_BUFFER] = iio_buffer_capture;
             valid = true;
+            printf("Buffer available, using '%s' sysattr\n", ill_buff_names[i]);
             break;
         }
     }
@@ -155,6 +175,7 @@ static bool validate_dev(void *dev) {
             als->attr_name[ALS_IIO_POLL] = ill_poll_names[i];
             als->capture[ALS_IIO_POLL] = iio_poll_capture;
             valid = true;
+            printf("Poll available, using '%s' sysattr\n", ill_poll_names[i]);
             break;
         }
     }
