@@ -1,18 +1,15 @@
 ## 5.x
 
-### CI
-
-- [ ] Support prebuilt artifacts (deb, rpm) build from as old as possible glibc version to reach widest compatibility
-- [ ] both master devel and release
-
 ### Pipewire
 - [ ] Fix set_camera_setting() impl -> how to get current value? how to set a new value?
 - [ ] Check pipewire 0.3.60 v4l2 changes 
 - [x] fix source of segfault
 - [x] fix node names, ose object.path instead of object id 
+- [x] use same algorithm as camera sensor to retrieve default camera (ie: the one with highest USEC_INITIALIZED property)
 
 ### Camera 
 - [x] Do not even try to open devices without correct ID_V4L_CAPABILITIES
+- [x] use USEC_INITIALIZED property instead of sysnum
 
 ### Backlight
 - [ ] Keep it up to date with possible ddcutil api changes

@@ -11,6 +11,11 @@
     #define INFO(fmt, ...)
 #endif
 
+#define CAMERA_NAME                 "Camera"
+#define CAMERA_SUBSYSTEM            "video4linux"
+#define CAMERA_CAPTURE_PROP_NAME    "ID_V4L_CAPABILITIES"
+#define CAMERA_CAPTURE_PROP_VAL     ":capture:"
+
 #define CAMERA_ILL_MAX              255
 #define HISTOGRAM_STEPS             40
 
