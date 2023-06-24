@@ -5,11 +5,6 @@
 #include "camera.h"
 #include <jpeglib.h>
 
-#define CAMERA_NAME                 "Camera"
-#define CAMERA_SUBSYSTEM            "video4linux"
-#define CAMERA_CAPTURE_PROP_NAME    "ID_V4L_CAPABILITIES"
-#define CAMERA_CAPTURE_PROP_VAL     ":capture:"
-
 struct buffer {
     uint8_t *start;
     size_t length;
@@ -70,7 +65,7 @@ static bool validate_dev(void *dev) {
 }
 
 static void fetch_dev(const char *interface, void **dev) {
-    // Note: we only filer cameras with capture prop val,
+    // Note: we only filter cameras with capture prop val,
     // and always start from greater sysnum (so that /dev/video2 has precedence over /dev/video0, when present).
     // This means that external webcam are always preferred to internal ones,
     // as they tend to have better resolution and increased image quality.

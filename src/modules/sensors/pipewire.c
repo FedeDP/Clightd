@@ -234,11 +234,24 @@ static void fetch_dev(const char *interface, void **dev) {
     if (interface && interface[0] != '\0') {
         pw = map_get(nodes, interface);
     } else {
-        // Peek first pw node found
-        map_itr_t *itr = map_itr_new(nodes);
-        if (itr) {
-            pw = map_itr_get_data(itr);
-            free(itr);
+        // Note: we only filter cameras with capture prop val,
+        // and always start from greater sysnum (so that /dev/video2 has precedence over /dev/video0, when present).
+        // This means that external webcam are always preferred to internal ones,
+        // as they tend to have better resolution and increased image quality.
+        struct udev_device *d = NULL;
+        get_udev_device(NULL, CAMERA_SUBSYSTEM, &(udev_match){.prop_key=CAMERA_CAPTURE_PROP_NAME, .prop_val=CAMERA_CAPTURE_PROP_VAL, .last_added = true}, NULL, &d);
+        if (d) {
+            const char *devnode = udev_device_get_devnode(d);
+            // Peek first pw node found
+            for (map_itr_t *itr = map_itr_new(nodes); itr; itr = map_itr_next(itr)) {
+                pw = map_itr_get_data(itr);
+                const char *node = strstr(pw->node.objpath, "/dev/");
+                if (node && strcmp(devnode, node) == 0) {
+                    free(itr);
+                    break;
+                }
+            }
+            udev_device_unref(d);
         }
     }
     *dev = pw;

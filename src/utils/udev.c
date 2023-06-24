@@ -34,20 +34,21 @@ static void get_first_matching_device(struct udev_device **dev, const char *subs
             const char *path = udev_list_entry_get_name(devices);
             *dev = udev_device_new_from_syspath(udev, path);
         } else {
-            // Return last found, ie: the one with greatest index
+            // Return last found, ie: the one with largest USEC_INITIALIZED
             *dev = NULL;
             struct udev_list_entry *entry = NULL;
-            int max_sysnum = -1;
+            uint64_t max_usec_initialized = 0;
             udev_list_entry_foreach(entry, devices) {
                 const char *path = udev_list_entry_get_name(entry);
                 struct udev_device *d = udev_device_new_from_syspath(udev, path);
-                int sysnum = atoi(udev_device_get_sysnum(d));
-                if (sysnum > max_sysnum) {
+                const char *usec_initialized_str = udev_device_get_property_value(d, "USEC_INITIALIZED");
+                uint64_t usec_initialized = strtoll(usec_initialized_str, NULL, 10);
+                if (usec_initialized > max_usec_initialized) {
                     if (*dev) {
                         udev_device_unref(*dev);
                     }
                     *dev = d;
-                    max_sysnum = sysnum;
+                    max_usec_initialized = usec_initialized;
                 } else {
                     udev_device_unref(d);
                 }
