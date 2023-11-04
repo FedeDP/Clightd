@@ -25,7 +25,7 @@ BACKLIGHT("DDC");
 static struct udev_monitor *drm_mon;
 static DDCA_Vcp_Feature_Code br_code = 0x10;
 static bool ddc_backlight_enabled = true;
-static bool emulated_backlight_enabled = true;
+static bool emulated_backlight_enabled = false;
 static uint64_t curr_cookie;
 
 static bool load_env(void) {

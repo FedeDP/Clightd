@@ -1,11 +1,9 @@
-## 5.x
+## 5.9
 
 ### Als
 - [x] add support for buffer als reads
 
 ### Pipewire
-- [ ] Fix set_camera_setting() impl -> how to get current value? how to set a new value?
-- [ ] Check pipewire 0.3.60 v4l2 changes 
 - [x] fix source of segfault
 - [x] fix node names, ose object.path instead of object id 
 - [x] use same algorithm as camera sensor to retrieve default camera (ie: the one with highest USEC_INITIALIZED property)
@@ -15,6 +13,16 @@
 - [x] use USEC_INITIALIZED property instead of sysnum
 
 ### Backlight
+- [x] disable emulated_backlight by default since it is a little buggy
+
+## 5.x
+
+### Pipewire
+- [ ] Fix set_camera_setting() impl -> how to get current value? how to set a new value?
+- [ ] Check pipewire 0.3.60 v4l2 changes 
+
+### Backlight
+- [ ] investigate emulated_backlight bugginess
 - [ ] Keep it up to date with possible ddcutil api changes
 
 ## 6.0 (api break)
