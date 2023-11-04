@@ -5,12 +5,6 @@
 #include <module/map.h>
 #include <udev.h>
 
-#ifndef NDEBUG
-    #define INFO(fmt, ...)          printf(fmt, ##__VA_ARGS__);
-#else
-    #define INFO(fmt, ...)
-#endif
-
 #define CAMERA_NAME                 "Camera"
 #define CAMERA_SUBSYSTEM            "video4linux"
 #define CAMERA_CAPTURE_PROP_NAME    "ID_V4L_CAPABILITIES"

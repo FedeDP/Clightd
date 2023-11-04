@@ -22,6 +22,12 @@
 
 #include <commons.h>
 
+#ifndef NDEBUG
+#define INFO(fmt, ...)          printf(fmt, ##__VA_ARGS__);
+#else
+#define INFO(fmt, ...)
+#endif
+
 /* Sensor->name must match its enumeration stringified value */
 #define _SENSORS \
     X(ALS) \
