@@ -116,7 +116,7 @@ static int method_getdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
     if (dpms_state < 0) {
         switch (dpms_state) {
         case COMPOSITOR_NO_PROTOCOL:
-            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Compositor does not support wayland protocol.");
+            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Compositor does not support required wayland protocols.");
             break;
         case WRONG_PLUGIN:
             sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "No plugin available for your configuration.");
@@ -171,7 +171,7 @@ static int method_setdpms(sd_bus_message *m, void *userdata, sd_bus_error *ret_e
     if (err) {
         switch (err) {
         case COMPOSITOR_NO_PROTOCOL:
-            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Compositor does not support neither 'wlr-output-power-management-unstable-v1' nor 'org_kde_kwin_dpms' protocols.");
+            sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "Compositor does not support required wayland protocols.");
             break;
         case WRONG_PLUGIN:
             sd_bus_error_set_const(ret_error, SD_BUS_ERROR_FAILED, "No plugin available for your configuration.");

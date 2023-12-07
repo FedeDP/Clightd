@@ -35,6 +35,7 @@
 ### Generic
 - [ ] Drop is_smooth options for gamma
 - [ ] avoid returning boolean where it does not make sense
+- [ ] Rename Wl to Wlr (wlroots) in interfaces
 
 ## Ideas
 - [ ] follow ddcci kernel driver and in case, drop ddcutil and add the kernel driver as clightd opt-dep

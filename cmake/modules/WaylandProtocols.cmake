@@ -1,13 +1,19 @@
-# Stolen from: https://github.com/giucam/orbital/blob/512c1b3b20a32cf67ba326e8acce3c1c32e11fa2/cmake/Wayland.cmake, thanks!
+include(FetchContent)
+
 function(WAYLAND_ADD_PROTOCOL_CLIENT protocol)
     find_program(WAYLAND_SCANNER_EXECUTABLE NAMES wayland-scanner REQUIRED)
 
     get_filename_component(proto_name ${protocol} NAME_WLE)
-    get_filename_component(proto_fullpath ${protocol} ABSOLUTE)
+    FetchContent_Declare(${proto_name} URL ${protocol} DOWNLOAD_NO_EXTRACT TRUE)
+    FetchContent_Populate(${proto_name})
+    
     message(STATUS "Enabled '${proto_name}' wayland client protocol")
         
-    set(_client_header "${CMAKE_CURRENT_BINARY_DIR}/${proto_name}-client-protocol.h")
-    set(_code "${CMAKE_CURRENT_BINARY_DIR}/${proto_name}-protocol.c")
+    set(_client_header "${${proto_name}_BINARY_DIR}/${proto_name}-client-protocol.h")
+    set(_code "${${proto_name}_BINARY_DIR}/${proto_name}-protocol.c")
+    # set(_client_header "${CMAKE_CURRENT_BINARY_DIR}/${proto_name}-client-protocol.h")
+    # set(_code "${CMAKE_CURRENT_BINARY_DIR}/${proto_name}-protocol.c")
+    set(proto_fullpath "${${proto_name}_SOURCE_DIR}/${proto_name}.xml")
             
     add_custom_command(
         OUTPUT "${_client_header}" "${_code}"
@@ -17,5 +23,6 @@ function(WAYLAND_ADD_PROTOCOL_CLIENT protocol)
     )
 
     target_sources(${PROJECT_NAME} PRIVATE ${_code})
-    target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    target_include_directories(${PROJECT_NAME} PRIVATE ${${proto_name}_BINARY_DIR})
 endfunction()
+
