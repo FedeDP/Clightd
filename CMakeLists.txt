@@ -7,6 +7,10 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 include(GNUInstallDirs)
 find_package(PkgConfig)
 
+# Add path for custom CMake modules.
+list(APPEND CMAKE_MODULE_PATH
+	"${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
+
 execute_process(
         COMMAND git log -1 --format=%h
         WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
@@ -50,7 +54,7 @@ list(APPEND COMBINED_LDFLAGS ${LOGIN_LIBS_LDFLAGS})
 # Optional dependencies
 
 # Needed to eventually build wayland protocols
-add_subdirectory(protocol)
+include(WaylandProtocols)
 
 # Helper macro for dealing correctly with optional pkg-config dependencies.
 # There are a number of issues when using pkg-config with cmake (as compared to
@@ -98,9 +102,9 @@ macro(optional_dep name modules description)
     endif()
 endmacro()
 
-optional_dep(GAMMA "x11;xrandr;libdrm;wayland-client" "Gamma correction" src/modules/gamma_plugins protocol/wlr-gamma-control-unstable-v1.xml)
-optional_dep(DPMS "x11;xext;libdrm;wayland-client" "DPMS" src/modules/dpms_plugins protocol/org_kde_kwin_dpms.xml;protocol/wlr-output-power-management-unstable-v1.xml)
-optional_dep(SCREEN "x11" "screen emitted brightness" src/modules/screen_plugins protocol/wlr-screencopy-unstable-v1.xml)
+optional_dep(GAMMA "x11;xrandr;libdrm;wayland-client" "Gamma correction" src/modules/gamma_plugins https://gitlab.freedesktop.org/wlroots/wlr-protocols/-/raw/master/unstable/wlr-gamma-control-unstable-v1.xml;https://raw.githubusercontent.com/KDE/plasma-wayland-protocols/master/src/protocols/outputdevice.xml;https://raw.githubusercontent.com/KDE/plasma-wayland-protocols/master/src/protocols/output-management.xml)
+optional_dep(DPMS "x11;xext;libdrm;wayland-client" "DPMS" src/modules/dpms_plugins https://raw.githubusercontent.com/KDE/plasma-wayland-protocols/master/src/protocols/dpms.xml;https://gitlab.freedesktop.org/wlroots/wlr-protocols/-/raw/master/unstable/wlr-output-power-management-unstable-v1.xml)
+optional_dep(SCREEN "x11" "screen emitted brightness" src/modules/screen_plugins https://gitlab.freedesktop.org/wlroots/wlr-protocols/-/raw/master/unstable/wlr-screencopy-unstable-v1.xml)
 optional_dep(DDC "ddcutil>=0.9.5" "external monitor backlight")
 optional_dep(YOCTOLIGHT "libusb-1.0" "Yoctolight usb als devices support")
 optional_dep(PIPEWIRE "libpipewire-0.3" "Enable pipewire camera sensor support")
