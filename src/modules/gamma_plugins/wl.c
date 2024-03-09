@@ -149,7 +149,7 @@ static int validate(const char **id, const char *env,  void **priv_data) {
     wl_display_roundtrip(display);
     
     if (priv->gamma_control_manager == NULL) {
-        fprintf(stderr, "compositor doesn't support wlr-gamma-control-unstable-v1\n");
+        fprintf(stderr, "compositor doesn't support '%s'\n", zwlr_gamma_control_manager_v1_interface.name);
         ret = COMPOSITOR_NO_PROTOCOL;
         goto err;
     }

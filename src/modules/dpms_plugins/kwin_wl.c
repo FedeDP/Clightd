@@ -85,7 +85,7 @@ static int wl_init(const char *display, const char *env) {
     wl_display_roundtrip(dpy);
 
      if (dpms_control_manager == NULL) {
-        fprintf(stderr, "compositor doesn't support org_kde_kwin_dpms\n");
+        fprintf(stderr, "compositor doesn't support '%s'\n", org_kde_kwin_dpms_manager_interface.name);
         ret = COMPOSITOR_NO_PROTOCOL;
         goto err;
     }
