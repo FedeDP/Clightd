@@ -1,19 +1,7 @@
-## 5.9
+## 5.10
 
-### Als
-- [x] add support for buffer als reads
-
-### Pipewire
-- [x] fix source of segfault
-- [x] fix node names, ose object.path instead of object id 
-- [x] use same algorithm as camera sensor to retrieve default camera (ie: the one with highest USEC_INITIALIZED property)
-
-### Camera 
-- [x] Do not even try to open devices without correct ID_V4L_CAPABILITIES
-- [x] use USEC_INITIALIZED property instead of sysnum
-
-### Backlight
-- [x] disable emulated_backlight by default since it is a little buggy
+- [ ] fix https://github.com/FedeDP/Clightd/issues/108
+- [ ] try to improve emulated backlight backend?
 
 ## 5.x
 
