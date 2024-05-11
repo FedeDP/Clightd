@@ -8,11 +8,17 @@ include(GNUInstallDirs)
 find_package(PkgConfig)
 
 execute_process(
-        COMMAND git log -1 --format=%h
+        COMMAND sh -c "test -d .git && git log -1 --format=%h"
         WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
         OUTPUT_VARIABLE GIT_HASH
         OUTPUT_STRIP_TRAILING_WHITESPACE
 )
+
+if(GIT_HASH)
+    set(VERSION "${PROJECT_VERSION}-${GIT_HASH}")
+else()
+    set(VERSION "${PROJECT_VERSION}")
+endif()
 
 # Create program target
 file(GLOB SOURCES src/*.c src/utils/*.c src/modules/*.c src/modules/sensors/*.c src/modules/backlight_plugins/*.c)
@@ -26,7 +32,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 )
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     -D_GNU_SOURCE
-    -DVERSION="${PROJECT_VERSION}-${GIT_HASH}"
+    -DVERSION="${VERSION}"
 )
 set_property(TARGET ${PROJECT_NAME} PROPERTY C_STANDARD 99)
 
