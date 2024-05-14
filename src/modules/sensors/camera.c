@@ -44,6 +44,7 @@ static struct udev_monitor *mon;
 static const __u32 supported_fmts[] = {
     V4L2_PIX_FMT_GREY,
     V4L2_PIX_FMT_YUYV,
+    V4L2_PIX_FMT_NV12,
     V4L2_PIX_FMT_MJPEG
 };
 
@@ -363,10 +364,11 @@ static double compute_brightness(unsigned int size) {
     double brightness = 0.0;
     uint8_t *img_data = state.buf.start;
     if (state.decoder) {
-        size = state.decoder->dec_cb(&img_data, size);
-        if (size < 0) {
+        int ret = state.decoder->dec_cb(&img_data, size);
+        if (ret < 0) {
             return brightness;
         }
+        size = ret;
     }
     
     rect_info_t full = {
