@@ -1,4 +1,4 @@
-#include "org_kde_kwin_dpms-client-protocol.h"
+#include "dpms-client-protocol.h"
 #include "wl_utils.h"
 #include "dpms.h"
 

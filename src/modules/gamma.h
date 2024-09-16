@@ -7,7 +7,8 @@ struct _gamma_cl;
 #define _GAMMA_PLUGINS \
     X(XORG, 0) \
     X(WL, 1) \
-    X(DRM, 2)
+    X(KWIN_WL, 2) \
+    X(DRM, 3)
 
 enum gamma_plugins { 
 #define X(name, val) name = val,
