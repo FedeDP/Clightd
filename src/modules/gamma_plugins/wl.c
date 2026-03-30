@@ -23,6 +23,7 @@ typedef struct {
     struct wl_registry *registry;
     struct zwlr_gamma_control_manager_v1 *gamma_control_manager;
     bool not_first_time;
+    int current_temp;
 } wlr_gamma_priv;
 
 static int create_gamma_table(uint32_t ramp_size, uint16_t **table);
@@ -123,15 +124,17 @@ static int validate(const char **id, const char *env,  void **priv_data) {
     }
     
     /* Check if we already have a running client for this display */
-    for (stack_itr_t *itr = stack_itr_new(clients); itr; itr = stack_itr_next(itr)) {
-        wlr_gamma_priv *p = (wlr_gamma_priv *)stack_itr_get_data(itr);
-        if (p->dpy == display) {
-            *priv_data = p;
-            // this is not the first time we use this client.
-            // No need to register its fd
-            p->not_first_time = true;
-            free(itr);
-            return 0;
+    if (stack_length(clients) > 0) {
+        for (stack_itr_t *itr = stack_itr_new(clients); itr; itr = stack_itr_next(itr)) {
+            wlr_gamma_priv *p = (wlr_gamma_priv *)stack_itr_get_data(itr);
+            if (p->dpy == display) {
+                *priv_data = p;
+                // this is not the first time we use this client.
+                // No need to register its fd
+                p->not_first_time = true;
+                free(itr);
+                return 0;
+            }
         }
     }
     
@@ -200,36 +203,38 @@ static int set(void *priv_data, const int temp) {
                                         output->table_fd);
     }
     wl_display_flush(priv->dpy);
+    priv->current_temp = temp;
     // Register this fd and listen on events
     if (!priv->not_first_time) {
         m_register_fd(wl_display_get_fd(priv->dpy), false, priv);
         stack_push(clients, priv);
+        priv->not_first_time = true;
     }
     return 0;
 }
 
 static int get(void *priv_data) {
-    // Unsupported ?
-    // Ok anyway, just return 0;
-    // It will be supported one day hopefully
-    return 0;
+    wlr_gamma_priv *priv = (wlr_gamma_priv *)priv_data;
+    return priv->current_temp;
 }
 
 static void dtor(void *priv_data) {
     if (!leaving) {
         /* Check if we already have a running client for this display */
-        for (stack_itr_t *itr = stack_itr_new(clients); itr; itr = stack_itr_next(itr)) {
-            wlr_gamma_priv *p = (wlr_gamma_priv *)stack_itr_get_data(itr);
-            if (p == priv_data) {
-                // do not remove this client as we need to keep it alive;
-                free(itr);
-                return;
+        if (stack_length(clients) > 0) {
+            for (stack_itr_t *itr = stack_itr_new(clients); itr; itr = stack_itr_next(itr)) {
+                wlr_gamma_priv *p = (wlr_gamma_priv *)stack_itr_get_data(itr);
+                if (p == priv_data) {
+                    // do not remove this client as we need to keep it alive;
+                    free(itr);
+                    return;
+                }
             }
         }
     }
     
     wlr_gamma_priv *priv = (wlr_gamma_priv *)priv_data;
-    if (priv->dpy) {
+    if (priv->dpy && priv->not_first_time) {
         m_deregister_fd(wl_display_get_fd(priv->dpy));
     }
     struct output *output, *tmp_output;
