@@ -273,6 +273,8 @@ end:
 }
 
 double get_gamma_brightness(const char *id) {
+    if (!gamma_brightness || map_length(gamma_brightness) <= 0) return 1.0;
+
     double *b = map_get(gamma_brightness, id);
     if (!b) {
         return 1.0;
@@ -425,12 +427,11 @@ static int start_client(gamma_client *cl, int temp, bool is_smooth, unsigned int
     cl->smooth_step = smooth_step;
     cl->smooth_wait = smooth_wait;
     
-    // NOTE: it seems like on wayland smooth transitions are not working.
-    // Forcefully disable them for now.
-    if (cl->plugin == plugins[WL] && cl->is_smooth) {
-        fprintf(stderr, "Smooth transitions are not supported on wayland.\n");
-        cl->is_smooth = false;
-    }
+    // If the gamma plugin can't read back the screen temperature (e.g. Wayland on
+    // first use, before we set it ourselves), current_temp == 0.
+    // Assume 6500 K (daylight) which matches the actual display state on wayland
+    // so smooth transitions work from the start.
+    if (cl->current_temp == 0) cl->current_temp = 6500;
     
     if (cl->fd == -1) {
         cl->fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
@@ -446,8 +447,8 @@ static int start_client(gamma_client *cl, int temp, bool is_smooth, unsigned int
 
 #else
 
-int set_gamma_brightness(const char *id, double brightness) { }
+int set_gamma_brightness(const char *id, double brightness) { return 0; }
 double get_gamma_brightness(const char *id) { return 1.0; }
-int clean_gamma_brightness(const char *id) { }
+int clean_gamma_brightness(const char *id) { return 0; }
 
 #endif
