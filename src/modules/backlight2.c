@@ -11,7 +11,7 @@ static void bl_dtor(void *data);
 map_ret_code get_backlight(void *userdata, const char *key, void *data);
 
 /* Setters */
-static int set_backlight_value(bl_t *bl, double *target_pct, double smooth_step);
+static int set_backlight_value(bl_t *bl, double *target_pct, double smooth_step, bool *reached);
 static map_ret_code set_backlight(void *userdata, const char *key, void *data);
 
 /* Helper methods */
@@ -117,7 +117,8 @@ static void receive(const msg_t *msg, const void *userdata) {
             bl_t *bl = (bl_t *)ptr;
             read(bl->smooth->fd, &t, sizeof(uint64_t));
 
-            int ret = set_backlight_value(bl, &bl->smooth->params.target_pct, bl->smooth->params.step);
+            bool reached = false;
+            int ret = set_backlight_value(bl, &bl->smooth->params.target_pct, bl->smooth->params.step, &reached);
             if (ret != 0) {
                 m_log("failed to set backlight for %s\n", bl->sn);
                 /* 
@@ -126,7 +127,7 @@ static void receive(const msg_t *msg, const void *userdata) {
                  * but they fail instead, leaving us to an infinite loop.
                  */
                 stop_smooth(bl);
-            } else if (bl->smooth->params.target_pct == 0) {
+            } else if (reached) {
                 /* set_backlight_value advised us to stop smoothing as it ended */
                 stop_smooth(bl);
             }
@@ -218,7 +219,7 @@ map_ret_code get_backlight(void *userdata, const char *key, void *data) {
 }
 
 /* Set a target_pct eventually computing smooth step */
-static int set_backlight_value(bl_t *bl, double *target_pct, double smooth_step) {
+static int set_backlight_value(bl_t *bl, double *target_pct, double smooth_step, bool *reached) {
     const double next_pct = next_backlight_pct(bl, target_pct, smooth_step);
     const int value = (int)round(bl->max * next_pct);
     int ret = bl->plugin->set(bl, value);
@@ -234,7 +235,7 @@ static int set_backlight_value(bl_t *bl, double *target_pct, double smooth_step)
     }
     if (next_pct == *target_pct) {
         m_log("%s reached target backlight: %.2lf.\n", bl->sn, next_pct);
-        *target_pct = 0; // eventually disable smooth (if called by set_backlight and not by timerfd)
+        *reached = true;
     }
     return ret;
 }
@@ -247,9 +248,11 @@ static map_ret_code set_backlight(void *userdata, const char *key, void *data) {
     
     stop_smooth(bl);
     
+    bool reached = false;
     const bool needs_smooth = is_smooth(&params);
-    if (set_backlight_value(bl, &params.target_pct, needs_smooth ? params.step : 0) == 0) {
-        if (needs_smooth) {
+    if (set_backlight_value(bl, &params.target_pct, needs_smooth ? params.step : 0, &reached) == 0) {
+        /* only continue if there's something left to smooth */
+        if (needs_smooth && !reached) {
             bl->smooth = calloc(1, sizeof(smooth_t));
             if (bl->smooth) {
                 memcpy(&bl->smooth->params, &params, sizeof(smooth_params_t));
