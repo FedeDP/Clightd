@@ -88,6 +88,10 @@ int rgb_frame_brightness(const uint8_t *data, const int width, const int height,
      * takes 1 pixel every div*div area 
      * (div values > 8 will almost not give performance improvements)
      */
+    if (data == NULL || width <= 0 || height <= 0 || stride <= 0) {
+        return 0;
+    }
+
     int r = 0, g = 0, b = 0;
     const int div = 8;
     const int wmax = (double)width / div;

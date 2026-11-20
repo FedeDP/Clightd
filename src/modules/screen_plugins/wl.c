@@ -161,21 +161,29 @@ static void wl_cleanup(struct cl_display *display) {
     struct cl_output *output;
     struct cl_output *tmp_output;
     wl_list_for_each_safe(output, tmp_output, &display->outputs, link) {
-        output->frame->copy_done = false;
-        output->frame->copy_err = false;
+        /* A failing compositor can leave any of these members NULL. */
+        if (output->frame != NULL) {
+            output->frame->copy_done = false;
+            output->frame->copy_err = false;
+        }
         if (output->screencopy_frame != NULL) {
             zwlr_screencopy_frame_v1_destroy(output->screencopy_frame);
         }
-        if (output->buffer->shm_data) {
-            munmap(output->buffer->shm_data, output->frame->size);
+        if (output->buffer != NULL) {
+            if (output->buffer->shm_data != NULL && output->frame != NULL) {
+                munmap(output->buffer->shm_data, output->frame->size);
+            }
+            if (output->buffer->wl_buffer != NULL) {
+                wl_buffer_destroy(output->buffer->wl_buffer);
+            }
+            free(output->buffer);
         }
-        if (output->buffer->wl_buffer) {
-            wl_buffer_destroy(output->buffer->wl_buffer);
+        if (output->wl_output != NULL) {
+            wl_output_destroy(output->wl_output);
         }
-        free(output->buffer);
-        wl_output_destroy(output->wl_output);
         wl_list_remove(&output->link);
         free(output->name);
+        free(output->frame);
         free(output);
     }
     if (display->wl_registry) {
@@ -191,6 +199,9 @@ static int get_frame_brightness(const char *id, const char *env) {
     struct cl_output *output;
     int ret = 0;
 
+    /* wl_cleanup() walks this list even when fetch_wl_display() fails. */
+    wl_list_init(&display.outputs);
+
     display.wl_display = fetch_wl_display(id, env);
 
     if (display.wl_display == NULL) {
@@ -198,7 +209,6 @@ static int get_frame_brightness(const char *id, const char *env) {
         ret = WRONG_PLUGIN;
         goto err;
     }
-    wl_list_init(&display.outputs);
 
     display.wl_registry = wl_display_get_registry(display.wl_display);
     wl_registry_add_listener(display.wl_registry, &registry_listener, &display);
