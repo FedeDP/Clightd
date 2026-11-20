@@ -1,4 +1,5 @@
 #include <sys/mman.h>
+#include <poll.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <stdint.h>
@@ -113,6 +114,8 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
             struct v4l2_buffer buf = { .type = V4L2_BUF_TYPE_VIDEO_CAPTURE, .memory = V4L2_MEMORY_MMAP};
             if (send_frame(&buf) == 0 && recv_frame(&buf) == 0) {
                 pct[ctr++] = compute_brightness(buf.bytesused);
+            } else {
+                break;
             }
         }
         destroy_decoder();
@@ -351,6 +354,17 @@ static int send_frame(struct v4l2_buffer *buf) {
 }
 
 static int recv_frame(struct v4l2_buffer *buf) {
+    /* A camera that never produces a frame must not block the whole
+     * clightd event loop.  Wait at most 1s for a buffer. */
+    struct pollfd pfd = { .fd = state.device_fd, .events = POLLIN };
+    int pr = poll(&pfd, 1, 1000);
+    if (pr <= 0) {
+        if (pr == 0) {
+            fprintf(stderr, "Camera frame timeout\n");
+        }
+        return -1;
+    }
+
     /* Dequeue the buffer */
     if(-1 == xioctl(VIDIOC_DQBUF, buf)) {
         perror("VIDIOC_DQBUF");
@@ -364,11 +378,18 @@ static double compute_brightness(unsigned int size) {
     uint8_t *img_data = state.buf.start;
     if (state.decoder) {
         size = state.decoder->dec_cb(&img_data, size);
-        if (size < 0) {
+        if (size <= 0) {
             return brightness;
         }
     }
-    
+
+    /* A failed decode or an unsupported format can leave us without a
+     * frame.  Do not pass a NULL buffer or zero dimensions to the
+     * histogram code. */
+    if (img_data == NULL || state.width == 0 || state.height == 0) {
+        return brightness;
+    }
+
     rect_info_t full = {
         .row_start = 0,
         .row_end = state.height,
