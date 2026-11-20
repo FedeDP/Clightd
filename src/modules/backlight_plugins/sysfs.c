@@ -1,5 +1,8 @@
 #include "backlight.h"
 #include <udev.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <unistd.h>
 
 #define BL_SUBSYSTEM        "backlight"
 #define BL_SYSFS_ENV        "CLIGHTD_BL_SYSFS_ENABLED"
@@ -66,7 +69,35 @@ static int set(bl_t *dev, int value) {
 }
 
 static int get(bl_t *dev) {
-    return atoi(udev_device_get_sysattr_value(dev->dev, "brightness"));
+    /*
+     * libudev caches sysfs attribute values per udev_device.  The smooth
+     * transition loop calls get() after every write; using the cached value
+     * makes it see the old brightness forever and it never reaches the
+     * target (observable as a 1.00/0.95 ping-pong on intel_backlight).
+     * Read the file directly instead.
+     */
+    char path[PATH_MAX] = {0};
+    char buf[16] = {0};
+    const char *syspath = udev_device_get_syspath(dev->dev);
+
+    if (syspath == NULL) {
+        return -1;
+    }
+
+    snprintf(path, sizeof(path), "%s/brightness", syspath);
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) {
+        return -1;
+    }
+
+    ssize_t n = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+
+    if (n <= 0) {
+        return -1;
+    }
+
+    return atoi(buf);
 }
 
 static void free_device(bl_t *dev) {
