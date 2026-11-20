@@ -242,6 +242,19 @@ static int capture(void *dev, double *pct, const int num_captures, char *setting
     parse_settings(settings, &interval);
 
     als_device_t *als = (als_device_t *)dev;
+
+    /*
+     * The ACPI ALS (acpi-als, e.g. on MacBookPro12,1) exposes
+     * scan_elements/ and a trigger, but the trigger never fires:
+     * iio_buffer_refill() blocks forever and clightd stops answering
+     * Sensor.Capture.  Poll in_illuminance_input for this device.
+     */
+    const char *name = udev_device_get_sysattr_value(als->dev, "name");
+    if (name != NULL && !strcmp(name, "acpi-als") &&
+        als->capture[ALS_IIO_POLL] != NULL) {
+        return als->capture[ALS_IIO_POLL](als, pct, num_captures, interval);
+    }
+
     int ret = 0;
     // Try buffer then poll methods, if both are available
     for (int i = 0; i < ALS_IIO_MAX && ret == 0; i++) {
