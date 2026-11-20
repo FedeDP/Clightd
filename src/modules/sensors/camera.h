@@ -50,6 +50,11 @@ static double get_frame_brightness(uint8_t *img_data, rect_info_t *full, bool is
     double brightness = 0.0;
     double min = CAMERA_ILL_MAX;
     double max = 0.0;
+
+    if (img_data == NULL || full == NULL || full->row_end <= 0 ||
+        full->col_end <= 0) {
+        return brightness;
+    }
     
     /*
      * If greyscale (rgb is converted to grey) -> increment by 1. 
